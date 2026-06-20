@@ -1,0 +1,112 @@
+.board {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  gap: 0;
+}
+
+.tableHeader {
+  display: grid;
+  grid-template-columns: 180px 1fr 60px 1fr 220px;
+  background: rgba(6, 72, 120, 0.85);
+  color: #fff;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.75rem 1.5rem;
+  gap: 1rem;
+  align-items: center;
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 180px 1fr 60px 1fr 220px;
+  align-items: center;
+  gap: 1rem;
+  padding: 1rem 1.5rem;
+  background: rgba(255,255,255,0.88);
+  border-bottom: 2px solid rgba(10, 132, 200, 0.15);
+  transition: background 0.2s;
+}
+
+.row:nth-child(even) {
+  background: rgba(232, 244, 252, 0.88);
+}
+
+.time {
+  display: flex;
+  flex-direction: column;
+}
+
+.date {
+  font-size: 0.85rem;
+  color: #555;
+  font-weight: 500;
+}
+
+.clock {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: var(--ice-dark);
+  line-height: 1.1;
+}
+
+.team {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--ice-dark);
+}
+
+.away { text-align: right; }
+.home { text-align: left; }
+
+.vsCell {
+  text-align: center;
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--ice-blue);
+  letter-spacing: 0.05em;
+}
+
+.lockers {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.lockerChip {
+  background: var(--ice-blue);
+  color: #fff;
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  display: inline-block;
+}
+
+.tbd {
+  color: #aaa;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 1rem;
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  color: rgba(255,255,255,0.8);
+  gap: 1rem;
+}
+
+.emptyIcon { font-size: 5rem; }
+.empty p { font-size: 1.8rem; font-weight: 600; }

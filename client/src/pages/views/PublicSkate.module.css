@@ -1,0 +1,82 @@
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 2rem;
+  width: 100%;
+  align-items: start;
+}
+
+.sectionTitle {
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #fff;
+  background: rgba(6, 72, 120, 0.85);
+  padding: 0.6rem 1.2rem;
+  margin-bottom: 0.75rem;
+  border-radius: 6px 6px 0 0;
+}
+
+.sessions {
+  display: flex;
+  flex-direction: column;
+}
+
+.sessionCard {
+  background: rgba(255,255,255,0.9);
+  border-bottom: 2px solid rgba(10,132,200,0.15);
+  padding: 1rem 1.4rem;
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+}
+
+.sessionDate {
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--ice-dark);
+  min-width: 260px;
+}
+
+.sessionTime {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--ice-blue);
+}
+
+.pricing {
+  display: flex;
+  flex-direction: column;
+}
+
+.priceTable {
+  width: 100%;
+  border-collapse: collapse;
+  background: rgba(255,255,255,0.9);
+}
+
+.priceTable tr {
+  border-bottom: 2px solid rgba(10,132,200,0.1);
+}
+
+.priceLabel {
+  padding: 0.9rem 1.2rem;
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--ice-dark);
+}
+
+.priceAmount {
+  padding: 0.9rem 1.2rem;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--ice-blue);
+  text-align: right;
+}
+
+.none {
+  color: rgba(255,255,255,0.7);
+  font-size: 1.2rem;
+  padding: 1rem 0;
+}

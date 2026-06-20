@@ -21,6 +21,12 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 app.use('/api', apiRouter);
 app.use('/api', uploadRouter);
 
+// TV-compatible plain HTML display (no React, works on Samsung/LG browsers)
+const tvHtml = require('fs').readFileSync(path.join(__dirname, 'tv.html'), 'utf8');
+app.get('/tv/:screenId', (req, res) => {
+  res.send(tvHtml.replace('{{SCREEN_ID}}', req.params.screenId));
+});
+
 // Serve built React app in production
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
 app.use(express.static(clientDist));

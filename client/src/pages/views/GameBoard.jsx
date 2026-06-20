@@ -6,9 +6,9 @@ function formatTime(iso) {
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function formatDate(iso) {
-  const d = new Date(iso);
-  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+function teamLabel(name, locker) {
+  if (!name) return null;
+  return locker ? `${name} (${locker})` : name;
 }
 
 export default function GameBoard({ rinkName }) {
@@ -18,22 +18,25 @@ export default function GameBoard({ rinkName }) {
     try {
       const res = await fetch('/api/games');
       const all = await res.json();
-      // Only show non-skate upcoming games
       const now = new Date();
-      setGames(all.filter((g) => !g.is_skate && new Date(g.start_time) >= now));
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+      setGames(all.filter((g) => {
+        if (g.is_skate) return false;
+        const start = new Date(g.start_time);
+        return start >= todayStart && start < todayEnd;
+      }));
     } catch (_) {}
   }
 
   useEffect(() => { load(); }, []);
-
-  // expose reload for parent
   GameBoard.reload = load;
 
   if (games.length === 0) {
     return (
       <div className={styles.empty}>
         <div className={styles.emptyIcon}>🏒</div>
-        <p>No upcoming games scheduled</p>
+        <p>No games scheduled for today</p>
       </div>
     );
   }
@@ -42,37 +45,29 @@ export default function GameBoard({ rinkName }) {
     <div className={styles.board}>
       <div className={styles.tableHeader}>
         <span>Time</span>
-        <span>Away</span>
-        <span className={styles.vs}>VS</span>
-        <span>Home</span>
-        <span>Locker Rooms</span>
+        <span className={styles.awayHeader}>Away</span>
+        <span className={styles.vsHeader}>VS</span>
+        <span className={styles.homeHeader}>Home</span>
       </div>
       <div className={styles.rows}>
-        {games.map((g) => (
-          <div key={g.id} className={styles.row}>
-            <div className={styles.time}>
-              <span className={styles.date}>{formatDate(g.start_time)}</span>
-              <span className={styles.clock}>{formatTime(g.start_time)}</span>
+        {games.map((g) => {
+          const awayLabel = teamLabel(g.away_team, g.away_locker);
+          const homeLabel = teamLabel(g.home_team, g.home_locker);
+          return (
+            <div key={g.id} className={styles.row}>
+              <div className={styles.time}>
+                <span className={styles.clock}>{formatTime(g.start_time)}</span>
+              </div>
+              <div className={styles.team + ' ' + styles.away}>
+                {awayLabel || <span className={styles.tbd}>TBD</span>}
+              </div>
+              <div className={styles.vsCell}>VS</div>
+              <div className={styles.team + ' ' + styles.home}>
+                {homeLabel || <span className={styles.tbd}>TBD</span>}
+              </div>
             </div>
-            <div className={styles.team + ' ' + styles.away}>
-              {g.away_team || <span className={styles.tbd}>TBD</span>}
-            </div>
-            <div className={styles.vsCell}>VS</div>
-            <div className={styles.team + ' ' + styles.home}>
-              {g.home_team || <span className={styles.tbd}>TBD</span>}
-            </div>
-            <div className={styles.lockers}>
-              {g.home_locker || g.away_locker ? (
-                <>
-                  <span className={styles.lockerChip}>Home: {g.home_locker || '—'}</span>
-                  <span className={styles.lockerChip}>Away: {g.away_locker || '—'}</span>
-                </>
-              ) : (
-                <span className={styles.tbd}>Not assigned</span>
-              )}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

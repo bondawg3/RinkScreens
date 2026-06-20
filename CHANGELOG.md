@@ -2,6 +2,36 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.0.4] — 2026-06-20
+
+### Added
+- **TV-compatible display page** (`/tv/:screenId`) — plain HTML/CSS/JavaScript with no React or ES modules; works on Samsung, LG, and other smart TV built-in browsers that cannot run modern JavaScript bundles
+- **Legacy JS build** — added `@vitejs/plugin-legacy` + `terser` to generate an ES5-compatible bundle as a fallback for older TV browsers loading the admin dashboard
+- Preview links in the Screens tab now point to `/tv/:screenId` (the TV-compatible URL) instead of the React display route
+
+### Fixed
+- `vite.config.js` renamed to `vite.config.mjs` to resolve ESM/CJS conflict with `@vitejs/plugin-legacy` v8
+
+## [1.0.3] — 2026-06-20
+
+### Changed
+- **Game Board layout** — locker room numbers now appear inline next to team names (e.g. `B4 (1) VS B5 (2)`) instead of as separate chips in a side column
+- Away and Home columns are now equal-width on either side of a centered VS, so the matchup is visually centered on screen
+- Removed the separate Locker Rooms column
+
+## [1.0.2] — 2026-06-20
+
+### Changed
+- **Game Board display** now shows only today's games instead of all upcoming games
+- Removed the date column from each game row (redundant now that only today's games show)
+- Empty state message updated to "No games scheduled for today"
+
+## [1.0.1] — 2026-06-19
+
+### Fixed
+- **Calendar sync** — events from up to 12 hours ago are now included so in-progress or recently-started games appear on the Game Board (previously only strictly future events were stored)
+- **Team/locker data preservation** — calendar re-sync no longer wipes out admin-assigned home team, away team, home locker, and away locker values
+
 ## [1.0.0] — 2026-06-19
 
 ### Added

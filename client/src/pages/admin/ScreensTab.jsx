@@ -122,7 +122,7 @@ export default function ScreensTab() {
                     </span>
                   </td>
                   <td className={styles.actions}>
-                    <a href={`/display/${s.id}`} target="_blank" rel="noreferrer" className={styles.btnGhost}>Preview</a>
+                    <a href={`/tv/${s.id}`} target="_blank" rel="noreferrer" className={styles.btnGhost}>Preview</a>
                     <button className={styles.btnGhost} onClick={() => startEdit(s)}>Edit</button>
                     <button className={styles.btnDanger} onClick={() => deleteScreen(s.id)}>Remove</button>
                   </td>

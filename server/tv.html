@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RinkScreens</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+  background: linear-gradient(135deg, #064878 0%, #0a84c8 60%, #1ab3e6 100%);
+  color: #fff;
+  height: 100vh;
+  overflow: hidden;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-orient: vertical;
+  -webkit-box-direction: normal;
+  -ms-flex-direction: column;
+  flex-direction: column;
+}
+
+.bg {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-size: cover;
+  background-position: center;
+  z-index: 0;
+}
+
+.overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.3);
+  z-index: 1;
+}
+
+header {
+  position: relative;
+  z-index: 2;
+  background: rgba(6,72,120,0.92);
+  padding: 12px 24px;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-pack: justify;
+  -ms-flex-pack: justify;
+  justify-content: space-between;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+}
+
+.rink-name {
+  font-size: 1.6em;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.clock {
+  font-size: 1.6em;
+  font-weight: bold;
+}
+
+#content {
+  position: relative;
+  z-index: 2;
+  -webkit-box-flex: 1;
+  -ms-flex: 1;
+  flex: 1;
+  overflow: hidden;
+  padding: 8px;
+}
+
+/* ── Game Board ── */
+.game-table { width: 100%; border-collapse: collapse; }
+
+.game-table thead tr {
+  background: rgba(6,72,120,0.85);
+}
+
+.game-table thead th {
+  padding: 10px 16px;
+  font-size: 1em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: bold;
+  color: #fff;
+}
+
+.game-table tbody tr {
+  background: rgba(255,255,255,0.88);
+  border-bottom: 2px solid rgba(10,132,200,0.15);
+}
+
+.game-table tbody tr:nth-child(even) {
+  background: rgba(232,244,252,0.88);
+}
+
+.game-table tbody td {
+  padding: 14px 16px;
+  color: #064878;
+}
+
+.td-time  { font-size: 1.6em; font-weight: bold; width: 180px; }
+.td-away  { font-size: 1.5em; font-weight: bold; text-align: right; }
+.td-vs    { font-size: 0.9em; font-weight: bold; color: #0a84c8; text-align: center; width: 70px; }
+.td-home  { font-size: 1.5em; font-weight: bold; }
+
+/* ── Public Skate ── */
+.skate-wrap {
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  gap: 24px;
+  height: 100%;
+}
+
+.skate-sessions { -webkit-box-flex: 1; -ms-flex: 1; flex: 1; }
+.skate-pricing  { width: 360px; }
+
+.section-title {
+  background: rgba(6,72,120,0.85);
+  color: #fff;
+  padding: 8px 16px;
+  font-size: 1.1em;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0;
+}
+
+.session-row {
+  background: rgba(255,255,255,0.88);
+  border-bottom: 2px solid rgba(10,132,200,0.15);
+  padding: 12px 16px;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  gap: 24px;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+}
+
+.session-date { font-size: 1.2em; font-weight: bold; color: #064878; min-width: 240px; }
+.session-time { font-size: 1.4em; font-weight: bold; color: #0a84c8; }
+
+.price-table { width: 100%; border-collapse: collapse; }
+.price-table tr { background: rgba(255,255,255,0.88); border-bottom: 2px solid rgba(10,132,200,0.1); }
+.price-label  { padding: 12px 16px; font-size: 1.2em; font-weight: 600; color: #064878; }
+.price-amount { padding: 12px 16px; font-size: 1.4em; font-weight: bold; color: #0a84c8; text-align: right; }
+
+/* ── Empty / Error ── */
+.empty {
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-orient: vertical;
+  -webkit-box-direction: normal;
+  -ms-flex-direction: column;
+  flex-direction: column;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+  -webkit-box-pack: center;
+  -ms-flex-pack: center;
+  justify-content: center;
+  height: 100%;
+  color: rgba(255,255,255,0.8);
+}
+
+.empty-icon { font-size: 5em; margin-bottom: 16px; }
+.empty p { font-size: 1.8em; font-weight: bold; }
+</style>
+</head>
+<body>
+<div class="bg" id="bg"></div>
+<div class="overlay"></div>
+<header>
+  <span class="rink-name" id="rink-name">Ice Rink</span>
+  <span class="clock" id="clock"></span>
+</header>
+<div id="content"></div>
+
+<script>
+var SCREEN_ID = '{{SCREEN_ID}}';
+var refreshTimer = null;
+
+// ── Clock ──────────────────────────────────────────────────────────────────
+function updateClock() {
+  var d = new Date();
+  var h = d.getHours(), m = d.getMinutes();
+  var ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  document.getElementById('clock').innerHTML = h + ':' + (m < 10 ? '0' : '') + m + ' ' + ampm;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ── XHR helper ────────────────────────────────────────────────────────────
+function get(url, cb) {
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', url, true);
+  xhr.onreadystatechange = function() {
+    if (xhr.readyState === 4) {
+      try { cb(null, JSON.parse(xhr.responseText)); }
+      catch(e) { cb(e); }
+    }
+  };
+  xhr.send();
+}
+
+// ── Format helpers ─────────────────────────────────────────────────────────
+function fmtTime(iso) {
+  var d = new Date(iso);
+  var h = d.getHours(), m = d.getMinutes();
+  var ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return h + ':' + (m < 10 ? '0' : '') + m + ' ' + ampm;
+}
+
+function fmtDate(iso) {
+  var d = new Date(iso);
+  var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return days[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate();
+}
+
+// ── Render ─────────────────────────────────────────────────────────────────
+function renderGames(games) {
+  if (!games || games.length === 0) {
+    document.getElementById('content').innerHTML =
+      '<div class="empty"><div class="empty-icon">&#127944;</div><p>No games scheduled for today</p></div>';
+    return;
+  }
+  var rows = '';
+  for (var i = 0; i < games.length; i++) {
+    var g = games[i];
+    var away = g.away_team ? (g.away_locker ? g.away_team + ' (' + g.away_locker + ')' : g.away_team) : 'TBD';
+    var home = g.home_team ? (g.home_locker ? g.home_team + ' (' + g.home_locker + ')' : g.home_team) : 'TBD';
+    rows += '<tr>' +
+      '<td class="td-time">' + fmtTime(g.start_time) + '</td>' +
+      '<td class="td-away">' + away + '</td>' +
+      '<td class="td-vs">VS</td>' +
+      '<td class="td-home">' + home + '</td>' +
+      '</tr>';
+  }
+  document.getElementById('content').innerHTML =
+    '<table class="game-table">' +
+    '<thead><tr><th style="width:180px">Time</th><th style="text-align:right">Away</th><th style="width:70px">VS</th><th>Home</th></tr></thead>' +
+    '<tbody>' + rows + '</tbody></table>';
+}
+
+function renderSkate(sessions, prices) {
+  var sessionHtml = '';
+  if (!sessions || sessions.length === 0) {
+    sessionHtml = '<div style="padding:16px;color:rgba(255,255,255,0.7)">No upcoming sessions</div>';
+  } else {
+    for (var i = 0; i < sessions.length; i++) {
+      var s = sessions[i];
+      sessionHtml += '<div class="session-row">' +
+        '<span class="session-date">' + fmtDate(s.start_time) + '</span>' +
+        '<span class="session-time">' + fmtTime(s.start_time) + ' &ndash; ' + fmtTime(s.end_time) + '</span>' +
+        '</div>';
+    }
+  }
+
+  var priceHtml = '';
+  if (prices && prices.length) {
+    for (var j = 0; j < prices.length; j++) {
+      priceHtml += '<tr><td class="price-label">' + prices[j].label + '</td><td class="price-amount">' + prices[j].price + '</td></tr>';
+    }
+    priceHtml = '<table class="price-table">' + priceHtml + '</table>';
+  } else {
+    priceHtml = '<div style="padding:16px;color:rgba(255,255,255,0.7)">Pricing not configured</div>';
+  }
+
+  document.getElementById('content').innerHTML =
+    '<div class="skate-wrap">' +
+    '<div class="skate-sessions"><div class="section-title">Upcoming Sessions</div>' + sessionHtml + '</div>' +
+    '<div class="skate-pricing"><div class="section-title">Admission</div>' + priceHtml + '</div>' +
+    '</div>';
+}
+
+// ── Load data ──────────────────────────────────────────────────────────────
+function loadScreen() {
+  get('/api/screens', function(err, screens) {
+    if (err || !screens) return;
+    var screen = null;
+    for (var i = 0; i < screens.length; i++) {
+      if (String(screens[i].id) === String(SCREEN_ID)) { screen = screens[i]; break; }
+    }
+    if (!screen) return;
+
+    // Background
+    if (screen.bg_filename) {
+      document.getElementById('bg').style.backgroundImage = 'url(/uploads/' + screen.bg_filename + ')';
+    }
+
+    var dtype = screen.display_type;
+
+    if (dtype === 'games') {
+      get('/api/games', function(err2, games) {
+        if (err2) return;
+        var now = new Date();
+        var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        var todayEnd = new Date(todayStart.getTime() + 86400000);
+        var filtered = [];
+        for (var i = 0; i < games.length; i++) {
+          var s = new Date(games[i].start_time);
+          if (!games[i].is_skate && s >= todayStart && s < todayEnd) filtered.push(games[i]);
+        }
+        renderGames(filtered);
+      });
+
+    } else if (dtype === 'skate') {
+      get('/api/games', function(err2, games) {
+        get('/api/skate-prices', function(err3, prices) {
+          var now = new Date();
+          var sessions = [];
+          if (games) {
+            for (var i = 0; i < games.length; i++) {
+              if (games[i].is_skate && new Date(games[i].start_time) >= now) sessions.push(games[i]);
+            }
+          }
+          renderSkate(sessions, prices || []);
+        });
+      });
+
+    } else if (dtype === 'message') {
+      document.getElementById('content').innerHTML =
+        '<div class="empty"><p>' + (screen.custom_message || 'Welcome!') + '</p></div>';
+    }
+  });
+}
+
+// ── Settings (rink name) ───────────────────────────────────────────────────
+get('/api/settings', function(err, s) {
+  if (!err && s && s.rink_name) document.getElementById('rink-name').innerHTML = s.rink_name;
+});
+
+// ── WebSocket (best-effort) ────────────────────────────────────────────────
+function connectWS() {
+  try {
+    var proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    var ws = new WebSocket(proto + '://' + location.host + '?screenId=' + SCREEN_ID);
+    ws.onmessage = function(e) {
+      try {
+        var msg = JSON.parse(e.data);
+        if (msg.type === 'ping') ws.send('{"type":"pong"}');
+        if (msg.type === 'reload' || msg.type === 'refresh_data') loadScreen();
+      } catch(x) {}
+    };
+    ws.onclose = function() { setTimeout(connectWS, 3000); };
+  } catch(x) {}
+}
+connectWS();
+
+// ── Auto-refresh every 60s as fallback ────────────────────────────────────
+setInterval(loadScreen, 60000);
+
+// ── Initial load ───────────────────────────────────────────────────────────
+loadScreen();
+</script>
+</body>
+</html>

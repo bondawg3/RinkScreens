@@ -81,6 +81,45 @@ router.post('/games/refresh', (req, res) => {
   res.json({ ok: true });
 });
 
+router.get('/games/debug-calendar', async (req, res) => {
+  const ical = require('node-ical');
+  const settings = db.getSettings();
+  const url = settings.ical_url;
+  if (!url) return res.json({ error: 'No iCal URL configured in Settings' });
+
+  let events;
+  try {
+    events = await ical.async.fromURL(url);
+  } catch (err) {
+    return res.json({ error: `Fetch failed: ${err.message}` });
+  }
+
+  const cutoff = new Date(Date.now() - 12 * 60 * 60 * 1000);
+  const now = new Date();
+  const summary = [];
+
+  for (const [, event] of Object.entries(events)) {
+    if (event.type !== 'VEVENT') continue;
+    const start = event.start ? new Date(event.start) : null;
+    summary.push({
+      uid: event.uid,
+      title: event.summary,
+      start: start ? start.toISOString() : null,
+      included: start && start >= cutoff,
+      reason: !start ? 'no start date' : start < cutoff ? `too old (cutoff: ${cutoff.toISOString()})` : 'ok',
+    });
+  }
+
+  res.json({
+    url,
+    now: now.toISOString(),
+    cutoff: cutoff.toISOString(),
+    total_vevents: summary.length,
+    included: summary.filter(e => e.included).length,
+    events: summary,
+  });
+});
+
 // ── Public Skate Prices ───────────────────────────────────────────────────────
 
 router.get('/skate-prices', (req, res) => {

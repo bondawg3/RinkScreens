@@ -2,6 +2,116 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.2.1] — 2026-06-26
+
+### Added
+- **Reparse Titles button** in the Games tab — re-runs title/team parsing on all existing games without a full calendar re-sync
+
+### Changed
+- **Title parsing overhauled** — colon in event title splits into title (before) and matchup (after); no colon + "vs" parses teams and leaves title blank; no colon + no "vs" keeps full title with Away TBD / Home TBD teams
+- **NCWHL parsing** — title set to everything up to "Game" word; `(Home)`/`(Away)` tags stripped before team split
+- **Practice/scrimmage/pickup events** — titles containing "Practice", "Scrimmage", or "League Pickup" import with title only and both team fields left blank
+- **Sync cleanup** — games previously imported that now fail the location filter or fall outside the 30-day window are removed on next refresh
+- **Import window** — changed from open-ended future to 30 days from now; events older than 12 hours or more than 30 days out are excluded
+- **Subheading field removed** from admin UI (still stored internally, will be used on TV Game Board display in a future release)
+
+## [1.2.0] — 2026-06-26
+
+### Added
+- **Team order setting per calendar** — Hockey Games calendars now have an "Away vs. Home" / "Home vs. Away" toggle in the Add/Edit modal; the setting is stored per calendar and used during import to assign teams to the correct home/away columns; shown as a column in the Calendars table
+- **Auto team parsing on import** — game titles containing "vs" are automatically split into away/home teams using the calendar's team order setting; titles without "vs" set both teams to `<Title> TBD`
+- **Subheading parsing** — titles with a colon are split: everything before the colon becomes the subheading (e.g. "Squirt"), the rest is the matchup; subheading stored on each game record for future grouping
+- **NCWHL calendar special rules** — calendars with "NCWHL" in the name use a different parsing strategy: subheading is extracted as everything up to and including the word "Game" (e.g. "Green Game"), `(Home)` and `(Away)` tags are stripped before team parsing, and the colon rule is skipped
+- **Location filter on import** — events with a location set that does not contain "San Mateo" are excluded from import (away games at other rinks)
+
+### Changed
+- **Games tab** — "By Date & Time" view now groups games under a date subheading per day; each day further groups by calendar with a light blue sub-header
+- **Games tab** — "Calendar Title" column renamed to "Title"
+
+## [1.1.9] — 2026-06-24
+
+### Added
+- **Locker Room Sequences** in Settings — create named pairing patterns (e.g. "Standard", "NCWHL") with an ordered list of home/away locker room pairs; pairs can be reordered with up/down arrows; sequences can be edited and deleted; foundation for auto-assign feature
+
+## [1.1.8] — 2026-06-23
+
+### Changed
+- **Games tab** — locker room dropdowns are now always visible on every row; selecting a locker room saves immediately without needing to click Edit; Edit button remains for team name changes only
+
+## [1.1.7] — 2026-06-23
+
+### Changed
+- **Games tab** — locker room assignment fields are now dropdowns populated from the Locker Rooms list in Settings, replacing free-text inputs
+
+## [1.1.6] — 2026-06-23
+
+### Added
+- **Locker Rooms section** in Settings — add locker rooms by name; inline edit and delete per row; duplicate name check on add and edit
+
+## [1.1.5] — 2026-06-23
+
+### Changed
+- **Games tab** — removed Remove Unassigned button; calendar group headers now use a medium blue distinct from the dark blue column headers; each group renders as one cohesive card with consistent corner rounding
+
+## [1.1.4] — 2026-06-23
+
+### Added
+- **Remove Unassigned button** in the Games tab — appears only when unassigned games exist; prompts for confirmation before deleting all games not linked to a calendar
+
+## [1.1.3] — 2026-06-23
+
+### Fixed
+- Logo upload now posts to the correct `/api/logo` endpoint (was incorrectly posting to `/upload/logo`)
+- Upgraded Express 4 → 5; fixed catch-all route syntax (`*` → `/{*path}`) required by Express 5's stricter path-to-regexp; DEP0169 deprecation warning now gone without suppression flags
+
+## [1.1.2] — 2026-06-23
+
+### Added
+- **Rink logo upload** — upload a logo image (JPG, PNG, SVG, WebP, max 5 MB) in the Settings tab; when set, the logo replaces the rink name text in the TV header bar; removing the logo reverts to the text name
+- **TV header bar** changed to white with dark blue text; logo constrained to 48px max height on screen
+
+## [1.1.1] — 2026-06-23
+
+### Added
+- **Settings tab** restored as a separate tab with just Rink Name for now
+- Rink Name removed from the Calendars tab
+
+## [1.1.0] — 2026-06-23
+
+### Changed
+- **Settings tab renamed to Calendars** — tab now focuses solely on calendar management; general settings form removed
+- **Rink Name** moved to a compact inline field at the top of the Calendars tab
+- **Calendar polling now driven by the Calendars table** — Hockey Games calendars are polled independently using each calendar's own poll interval; falls back to the legacy `ical_url` setting if no hockey calendars have been added yet
+- **Games import now stores `calendar_id`** — each synced game records which calendar it came from, enabling the "By Calendar" sort in the Games tab
+
+## [1.0.9] — 2026-06-23
+
+### Added
+- **Games tab sort toggle** — switch between "By Date & Time" (default) and "By Calendar" views; By Calendar groups games under their calendar name with a header row; games not yet linked to a calendar appear under "Unassigned"
+
+## [1.0.8] — 2026-06-23
+
+### Added
+- **Edit calendar** — each calendar row now has an Edit button that opens the modal pre-filled; validates name uniqueness and URL only when changed
+
+## [1.0.7] — 2026-06-23
+
+### Added
+- **Calendars section in Settings** — replace the single iCal URL field with a full calendar manager; add Hockey Games, Public Skates, and Rink Events calendars each with a name, iCal URL, and poll interval
+- **Add Calendar modal** — validates that the name is unique, the URL is not already in use, and that the URL is a valid iCal feed before saving; shows inline error messages for each case
+- **Calendars API** — `GET/POST/PATCH/DELETE /api/calendars` endpoints with duplicate name/URL and iCal format validation
+
+## [1.0.6] — 2026-06-23
+
+### Fixed
+- Calendar URL validation now triggers correctly on the first save attempt; removed `type="url"` from the iCal URL input so the browser's own URL check no longer interferes with server-side validation
+
+## [1.0.5] — 2026-06-23
+
+### Added
+- **Build info label** — version number and build date shown in the bottom-right corner of the admin dashboard; updates automatically on each build
+- **Calendar URL validation** — saving an invalid or non-iCal URL in Settings now shows a descriptive error message inline below the URL field instead of silently saving
+
 ## [1.0.4] — 2026-06-20
 
 ### Added

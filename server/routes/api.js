@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const ws = require('../ws');
-const { triggerRefresh } = require('../calendar');
+const { triggerRefresh, parseTitle } = require('../calendar');
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
@@ -10,8 +10,32 @@ router.get('/settings', (req, res) => {
   res.json(db.getSettings());
 });
 
-router.patch('/settings', (req, res) => {
-  db.setSettings(req.body);
+router.patch('/settings', async (req, res) => {
+  const incoming = req.body;
+
+  if (incoming.ical_url) {
+    const current = db.getSettings();
+    if (incoming.ical_url !== current.ical_url) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
+        let text;
+        try {
+          const response = await fetch(incoming.ical_url, { signal: controller.signal });
+          text = await response.text();
+        } finally {
+          clearTimeout(timeout);
+        }
+        if (!text.includes('BEGIN:VCALENDAR')) {
+          return res.status(400).json({ error: 'The URL does not appear to be a valid iCal calendar. Make sure you copied the iCal (.ics) link, not the Google Calendar web page URL.' });
+        }
+      } catch (err) {
+        return res.status(400).json({ error: `Could not load the calendar URL: ${err.message}. Make sure the URL is publicly accessible and in iCal format.` });
+      }
+    }
+  }
+
+  db.setSettings(incoming);
   res.json({ ok: true });
 });
 
@@ -81,11 +105,46 @@ router.post('/games/refresh', (req, res) => {
   res.json({ ok: true });
 });
 
+router.post('/games/reparse', (req, res) => {
+  const calendars = db.findAll('calendars');
+  const calMap = Object.fromEntries(calendars.map((c) => [c.id, c]));
+  const games = db.findAll('games');
+  let updated = 0;
+
+  for (const game of games) {
+    const cal = calMap[game.calendar_id] || {};
+    const { title, away_team, home_team } = parseTitle(game.title || '', cal);
+    db.update('games', game.id, { title, away_team, home_team });
+    updated++;
+  }
+
+  ws.broadcast({ type: 'refresh_data' });
+  res.json({ updated });
+});
+
+router.delete('/games/unassigned', (req, res) => {
+  const data = require('../db');
+  const all = data.findAll('games');
+  const toRemove = all.filter((g) => !g.calendar_id);
+  toRemove.forEach((g) => data.remove('games', g.id));
+  res.json({ removed: toRemove.length });
+});
+
 router.get('/games/debug-calendar', async (req, res) => {
   const ical = require('node-ical');
-  const settings = db.getSettings();
-  const url = settings.ical_url;
-  if (!url) return res.json({ error: 'No iCal URL configured in Settings' });
+
+  let url, calName;
+  if (req.query.calendar_id) {
+    const cal = db.findById('calendars', req.query.calendar_id);
+    if (!cal) return res.json({ error: `Calendar ${req.query.calendar_id} not found` });
+    url = cal.url;
+    calName = cal.name;
+  } else {
+    const settings = db.getSettings();
+    url = settings.ical_url;
+    calName = 'Legacy (ical_url setting)';
+  }
+  if (!url) return res.json({ error: 'No iCal URL configured' });
 
   let events;
   try {
@@ -101,9 +160,11 @@ router.get('/games/debug-calendar', async (req, res) => {
   for (const [, event] of Object.entries(events)) {
     if (event.type !== 'VEVENT') continue;
     const start = event.start ? new Date(event.start) : null;
+    const location = (event.location || '').trim();
     summary.push({
       uid: event.uid,
       title: event.summary,
+      location: location || null,
       start: start ? start.toISOString() : null,
       included: start && start >= cutoff,
       reason: !start ? 'no start date' : start < cutoff ? `too old (cutoff: ${cutoff.toISOString()})` : 'ok',
@@ -111,6 +172,7 @@ router.get('/games/debug-calendar', async (req, res) => {
   }
 
   res.json({
+    calendar: calName,
     url,
     now: now.toISOString(),
     cutoff: cutoff.toISOString(),
@@ -118,6 +180,94 @@ router.get('/games/debug-calendar', async (req, res) => {
     included: summary.filter(e => e.included).length,
     events: summary,
   });
+});
+
+// ── Calendars ─────────────────────────────────────────────────────────────────
+
+router.get('/calendars', (req, res) => {
+  res.json(db.findAll('calendars', 'created_at'));
+});
+
+router.post('/calendars', async (req, res) => {
+  const { name, url, type, poll_interval_minutes = 5, team_order = 'away_home' } = req.body;
+  if (!name || !url || !type) return res.status(400).json({ error: 'name, url, and type are required' });
+
+  const all = db.findAll('calendars');
+  if (all.find((c) => c.name.toLowerCase() === name.toLowerCase())) {
+    return res.status(400).json({ error: `A calendar named "${name}" already exists. Please use a different name.` });
+  }
+  if (all.find((c) => c.url === url)) {
+    return res.status(400).json({ error: 'This iCal URL is already in use by another calendar.' });
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    let text;
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      text = await response.text();
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (!text.includes('BEGIN:VCALENDAR')) {
+      return res.status(400).json({ error: 'The URL does not appear to be a valid iCal calendar. Make sure you copied the iCal (.ics) link.' });
+    }
+  } catch (err) {
+    return res.status(400).json({ error: `Could not load the calendar URL: ${err.message}` });
+  }
+
+  const row = db.insert('calendars', { name, url, type, poll_interval_minutes: Number(poll_interval_minutes), team_order });
+  res.json({ id: row.id });
+});
+
+router.patch('/calendars/:id', async (req, res) => {
+  const cal = db.findById('calendars', req.params.id);
+  if (!cal) return res.status(404).json({ error: 'not found' });
+
+  const { name, url, poll_interval_minutes, team_order } = req.body;
+  const all = db.findAll('calendars');
+
+  if (name && name.toLowerCase() !== cal.name.toLowerCase()) {
+    if (all.find((c) => c.id !== cal.id && c.name.toLowerCase() === name.toLowerCase())) {
+      return res.status(400).json({ error: `A calendar named "${name}" already exists.` });
+    }
+  }
+
+  if (url && url !== cal.url) {
+    if (all.find((c) => c.id !== cal.id && c.url === url)) {
+      return res.status(400).json({ error: 'This iCal URL is already in use by another calendar.' });
+    }
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      let text;
+      try {
+        const response = await fetch(url, { signal: controller.signal });
+        text = await response.text();
+      } finally {
+        clearTimeout(timeout);
+      }
+      if (!text.includes('BEGIN:VCALENDAR')) {
+        return res.status(400).json({ error: 'The URL does not appear to be a valid iCal calendar.' });
+      }
+    } catch (err) {
+      return res.status(400).json({ error: `Could not load the calendar URL: ${err.message}` });
+    }
+  }
+
+  db.update('calendars', req.params.id, {
+    name: name ?? cal.name,
+    url: url ?? cal.url,
+    poll_interval_minutes: poll_interval_minutes !== undefined ? Number(poll_interval_minutes) : cal.poll_interval_minutes,
+    team_order: team_order ?? cal.team_order ?? 'away_home',
+  });
+  res.json({ ok: true });
+});
+
+router.delete('/calendars/:id', (req, res) => {
+  db.remove('calendars', req.params.id);
+  res.json({ ok: true });
 });
 
 // ── Public Skate Prices ───────────────────────────────────────────────────────
@@ -148,6 +298,94 @@ router.patch('/skate-prices/:id', (req, res) => {
 
 router.delete('/skate-prices/:id', (req, res) => {
   db.remove('skate_prices', req.params.id);
+  res.json({ ok: true });
+});
+
+// ── Locker Sequences ──────────────────────────────────────────────────────────
+
+router.get('/locker-sequences', (req, res) => {
+  res.json(db.findAll('locker_sequences', 'name'));
+});
+
+router.post('/locker-sequences', (req, res) => {
+  const { name, pairs } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+  if (!pairs || !pairs.length) return res.status(400).json({ error: 'At least one pair is required' });
+  const all = db.findAll('locker_sequences');
+  if (all.find((s) => s.name.toLowerCase() === name.trim().toLowerCase())) {
+    return res.status(400).json({ error: `A sequence named "${name}" already exists.` });
+  }
+  const row = db.insert('locker_sequences', { name: name.trim(), pairs });
+  res.json(row);
+});
+
+router.patch('/locker-sequences/:id', (req, res) => {
+  const seq = db.findById('locker_sequences', req.params.id);
+  if (!seq) return res.status(404).json({ error: 'not found' });
+  const { name, pairs } = req.body;
+  if (name && name.trim()) {
+    const all = db.findAll('locker_sequences');
+    if (all.find((s) => s.id !== seq.id && s.name.toLowerCase() === name.trim().toLowerCase())) {
+      return res.status(400).json({ error: `A sequence named "${name}" already exists.` });
+    }
+  }
+  db.update('locker_sequences', req.params.id, {
+    name: name ? name.trim() : seq.name,
+    pairs: pairs ?? seq.pairs,
+  });
+  res.json({ ok: true });
+});
+
+router.delete('/locker-sequences/:id', (req, res) => {
+  db.remove('locker_sequences', req.params.id);
+  res.json({ ok: true });
+});
+
+// ── Locker Rooms ─────────────────────────────────────────────────────────────
+
+router.get('/locker-rooms', (req, res) => {
+  res.json(db.findAll('locker_rooms', 'name'));
+});
+
+router.post('/locker-rooms', (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+  const all = db.findAll('locker_rooms');
+  if (all.find((r) => r.name.toLowerCase() === name.trim().toLowerCase())) {
+    return res.status(400).json({ error: `A locker room named "${name}" already exists.` });
+  }
+  const row = db.insert('locker_rooms', { name: name.trim() });
+  res.json(row);
+});
+
+router.patch('/locker-rooms/:id', (req, res) => {
+  const room = db.findById('locker_rooms', req.params.id);
+  if (!room) return res.status(404).json({ error: 'not found' });
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+  const all = db.findAll('locker_rooms');
+  if (all.find((r) => r.id !== room.id && r.name.toLowerCase() === name.trim().toLowerCase())) {
+    return res.status(400).json({ error: `A locker room named "${name}" already exists.` });
+  }
+  db.update('locker_rooms', req.params.id, { name: name.trim() });
+  res.json({ ok: true });
+});
+
+router.delete('/locker-rooms/:id', (req, res) => {
+  db.remove('locker_rooms', req.params.id);
+  res.json({ ok: true });
+});
+
+// ── Logo ──────────────────────────────────────────────────────────────────────
+
+router.delete('/logo', (req, res) => {
+  const filename = db.getSettings().logo_filename;
+  if (filename) {
+    const fs = require('fs');
+    const path = require('path');
+    try { fs.unlinkSync(path.join(__dirname, '..', '..', 'uploads', filename)); } catch (_) {}
+  }
+  db.setSetting('logo_filename', '');
   res.json({ ok: true });
 });
 

@@ -7,6 +7,7 @@ import GamesTab from './pages/admin/GamesTab';
 import SkateTab from './pages/admin/SkateTab';
 import BackgroundsTab from './pages/admin/BackgroundsTab';
 import SettingsTab from './pages/admin/SettingsTab';
+import RinkSettingsTab from './pages/admin/RinkSettingsTab';
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="skate" element={<SkateTab />} />
           <Route path="backgrounds" element={<BackgroundsTab />} />
           <Route path="settings" element={<SettingsTab />} />
+          <Route path="rink-settings" element={<RinkSettingsTab />} />
         </Route>
         <Route path="*" element={<Navigate to="/admin" replace />} />
       </Routes>

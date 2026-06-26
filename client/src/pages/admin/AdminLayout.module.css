@@ -55,3 +55,13 @@
   width: 100%;
   margin: 0 auto;
 }
+
+.buildInfo {
+  position: fixed;
+  bottom: 0.5rem;
+  right: 0.75rem;
+  font-size: 0.72rem;
+  color: rgba(0,0,0,0.3);
+  pointer-events: none;
+  user-select: none;
+}

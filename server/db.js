@@ -21,7 +21,10 @@ const DEFAULTS = {
   backgrounds: [],
   games: [],
   skate_prices: [],
-  _seq: { screens: 1, backgrounds: 1, games: 1, skate_prices: 1 },
+  calendars: [],
+  locker_rooms: [],
+  locker_sequences: [],
+  _seq: { screens: 1, backgrounds: 1, games: 1, skate_prices: 1, calendars: 1, locker_rooms: 1, locker_sequences: 1 },
 };
 
 function load() {

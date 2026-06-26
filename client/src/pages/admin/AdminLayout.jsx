@@ -7,7 +7,8 @@ const tabs = [
   { to: 'games', label: 'Games' },
   { to: 'skate', label: 'Public Skate' },
   { to: 'backgrounds', label: 'Backgrounds' },
-  { to: 'settings', label: 'Settings' },
+  { to: 'settings', label: 'Calendars' },
+  { to: 'rink-settings', label: 'Settings' },
 ];
 
 export default function AdminLayout() {
@@ -33,6 +34,9 @@ export default function AdminLayout() {
       <main className={styles.main}>
         <Outlet />
       </main>
+      <div className={styles.buildInfo}>
+        v{__APP_VERSION__} — {__BUILD_DATE__}
+      </div>
     </div>
   );
 }

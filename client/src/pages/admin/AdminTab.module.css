@@ -182,6 +182,16 @@
   font-size: 0.9rem;
 }
 
+.errorMsg {
+  color: #c0392b;
+  background: #fdf0ee;
+  border: 1px solid #e8b4ae;
+  border-radius: 4px;
+  padding: 0.6rem 0.9rem;
+  font-size: 0.9rem;
+  margin-top: 0.25rem;
+}
+
 .infoBox {
   background: #f0f7ff;
   border: 1px solid #b8d8f5;

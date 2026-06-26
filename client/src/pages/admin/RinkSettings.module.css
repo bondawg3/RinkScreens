@@ -1,0 +1,104 @@
+.logoPreview {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.logoImg {
+  max-height: 64px;
+  max-width: 240px;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px;
+  background: #f8f8f8;
+}
+
+.uploadRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+/* ── Locker sequence builder ── */
+
+.pairRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.pairVs {
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.pairList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+}
+
+.pairItem {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: var(--ice-light, #eef4fb);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.35rem 0.6rem;
+}
+
+.pairNum {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--muted);
+  min-width: 1.2rem;
+}
+
+.pairLabel {
+  flex: 1;
+  font-size: 0.9rem;
+}
+
+.pairVsSmall {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 0 0.25rem;
+}
+
+.pairActions {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.moveBtn {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  color: var(--text);
+}
+
+.moveBtn:hover:not(:disabled) { background: var(--border); }
+.moveBtn:disabled { opacity: 0.3; cursor: default; }
+
+/* Chips in the sequence list table */
+.pairChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.pairChip {
+  background: var(--ice-light, #eef4fb);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.82rem;
+  white-space: nowrap;
+}

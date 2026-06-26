@@ -1,0 +1,89 @@
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sortToggle {
+  display: flex;
+  border: 1.5px solid var(--ice-blue);
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.sortBtn {
+  background: transparent;
+  color: var(--ice-blue);
+  border: none;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sortBtn:hover { background: var(--ice-light); }
+
+.sortActive {
+  background: var(--ice-blue);
+  color: #fff;
+  border: none;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: default;
+}
+
+/* ── Group (calendar section) ── */
+.group {
+  margin-bottom: 1.5rem;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.groupHeader {
+  background: var(--ice-blue);
+  color: #fff;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.calSubHeader {
+  background: #d6e8f7;
+  color: #064878;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  border-bottom: 1px solid #b8d4ec;
+}
+
+.lockerSelect {
+  border: 1.5px solid var(--border);
+  border-radius: 5px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.88rem;
+  background: #fff;
+  color: var(--text);
+  width: 100%;
+}
+
+.lockerSelect:focus {
+  outline: none;
+  border-color: var(--ice-blue);
+}
+
+/* When a group has a header, the table inside loses its own shadow and rounding
+   so the whole group reads as one card */
+.group table {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Table header row inside a group sits below the calendar header and uses
+   a darker shade so the two headers are visually distinct */
+.group table th {
+  background: #0a5a96;
+}

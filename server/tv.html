@@ -40,8 +40,8 @@ body {
 header {
   position: relative;
   z-index: 2;
-  background: rgba(6,72,120,0.92);
-  padding: 12px 24px;
+  background: #fff;
+  padding: 10px 24px;
   display: -webkit-box;
   display: -ms-flexbox;
   display: flex;
@@ -51,6 +51,7 @@ header {
   -webkit-box-align: center;
   -ms-flex-align: center;
   align-items: center;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.15);
 }
 
 .rink-name {
@@ -58,11 +59,29 @@ header {
   font-weight: bold;
   letter-spacing: 0.05em;
   text-transform: uppercase;
+  color: #064878;
+}
+
+.rink-logo {
+  max-height: 48px;
+  max-width: 200px;
+  object-fit: contain;
+}
+
+.date {
+  font-size: 1.6em;
+  font-weight: bold;
+  color: #064878;
+  position: absolute;
+  left: 50%;
+  -webkit-transform: translateX(-50%);
+  transform: translateX(-50%);
 }
 
 .clock {
   font-size: 1.6em;
   font-weight: bold;
+  color: #064878;
 }
 
 #content {
@@ -182,6 +201,7 @@ header {
 <div class="overlay"></div>
 <header>
   <span class="rink-name" id="rink-name">Ice Rink</span>
+  <span class="date" id="date"></span>
   <span class="clock" id="clock"></span>
 </header>
 <div id="content"></div>
@@ -197,6 +217,9 @@ function updateClock() {
   var ampm = h >= 12 ? 'PM' : 'AM';
   h = h % 12 || 12;
   document.getElementById('clock').innerHTML = h + ':' + (m < 10 ? '0' : '') + m + ' ' + ampm;
+  var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  document.getElementById('date').innerHTML = days[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate();
 }
 setInterval(updateClock, 1000);
 updateClock();
@@ -338,9 +361,15 @@ function loadScreen() {
   });
 }
 
-// ── Settings (rink name) ───────────────────────────────────────────────────
+// ── Settings (rink name / logo) ───────────────────────────────────────────────
 get('/api/settings', function(err, s) {
-  if (!err && s && s.rink_name) document.getElementById('rink-name').innerHTML = s.rink_name;
+  if (err || !s) return;
+  var el = document.getElementById('rink-name');
+  if (s.logo_filename) {
+    el.innerHTML = '<img class="rink-logo" src="/uploads/' + s.logo_filename + '" alt="' + (s.rink_name || 'Rink') + '">';
+  } else if (s.rink_name) {
+    el.innerHTML = s.rink_name;
+  }
 });
 
 // ── WebSocket (best-effort) ────────────────────────────────────────────────

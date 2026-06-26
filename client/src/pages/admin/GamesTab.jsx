@@ -4,8 +4,7 @@ import styles from './AdminTab.module.css';
 import tabStyles from './GamesTab.module.css';
 
 function fmt(iso) {
-  const d = new Date(iso);
-  return d.toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 export default function GamesTab() {
@@ -230,7 +229,7 @@ export default function GamesTab() {
           <table className={styles.table}>
             <thead>
               <tr>
-                <th>Date / Time</th>
+                <th>Time</th>
                 <th>Away Team</th><th>Home Team</th>
                 <th>Away Locker</th><th>Home Locker</th>
                 <th>Title</th>

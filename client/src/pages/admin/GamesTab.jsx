@@ -158,11 +158,11 @@ export default function GamesTab() {
         <td className={styles.nowrap}>{fmt(g.start_time)}</td>
         {editing === g.id ? (
           <>
+            <td>{g.title}</td>
             <td><input className={styles.input} value={editData.away_team} onChange={(e) => setEditData({ ...editData, away_team: e.target.value })} placeholder="Away" /></td>
             <td><input className={styles.input} value={editData.home_team} onChange={(e) => setEditData({ ...editData, home_team: e.target.value })} placeholder="Home" /></td>
             <td>{lockerSelect(g, 'away_locker')}</td>
             <td>{lockerSelect(g, 'home_locker')}</td>
-            <td>{g.title}</td>
             <td className={styles.actions}>
               <button className={styles.btnPrimary} onClick={() => saveGame(g.id)}>Save</button>
               <button className={styles.btnGhost} onClick={() => setEditing(null)}>Cancel</button>
@@ -170,11 +170,11 @@ export default function GamesTab() {
           </>
         ) : (
           <>
+            <td>{g.title}</td>
             <td>{g.away_team || <span className={styles.muted}>—</span>}</td>
             <td>{g.home_team || <span className={styles.muted}>—</span>}</td>
             <td>{lockerSelect(g, 'away_locker')}</td>
             <td>{lockerSelect(g, 'home_locker')}</td>
-            <td>{g.title}</td>
             <td><button className={styles.btnGhost} onClick={() => startEdit(g)}>Edit</button></td>
           </>
         )}
@@ -230,9 +230,9 @@ export default function GamesTab() {
             <thead>
               <tr>
                 <th>Time</th>
+                <th>Title</th>
                 <th>Away Team</th><th>Home Team</th>
                 <th>Away Locker</th><th>Home Locker</th>
-                <th>Title</th>
                 <th></th>
               </tr>
             </thead>

@@ -157,13 +157,13 @@ export default function GamesTab() {
     return (
       <tr key={g.id}>
         <td className={styles.nowrap}>{fmt(g.start_time)}</td>
-        <td>{g.title}</td>
         {editing === g.id ? (
           <>
             <td><input className={styles.input} value={editData.away_team} onChange={(e) => setEditData({ ...editData, away_team: e.target.value })} placeholder="Away" /></td>
             <td><input className={styles.input} value={editData.home_team} onChange={(e) => setEditData({ ...editData, home_team: e.target.value })} placeholder="Home" /></td>
             <td>{lockerSelect(g, 'away_locker')}</td>
             <td>{lockerSelect(g, 'home_locker')}</td>
+            <td>{g.title}</td>
             <td className={styles.actions}>
               <button className={styles.btnPrimary} onClick={() => saveGame(g.id)}>Save</button>
               <button className={styles.btnGhost} onClick={() => setEditing(null)}>Cancel</button>
@@ -175,6 +175,7 @@ export default function GamesTab() {
             <td>{g.home_team || <span className={styles.muted}>—</span>}</td>
             <td>{lockerSelect(g, 'away_locker')}</td>
             <td>{lockerSelect(g, 'home_locker')}</td>
+            <td>{g.title}</td>
             <td><button className={styles.btnGhost} onClick={() => startEdit(g)}>Edit</button></td>
           </>
         )}
@@ -226,24 +227,29 @@ export default function GamesTab() {
       {groups.map((group, gi) => (
         <div key={gi} className={tabStyles.group}>
           {group.label && <div className={tabStyles.groupHeader}>{group.label}</div>}
-          {group.subgroups.map((sub, si) => (
-            <div key={si}>
-              {sub.label && <div className={tabStyles.calSubHeader}>{sub.label}</div>}
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    <th>Date / Time</th><th>Title</th>
-                    <th>Away Team</th><th>Home Team</th>
-                    <th>Away Locker</th><th>Home Locker</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Date / Time</th>
+                <th>Away Team</th><th>Home Team</th>
+                <th>Away Locker</th><th>Home Locker</th>
+                <th>Title</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {group.subgroups.map((sub, si) => (
+                <React.Fragment key={si}>
+                  {sub.label && (
+                    <tr>
+                      <td colSpan={7} className={tabStyles.calSubHeaderRow}>{sub.label}</td>
+                    </tr>
+                  )}
                   {sub.games.map(renderRow)}
-                </tbody>
-              </table>
-            </div>
-          ))}
+                </React.Fragment>
+              ))}
+            </tbody>
+          </table>
         </div>
       ))}
 

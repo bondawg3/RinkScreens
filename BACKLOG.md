@@ -14,6 +14,10 @@ Items here are planned but not yet implemented.
 
 ## Improvements
 
+- ~~**Games tab — weekly pagination**~~ — **Done.** "By Date & Time" view shows one week at a time with Prev/Next buttons; defaults to current week.
+
+- ~~**Games tab — table color reorder**~~ — **Done.** Day headers darkest (`#064878`), calendar sub-headers medium (`#1a7abf`), column `th` lightest (`#4da3d4`).
+
 - **Game import — parse team names and subheadings from title** — parse calendar event titles on import using these rules:
   - If the title contains a colon (`:`), everything before the colon is the **subheading** (e.g. division or category like "Squirt"), and everything after is the matchup
   - If the matchup portion contains "vs" (case-insensitive), split on "vs" to extract team names

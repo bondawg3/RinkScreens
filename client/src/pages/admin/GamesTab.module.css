@@ -33,6 +33,35 @@
   cursor: default;
 }
 
+/* ── Week pagination ── */
+.weekNav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  margin-top: 0.5rem;
+}
+
+.weekBtn {
+  background: transparent;
+  color: var(--ice-blue);
+  border: 1.5px solid var(--ice-blue);
+  border-radius: 5px;
+  padding: 0.3rem 0.85rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.weekBtn:hover { background: var(--ice-light); }
+
+.weekLabel {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
 /* ── Group (calendar section) ── */
 .group {
   margin-bottom: 1.5rem;
@@ -42,7 +71,7 @@
 }
 
 .groupHeader {
-  background: var(--ice-blue);
+  background: #064878;
   color: #fff;
   padding: 0.5rem 0.9rem;
   font-size: 0.9rem;
@@ -51,13 +80,13 @@
 }
 
 .calSubHeader {
-  background: #d6e8f7;
-  color: #064878;
+  background: #1a7abf;
+  color: #fff;
   padding: 0.35rem 0.9rem;
   font-size: 0.82rem;
   font-weight: 600;
   letter-spacing: 0.03em;
-  border-bottom: 1px solid #b8d4ec;
+  border-bottom: 1px solid #1568a3;
 }
 
 .lockerSelect {
@@ -82,8 +111,7 @@
   box-shadow: none;
 }
 
-/* Table header row inside a group sits below the calendar header and uses
-   a darker shade so the two headers are visually distinct */
+/* Column headers are lightest — dark → medium → light top to bottom */
 .group table th {
-  background: #0a5a96;
+  background: #4da3d4;
 }

@@ -2,6 +2,14 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.2.2] — 2026-06-26
+
+### Added
+- **Weekly pagination in Games tab** — "By Date & Time" view now shows one week at a time; Previous/Next buttons page through weeks; defaults to the current week on load; empty state shows "No games this week"
+
+### Changed
+- **Games tab color order** — day group headers (darkest, `#064878`), calendar sub-headers (medium, `#1a7abf`), and column header rows (lightest, `#4da3d4`) now go darker → lighter top to bottom for a cleaner visual hierarchy
+
 ## [1.2.1] — 2026-06-26
 
 ### Added

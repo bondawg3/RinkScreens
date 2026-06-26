@@ -56,7 +56,7 @@ Navigate to `/admin` from any browser on the local network.
 
 ### Games tab
 - Lists all imported hockey games
-- Sort by **Date & Time** (grouped by day, then by calendar) or **By Calendar**
+- Sort by **Date & Time** (grouped by day, then by calendar with week pagination) or **By Calendar**
 - Assign home/away team names and locker rooms per game via dropdowns
 - Locker room dropdowns auto-save on change; Edit button for team name changes
 - **Refresh Calendar** button forces an immediate re-sync

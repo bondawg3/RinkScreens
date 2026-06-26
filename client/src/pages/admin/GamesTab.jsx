@@ -17,6 +17,7 @@ export default function GamesTab() {
   const [refreshing, setRefreshing] = useState(false);
   const [reparsing, setReparsing] = useState(false);
   const [sortBy, setSortBy] = useState('datetime');
+  const [weekOffset, setWeekOffset] = useState(0);
 
   async function forceRefresh() {
     setRefreshing(true);
@@ -64,13 +65,41 @@ export default function GamesTab() {
   const calMap = Object.fromEntries((calendars || []).map((c) => [c.id, c.name]));
   const gamesList = (games || []).filter((g) => !g.is_skate);
 
+  function getWeekBounds(offset) {
+    const now = new Date();
+    const day = now.getDay(); // 0=Sun
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - ((day + 6) % 7) + offset * 7);
+    monday.setHours(0, 0, 0, 0);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    sunday.setHours(23, 59, 59, 999);
+    return { monday, sunday };
+  }
+
+  function weekLabel(offset) {
+    const { monday, sunday } = getWeekBounds(offset);
+    const opts = { month: 'short', day: 'numeric' };
+    const monStr = monday.toLocaleDateString([], opts);
+    const sunStr = sunday.toLocaleDateString([], opts);
+    if (offset === 0) return `This Week  (${monStr} – ${sunStr})`;
+    if (offset === 1) return `Next Week  (${monStr} – ${sunStr})`;
+    if (offset === -1) return `Last Week  (${monStr} – ${sunStr})`;
+    return `${monStr} – ${sunStr}`;
+  }
+
   function dayLabel(iso) {
     return new Date(iso).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
   }
 
   function getGroups() {
     if (sortBy === 'datetime') {
-      const sorted = [...gamesList].sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
+      const { monday, sunday } = getWeekBounds(weekOffset);
+      const filtered = gamesList.filter((g) => {
+        const t = new Date(g.start_time);
+        return t >= monday && t <= sunday;
+      });
+      const sorted = [...filtered].sort((a, b) => new Date(a.start_time) - new Date(b.start_time));
       const byDay = {};
       const dayOrder = [];
       for (const g of sorted) {
@@ -153,6 +182,14 @@ export default function GamesTab() {
     );
   }
 
+  const weekNav = (
+    <div className={tabStyles.weekNav}>
+      <button className={tabStyles.weekBtn} onClick={() => setWeekOffset(weekOffset - 1)}>&#8592; Prev</button>
+      <span className={tabStyles.weekLabel}>{weekLabel(weekOffset)}</span>
+      <button className={tabStyles.weekBtn} onClick={() => setWeekOffset(weekOffset + 1)}>Next &#8594;</button>
+    </div>
+  );
+
   return (
     <div>
       <div className={styles.rowBetween}>
@@ -184,6 +221,8 @@ export default function GamesTab() {
         Game times are pulled from Google Calendar. Assign team names and locker rooms here.
       </p>
 
+      {sortBy === 'datetime' && weekNav}
+
       {groups.map((group, gi) => (
         <div key={gi} className={tabStyles.group}>
           {group.label && <div className={tabStyles.groupHeader}>{group.label}</div>}
@@ -208,7 +247,11 @@ export default function GamesTab() {
         </div>
       ))}
 
-      {gamesList.length === 0 && (
+      {sortBy === 'datetime' && groups.length === 0 && (
+        <p className={styles.muted}>No games this week.</p>
+      )}
+      {sortBy === 'datetime' && weekNav}
+      {sortBy === 'calendar' && gamesList.length === 0 && (
         <p className={styles.muted}>No games found. Add a calendar in the Calendars tab, then click Refresh Calendar.</p>
       )}
     </div>

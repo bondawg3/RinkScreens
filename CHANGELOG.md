@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.3.1] — 2026-06-26
+
+### Changed
+- **Webpage display** — added Width (10–100%) and Zoom (25–300%) sliders in the screen edit modal; TV applies width centering and zoom scaling to the embedded iframe
+
 ## [1.3.0] — 2026-06-26
 
 ### Added

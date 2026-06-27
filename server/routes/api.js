@@ -55,22 +55,24 @@ router.get('/screens', (req, res) => {
 });
 
 router.post('/screens', (req, res) => {
-  const { name, ip, display_type = 'games', webpage_url = '' } = req.body;
+  const { name, ip, display_type = 'games', webpage_url = '', webpage_width = 100, webpage_zoom = 100 } = req.body;
   if (!name || !ip) return res.status(400).json({ error: 'name and ip required' });
-  const row = db.insert('screens', { name, ip, display_type, background_id: null, webpage_url });
+  const row = db.insert('screens', { name, ip, display_type, background_id: null, webpage_url, webpage_width: Number(webpage_width), webpage_zoom: Number(webpage_zoom) });
   res.json({ id: row.id });
 });
 
 router.patch('/screens/:id', (req, res) => {
   const screen = db.findById('screens', req.params.id);
   if (!screen) return res.status(404).json({ error: 'not found' });
-  const { name, ip, display_type, background_id, webpage_url } = req.body;
+  const { name, ip, display_type, background_id, webpage_url, webpage_width, webpage_zoom } = req.body;
   db.update('screens', req.params.id, {
     name: name ?? screen.name,
     ip: ip ?? screen.ip,
     display_type: display_type ?? screen.display_type,
     background_id: background_id !== undefined ? (background_id || null) : screen.background_id,
     webpage_url: webpage_url !== undefined ? webpage_url : (screen.webpage_url || ''),
+    webpage_width: webpage_width !== undefined ? Number(webpage_width) : (screen.webpage_width || 100),
+    webpage_zoom: webpage_zoom !== undefined ? Number(webpage_zoom) : (screen.webpage_zoom || 100),
   });
   ws.push(String(req.params.id), { type: 'reload' });
   res.json({ ok: true });

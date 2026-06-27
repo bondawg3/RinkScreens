@@ -68,6 +68,8 @@ export default function ScreensTab() {
       display_type: screen.display_type,
       background_id: screen.background_id ?? '',
       webpage_url: screen.webpage_url || '',
+      webpage_width: screen.webpage_width ?? 100,
+      webpage_zoom: screen.webpage_zoom ?? 100,
     });
   }
 
@@ -148,6 +150,20 @@ export default function ScreensTab() {
                   placeholder="https://example.com"
                   value={editData.webpage_url || ''}
                   onChange={(e) => setEditData({ ...editData, webpage_url: e.target.value })}
+                />
+                <label className={styles.label}>Width — {editData.webpage_width ?? 100}%</label>
+                <input
+                  type="range" min="10" max="100" step="5"
+                  value={editData.webpage_width ?? 100}
+                  onChange={(e) => setEditData({ ...editData, webpage_width: Number(e.target.value) })}
+                  style={{ width: '100%' }}
+                />
+                <label className={styles.label}>Zoom — {editData.webpage_zoom ?? 100}%</label>
+                <input
+                  type="range" min="25" max="300" step="5"
+                  value={editData.webpage_zoom ?? 100}
+                  onChange={(e) => setEditData({ ...editData, webpage_zoom: Number(e.target.value) })}
+                  style={{ width: '100%' }}
                 />
               </>
             )}

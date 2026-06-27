@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.2.7] — 2026-06-26
+
+### Changed
+- **Screens tab** — added "Rink Events" as a display type option when creating or editing a screen
+
 ## [1.2.6] — 2026-06-26
 
 ### Added

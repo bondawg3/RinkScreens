@@ -5,6 +5,7 @@ import tStyles from './ScreensTab.module.css';
 
 const DISPLAY_TYPES = [
   { value: 'games', label: 'Game Board' },
+  { value: 'rink_events', label: 'Rink Events' },
   { value: 'skate', label: 'Public Skate' },
   { value: 'message', label: 'Custom Message' },
 ];

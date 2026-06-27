@@ -291,18 +291,19 @@ router.get('/skate-prices', (req, res) => {
 });
 
 router.post('/skate-prices', (req, res) => {
-  const { label, price, sort_order = 0 } = req.body;
+  const { label, subheading = '', price, sort_order = 0 } = req.body;
   if (!label || !price) return res.status(400).json({ error: 'label and price required' });
-  const row = db.insert('skate_prices', { label, price, sort_order: Number(sort_order) });
+  const row = db.insert('skate_prices', { label, subheading, price, sort_order: Number(sort_order) });
   res.json({ id: row.id });
 });
 
 router.patch('/skate-prices/:id', (req, res) => {
   const row = db.findById('skate_prices', req.params.id);
   if (!row) return res.status(404).json({ error: 'not found' });
-  const { label, price, sort_order } = req.body;
+  const { label, subheading, price, sort_order } = req.body;
   db.update('skate_prices', req.params.id, {
     label: label ?? row.label,
+    subheading: subheading !== undefined ? subheading : (row.subheading || ''),
     price: price ?? row.price,
     sort_order: sort_order !== undefined ? Number(sort_order) : row.sort_order,
   });

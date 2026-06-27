@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.2.8] — 2026-06-26
+
+### Changed
+- **Public Skate tab** — added optional Subheading field to each pricing tier (e.g. "18+", "Under 12"); shown as a column in the table
+
 ## [1.2.7] — 2026-06-26
 
 ### Changed

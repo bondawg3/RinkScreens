@@ -113,7 +113,7 @@ router.post('/games/reparse', (req, res) => {
 
   for (const game of games) {
     const cal = calMap[game.calendar_id] || {};
-    const { title, away_team, home_team } = parseTitle(game.title || '', cal);
+    const { title, away_team, home_team } = parseTitle(game.raw_title || game.title || '', cal);
     db.update('games', game.id, { title, away_team, home_team });
     updated++;
   }

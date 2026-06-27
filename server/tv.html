@@ -41,7 +41,7 @@ header {
   position: relative;
   z-index: 2;
   background: #fff;
-  padding: 10px 24px;
+  padding: 12px 28px;
   display: -webkit-box;
   display: -ms-flexbox;
   display: flex;
@@ -55,7 +55,7 @@ header {
 }
 
 .rink-name {
-  font-size: 1.6em;
+  font-size: 2em;
   font-weight: bold;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -63,13 +63,13 @@ header {
 }
 
 .rink-logo {
-  max-height: 48px;
-  max-width: 200px;
+  max-height: 64px;
+  max-width: 300px;
   object-fit: contain;
 }
 
 .date {
-  font-size: 1.6em;
+  font-size: 2em;
   font-weight: bold;
   color: #064878;
   position: absolute;
@@ -79,7 +79,7 @@ header {
 }
 
 .clock {
-  font-size: 1.6em;
+  font-size: 2em;
   font-weight: bold;
   color: #064878;
 }
@@ -91,43 +91,69 @@ header {
   -ms-flex: 1;
   flex: 1;
   overflow: hidden;
-  padding: 8px;
+  padding: 16px 40px;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-orient: vertical;
+  -webkit-box-direction: normal;
+  -ms-flex-direction: column;
+  flex-direction: column;
+  -webkit-box-pack: center;
+  -ms-flex-pack: center;
+  justify-content: center;
 }
 
 /* ── Game Board ── */
-.game-table { width: 100%; border-collapse: collapse; }
+.game-table { width: 100%; border-collapse: separate; border-spacing: 0px 20px; }
 
 .game-table thead tr {
-  background: rgba(6,72,120,0.85);
+  background: rgba(26,122,191,0.92);
 }
 
 .game-table thead th {
-  padding: 10px 16px;
-  font-size: 1em;
+  padding: 14px 20px;
+  font-size: 1.3rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   font-weight: bold;
   color: #fff;
+  text-align: left;
 }
 
-.game-table tbody tr {
-  background: rgba(255,255,255,0.88);
-  border-bottom: 2px solid rgba(10,132,200,0.15);
-}
+.game-table thead th.th-away { text-align: right; }
+.game-table thead th.th-vs   { text-align: center; }
 
-.game-table tbody tr:nth-child(even) {
-  background: rgba(232,244,252,0.88);
+.game-table .cal-sub-row td {
+  background: rgba(77,163,212,0.92);
+  color: #fff;
+  padding: 14px 20px;
+  font-size: 1.3rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
 }
 
 .game-table tbody td {
-  padding: 14px 16px;
+  padding: 18px 20px;
   color: #064878;
+  background: rgba(255,255,255,0.88);
 }
 
-.td-time  { font-size: 1.6em; font-weight: bold; width: 180px; }
-.td-away  { font-size: 1.5em; font-weight: bold; text-align: right; }
-.td-vs    { font-size: 0.9em; font-weight: bold; color: #0a84c8; text-align: center; width: 70px; }
-.td-home  { font-size: 1.5em; font-weight: bold; }
+.game-table tbody tr.game-row:first-child td:not(.td-gap) {
+  padding-top: 28px;
+}
+
+.game-table tbody tr.game-row:nth-child(even) td {
+  background: rgba(232,244,252,0.88);
+}
+
+.td-time  { font-weight: bold; white-space: nowrap; text-align: right; width: 1%; }
+.td-title { font-weight: 600; color: #0a84c8; white-space: nowrap; }
+.td-away  { font-weight: bold; text-align: left; white-space: nowrap; }
+.td-home  { font-weight: bold; white-space: nowrap; }
+.td-gap    { width: 20px; background: transparent !important; padding: 0 !important; }
+.td-locker { font-weight: bold; text-align: center; background: #000 !important; color: #fff !important; white-space: nowrap; width: 70px; min-width: 70px; }
 
 /* ── Public Skate ── */
 .skate-wrap {
@@ -254,28 +280,60 @@ function fmtDate(iso) {
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────
-function renderGames(games) {
+function renderGames(games, calMap) {
   if (!games || games.length === 0) {
     document.getElementById('content').innerHTML =
       '<div class="empty"><div class="empty-icon">&#127944;</div><p>No games scheduled for today</p></div>';
     return;
   }
-  var rows = '';
+
+  // Group by calendar
+  var groups = {};
+  var groupOrder = [];
   for (var i = 0; i < games.length; i++) {
-    var g = games[i];
-    var away = g.away_team ? (g.away_locker ? g.away_team + ' (' + g.away_locker + ')' : g.away_team) : 'TBD';
-    var home = g.home_team ? (g.home_locker ? g.home_team + ' (' + g.home_locker + ')' : g.home_team) : 'TBD';
-    rows += '<tr>' +
-      '<td class="td-time">' + fmtTime(g.start_time) + '</td>' +
-      '<td class="td-away">' + away + '</td>' +
-      '<td class="td-vs">VS</td>' +
-      '<td class="td-home">' + home + '</td>' +
-      '</tr>';
+    var key = games[i].calendar_id ? String(games[i].calendar_id) : '__none__';
+    if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
+    groups[key].push(games[i]);
   }
+
+  var tbody = '';
+  for (var gi = 0; gi < groupOrder.length; gi++) {
+    var key = groupOrder[gi];
+    var calName = calMap && calMap[key] ? calMap[key] : '';
+    if (calName) {
+      tbody += '<tr class="cal-sub-row"><td colspan="8">' + calName + '</td></tr>';
+    }
+    var grpGames = groups[key];
+    for (var j = 0; j < grpGames.length; j++) {
+      var g = grpGames[j];
+      var away = g.away_team ? (g.away_locker ? g.away_team + ' (' + g.away_locker + ')' : g.away_team) : 'TBD';
+      var home = g.home_team ? (g.home_locker ? g.home_team + ' (' + g.home_locker + ')' : g.home_team) : 'TBD';
+      tbody += '<tr class="game-row">' +
+        '<td class="td-time">' + fmtTime(g.start_time) + '</td>' +
+        '<td class="td-title">' + (g.title || '') + '</td>' +
+        '<td class="td-gap"></td>' +
+        '<td class="td-home">' + (g.home_team || 'TBD') + '</td>' +
+        '<td class="td-locker">' + (g.home_locker || '') + '</td>' +
+        '<td class="td-gap"></td>' +
+        '<td class="td-away">' + (g.away_team || 'TBD') + '</td>' +
+        '<td class="td-locker">' + (g.away_locker || '') + '</td>' +
+        '</tr>';
+    }
+  }
+
   document.getElementById('content').innerHTML =
     '<table class="game-table">' +
-    '<thead><tr><th style="width:180px">Time</th><th style="text-align:right">Away</th><th style="width:70px">VS</th><th>Home</th></tr></thead>' +
-    '<tbody>' + rows + '</tbody></table>';
+    '<thead><tr>' +
+      '<th style="white-space:nowrap">Time</th>' +
+      '<th style="white-space:nowrap">Title</th>' +
+      '<th style="width:20px;padding:0;background:transparent"></th>' +
+      '<th style="white-space:nowrap">Home</th>' +
+      '<th style="width:70px;min-width:70px;text-align:center">LR#</th>' +
+      '<th style="width:20px;padding:0;background:transparent"></th>' +
+      '<th style="white-space:nowrap" class="th-away">Away</th>' +
+      '<th style="width:70px;min-width:70px;text-align:center">LR#</th>' +
+    '</tr></thead>' +
+    '<tbody>' + tbody + '</tbody></table>';
 }
 
 function renderSkate(sessions, prices) {
@@ -309,6 +367,18 @@ function renderSkate(sessions, prices) {
     '</div>';
 }
 
+// ── Auto-fit table font size ──────────────────────────────────────────────
+function fitTable() {
+  var content = document.getElementById('content');
+  var table = content ? content.querySelector('.game-table') : null;
+  if (!table) return;
+  table.style.fontSize = '2em';
+  while ((table.scrollWidth > content.clientWidth || table.scrollHeight > content.clientHeight) && parseFloat(table.style.fontSize) > 0.5) {
+    var size = Math.round((parseFloat(table.style.fontSize) - 0.05) * 100) / 100;
+    table.style.fontSize = size + 'em';
+  }
+}
+
 // ── Load data ──────────────────────────────────────────────────────────────
 function loadScreen() {
   get('/api/screens', function(err, screens) {
@@ -337,7 +407,16 @@ function loadScreen() {
           var s = new Date(games[i].start_time);
           if (!games[i].is_skate && s >= todayStart && s < todayEnd) filtered.push(games[i]);
         }
-        renderGames(filtered);
+        get('/api/calendars', function(err3, calendars) {
+          var calMap = {};
+          if (calendars) {
+            for (var i = 0; i < calendars.length; i++) {
+              calMap[String(calendars[i].id)] = calendars[i].name;
+            }
+          }
+          renderGames(filtered, calMap);
+          fitTable();
+        });
       });
 
     } else if (dtype === 'skate') {

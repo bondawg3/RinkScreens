@@ -2,6 +2,18 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.2.3] — 2026-06-26
+
+### Changed
+- **TV Game Board** — overhauled layout to mirror admin Games tab: games grouped by calendar with sub-header rows, columns for Time, Title, Home, LR#, Away, LR#
+- **TV Game Board** — locker room numbers shown in black cells with white text directly attached to each team
+- **TV Game Board** — transparent gaps between Title/Home and Home LR/Away columns matching row gap spacing
+- **TV Game Board** — text auto-scales down if content doesn't fit the screen; starts at 2em
+- **TV Game Board** — larger header banner (2em text, 64px logo)
+- **Admin Games tab** — column order changed to Time, Title, Home Team, Home Locker, Away Team, Away Locker
+- **Calendar sync** — stores `raw_title` on each game; reparse now uses raw title so team parsing works correctly after first import
+- **Calendar sync** — team names are re-parsed on re-sync if previously blank or TBD (only preserves admin-entered names)
+
 ## [1.2.2] — 2026-06-26
 
 ### Added

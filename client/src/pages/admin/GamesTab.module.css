@@ -80,13 +80,13 @@
 }
 
 .calSubHeaderRow {
-  background: #1a7abf;
+  background: #4da3d4;
   color: #fff;
   padding: 0.35rem 0.9rem;
   font-size: 0.82rem;
   font-weight: 600;
   letter-spacing: 0.03em;
-  border-bottom: 1px solid #1568a3;
+  border-bottom: 1px solid #3a8fbf;
 }
 
 .lockerSelect {
@@ -111,7 +111,7 @@
   box-shadow: none;
 }
 
-/* Column headers are lightest — dark → medium → light top to bottom */
+/* Column headers are medium — dark → medium → light top to bottom */
 .group table th {
-  background: #4da3d4;
+  background: #1a7abf;
 }

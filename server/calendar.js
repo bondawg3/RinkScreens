@@ -80,14 +80,17 @@ async function syncCalendar(cal) {
     const rawTitle = event.summary || '';
     const { title, away_team, home_team } = parseTitle(rawTitle, cal);
 
+    const isAdminTeam = (t) => t && t !== 'Away TBD' && t !== 'Home TBD';
+
     db.upsertByField('games', 'calendar_uid', event.uid, {
       calendar_uid: event.uid,
       calendar_id: cal.id,
       start_time: start.toISOString(),
       end_time: event.end ? new Date(event.end).toISOString() : start.toISOString(),
+      raw_title: rawTitle,
       title: title || '(No title)',
-      home_team: existing ? existing.home_team : home_team,
-      away_team: existing ? existing.away_team : away_team,
+      home_team: (existing && isAdminTeam(existing.home_team)) ? existing.home_team : home_team,
+      away_team: (existing && isAdminTeam(existing.away_team)) ? existing.away_team : away_team,
       home_locker: existing ? existing.home_locker : '',
       away_locker: existing ? existing.away_locker : '',
       is_skate: event.summary && event.summary.includes(keyword) ? 1 : 0,

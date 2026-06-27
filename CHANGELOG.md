@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.2.9] — 2026-06-26
+
+### Changed
+- **Public Skate TV display** — pricing subheading now appears on a second line below the label, slightly indented and in a smaller font
+
 ## [1.2.8] — 2026-06-26
 
 ### Changed

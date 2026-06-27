@@ -5,6 +5,7 @@ import styles from './AdminLayout.module.css';
 const tabs = [
   { to: 'screens', label: 'Screens' },
   { to: 'games', label: 'Games' },
+  { to: 'rink-events', label: 'Rink Events' },
   { to: 'skate', label: 'Public Skate' },
   { to: 'backgrounds', label: 'Backgrounds' },
   { to: 'settings', label: 'Calendars' },

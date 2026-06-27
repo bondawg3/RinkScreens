@@ -126,7 +126,8 @@ function scheduleCalendar(cal) {
 }
 
 async function fetchAndSync() {
-  const calendars = db.findAll('calendars').filter((c) => c.type === 'hockey_games');
+  const allCals = db.findAll('calendars');
+  const calendars = allCals.filter((c) => c.type === 'hockey_games' || c.type === 'rink_events');
 
   // Fall back to legacy single ical_url setting if no calendars configured yet
   if (calendars.length === 0) {
@@ -143,7 +144,7 @@ async function fetchAndSync() {
 
 function startPolling() {
   fetchAndSync();
-  const calendars = db.findAll('calendars').filter((c) => c.type === 'hockey_games');
+  const calendars = db.findAll('calendars').filter((c) => c.type === 'hockey_games' || c.type === 'rink_events');
   if (calendars.length > 0) {
     calendars.forEach(scheduleCalendar);
   } else {

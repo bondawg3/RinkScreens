@@ -80,6 +80,19 @@ router.delete('/screens/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Rink Events ───────────────────────────────────────────────────────────────
+
+router.get('/rink-events', (req, res) => {
+  const rinkEventCalIds = new Set(
+    db.findAll('calendars')
+      .filter((c) => c.type === 'rink_events')
+      .map((c) => c.id)
+  );
+  const events = db.findAll('games', 'start_time')
+    .filter((g) => rinkEventCalIds.has(g.calendar_id));
+  res.json(events);
+});
+
 // ── Games ─────────────────────────────────────────────────────────────────────
 
 router.get('/games', (req, res) => {

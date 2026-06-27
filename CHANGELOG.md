@@ -2,6 +2,13 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.2.6] — 2026-06-26
+
+### Added
+- **Rink Events tab** — new admin tab showing events pulled from Rink Events calendars, grouped by day then calendar, with weekly pagination
+- **Rink Events calendar sync** — server now polls `rink_events`-type calendars alongside `hockey_games` calendars
+- **`/api/rink-events` endpoint** — returns games whose calendar is type `rink_events`
+
 ## [1.2.5] — 2026-06-26
 
 ### Added

@@ -55,9 +55,9 @@ router.get('/screens', (req, res) => {
 });
 
 router.post('/screens', (req, res) => {
-  const { name, ip, display_type = 'games', webpage_url = '', webpage_width = 100, webpage_zoom = 100 } = req.body;
+  const { name, ip, display_type = 'games', webpage_url = '', webpage_width = 100, webpage_zoom = 100, webpage_refresh = 0 } = req.body;
   if (!name || !ip) return res.status(400).json({ error: 'name and ip required' });
-  const row = db.insert('screens', { name, ip, display_type, background_id: null, webpage_url, webpage_width: Number(webpage_width), webpage_zoom: Number(webpage_zoom) });
+  const row = db.insert('screens', { name, ip, display_type, background_id: null, webpage_url, webpage_width: Number(webpage_width), webpage_zoom: Number(webpage_zoom), webpage_refresh: Number(webpage_refresh) });
   res.json({ id: row.id });
 });
 
@@ -73,6 +73,7 @@ router.patch('/screens/:id', (req, res) => {
     webpage_url: webpage_url !== undefined ? webpage_url : (screen.webpage_url || ''),
     webpage_width: webpage_width !== undefined ? Number(webpage_width) : (screen.webpage_width || 100),
     webpage_zoom: webpage_zoom !== undefined ? Number(webpage_zoom) : (screen.webpage_zoom || 100),
+    webpage_refresh: webpage_refresh !== undefined ? Number(webpage_refresh) : (screen.webpage_refresh || 0),
   });
   ws.push(String(req.params.id), { type: 'reload' });
   res.json({ ok: true });

@@ -2,6 +2,14 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.3.2] — 2026-06-26
+
+### Fixed
+- **Webpage display** — iframe now centers correctly when width is less than 100% (changed transform-origin to top center)
+
+### Added
+- **Webpage display** — Refresh Interval slider (0–60 min, Off when 0); TV reloads the iframe at the configured interval
+
 ## [1.3.1] — 2026-06-26
 
 ### Changed

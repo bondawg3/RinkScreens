@@ -451,10 +451,19 @@ function loadScreen() {
       if (screen.webpage_url) {
         var wpWidth = screen.webpage_width || 100;
         var wpZoom = (screen.webpage_zoom || 100) / 100;
+        var wpRefresh = screen.webpage_refresh || 0;
+        var iframeId = 'webpage-frame';
         document.getElementById('content').innerHTML =
           '<div style="width:100%;height:100%;display:flex;justify-content:center;overflow:hidden;">' +
-          '<iframe src="' + screen.webpage_url + '" style="width:' + wpWidth + '%;height:' + Math.round(100 / wpZoom) + '%;border:none;flex-shrink:0;transform:scale(' + wpZoom + ');transform-origin:top left;" allowfullscreen></iframe>' +
+          '<iframe id="' + iframeId + '" src="' + screen.webpage_url + '" style="width:' + wpWidth + '%;height:' + Math.round(100 / wpZoom) + '%;border:none;flex-shrink:0;transform:scale(' + wpZoom + ');transform-origin:top center;" allowfullscreen></iframe>' +
           '</div>';
+        if (wpRefresh > 0) {
+          setTimeout(function reloadFrame() {
+            var f = document.getElementById(iframeId);
+            if (f) f.src = f.src;
+            setTimeout(reloadFrame, wpRefresh * 60000);
+          }, wpRefresh * 60000);
+        }
       } else {
         document.getElementById('content').innerHTML =
           '<div class="empty"><p>No webpage URL configured.</p></div>';

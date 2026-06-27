@@ -70,6 +70,7 @@ export default function ScreensTab() {
       webpage_url: screen.webpage_url || '',
       webpage_width: screen.webpage_width ?? 100,
       webpage_zoom: screen.webpage_zoom ?? 100,
+      webpage_refresh: screen.webpage_refresh ?? 0,
     });
   }
 
@@ -163,6 +164,15 @@ export default function ScreensTab() {
                   type="range" min="25" max="300" step="5"
                   value={editData.webpage_zoom ?? 100}
                   onChange={(e) => setEditData({ ...editData, webpage_zoom: Number(e.target.value) })}
+                  style={{ width: '100%' }}
+                />
+                <label className={styles.label}>
+                  Refresh Interval — {(editData.webpage_refresh ?? 0) === 0 ? 'Off' : `Every ${editData.webpage_refresh} min`}
+                </label>
+                <input
+                  type="range" min="0" max="60" step="1"
+                  value={editData.webpage_refresh ?? 0}
+                  onChange={(e) => setEditData({ ...editData, webpage_refresh: Number(e.target.value) })}
                   style={{ width: '100%' }}
                 />
               </>

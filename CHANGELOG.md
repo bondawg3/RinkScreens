@@ -2,6 +2,15 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.2.4] — 2026-06-26
+
+### Changed
+- **TV Game Board** — calendar sub-heading now appears first in each group, column header row second (Home/LR#/Away/LR# only — Time and Title area transparent)
+- **TV Game Board** — swapped row colors: sub-heading is now medium blue, column header row is light blue
+- **TV Game Board** — rounded corners on all visible row segments and sub-heading
+- **TV Game Board** — sub-heading font size now matches game row text and scales with auto-fit
+- **Admin Games tab** — Games tab column color order fixed: column headers now medium blue, sub-headers light blue
+
 ## [1.2.3] — 2026-06-26
 
 ### Changed

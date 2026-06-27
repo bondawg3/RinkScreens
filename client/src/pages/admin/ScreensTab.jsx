@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
+import tStyles from './ScreensTab.module.css';
 
 const DISPLAY_TYPES = [
   { value: 'games', label: 'Game Board' },
@@ -8,11 +9,28 @@ const DISPLAY_TYPES = [
   { value: 'message', label: 'Custom Message' },
 ];
 
+function Thumbnail({ screenId }) {
+  const wrapRef = useRef(null);
+  const [scale, setScale] = useState(0.2);
+
+  useEffect(() => {
+    if (!wrapRef.current) return;
+    const w = wrapRef.current.offsetWidth;
+    setScale(w / 1920);
+  }, []);
+
+  return (
+    <div className={tStyles.thumbWrap} ref={wrapRef} style={{ '--thumb-scale': scale }}>
+      <iframe src={`/tv/${screenId}`} title={`Screen ${screenId}`} scrolling="no" />
+    </div>
+  );
+}
+
 export default function ScreensTab() {
   const { data: screens, reload } = useApi('/screens');
   const { data: backgrounds } = useApi('/backgrounds');
   const [form, setForm] = useState({ name: '', ip: '', display_type: 'games' });
-  const [editing, setEditing] = useState(null); // screenId being edited
+  const [editing, setEditing] = useState(null);
   const [editData, setEditData] = useState({});
   const [err, setErr] = useState('');
 
@@ -50,6 +68,8 @@ export default function ScreensTab() {
     });
   }
 
+  const editingScreen = editing && (screens || []).find((s) => s.id === editing);
+
   return (
     <div>
       <h2 className={styles.heading}>Screens</h2>
@@ -80,61 +100,55 @@ export default function ScreensTab() {
         {err && <span className={styles.error}>{err}</span>}
       </form>
 
-      <table className={styles.table}>
-        <thead>
-          <tr>
-            <th>Name</th><th>IP</th><th>Display</th><th>Background</th><th>Status</th><th></th>
-          </tr>
-        </thead>
-        <tbody>
-          {(screens || []).map((s) => (
-            <tr key={s.id}>
-              {editing === s.id ? (
-                <>
-                  <td><input className={styles.input} value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} /></td>
-                  <td><input className={styles.input} value={editData.ip} onChange={(e) => setEditData({ ...editData, ip: e.target.value })} /></td>
-                  <td>
-                    <select className={styles.select} value={editData.display_type} onChange={(e) => setEditData({ ...editData, display_type: e.target.value })}>
-                      {DISPLAY_TYPES.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-                    </select>
-                  </td>
-                  <td>
-                    <select className={styles.select} value={editData.background_id ?? ''} onChange={(e) => setEditData({ ...editData, background_id: e.target.value || null })}>
-                      <option value="">None</option>
-                      {(backgrounds || []).map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
-                    </select>
-                  </td>
-                  <td></td>
-                  <td className={styles.actions}>
-                    <button className={styles.btnPrimary} onClick={() => saveScreen(s.id)}>Save</button>
-                    <button className={styles.btnGhost} onClick={() => setEditing(null)}>Cancel</button>
-                  </td>
-                </>
-              ) : (
-                <>
-                  <td>{s.name}</td>
-                  <td className={styles.mono}>{s.ip}</td>
-                  <td>{DISPLAY_TYPES.find((d) => d.value === s.display_type)?.label || s.display_type}</td>
-                  <td>{s.bg_label || <span className={styles.muted}>None</span>}</td>
-                  <td>
-                    <span className={s.online ? styles.online : styles.offline}>
-                      {s.online ? 'Online' : 'Offline'}
-                    </span>
-                  </td>
-                  <td className={styles.actions}>
-                    <a href={`/tv/${s.id}`} target="_blank" rel="noreferrer" className={styles.btnGhost}>Preview</a>
-                    <button className={styles.btnGhost} onClick={() => startEdit(s)}>Edit</button>
-                    <button className={styles.btnDanger} onClick={() => deleteScreen(s.id)}>Remove</button>
-                  </td>
-                </>
-              )}
-            </tr>
-          ))}
-          {screens && screens.length === 0 && (
-            <tr><td colSpan={6} className={styles.muted}>No screens added yet.</td></tr>
-          )}
-        </tbody>
-      </table>
+      <div className={tStyles.grid}>
+        {(screens || []).map((s) => (
+          <div key={s.id} className={tStyles.card}>
+            <Thumbnail screenId={s.id} />
+            <div className={tStyles.cardBody}>
+              <div className={tStyles.cardName}>{s.name}</div>
+              <div className={tStyles.cardMeta}>
+                <span>{DISPLAY_TYPES.find((d) => d.value === s.display_type)?.label || s.display_type}</span>
+                <span className={s.online ? styles.online : styles.offline}>
+                  {s.online ? '● Online' : '● Offline'}
+                </span>
+              </div>
+              <div className={tStyles.cardActions}>
+                <a href={`/tv/${s.id}`} target="_blank" rel="noreferrer" className={styles.btnGhost}>Preview</a>
+                <button className={styles.btnGhost} onClick={() => startEdit(s)}>Edit</button>
+                <button className={styles.btnDanger} onClick={() => deleteScreen(s.id)}>Remove</button>
+              </div>
+            </div>
+          </div>
+        ))}
+        {screens && screens.length === 0 && (
+          <p className={styles.muted}>No screens added yet.</p>
+        )}
+      </div>
+
+      {editing && editingScreen && (
+        <div className={tStyles.modalBackdrop} onClick={() => setEditing(null)}>
+          <div className={tStyles.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={tStyles.modalTitle}>Edit — {editingScreen.name}</div>
+            <label className={styles.label}>Name</label>
+            <input className={styles.input} value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} />
+            <label className={styles.label}>IP Address</label>
+            <input className={styles.input} value={editData.ip} onChange={(e) => setEditData({ ...editData, ip: e.target.value })} />
+            <label className={styles.label}>Display Type</label>
+            <select className={styles.select} value={editData.display_type} onChange={(e) => setEditData({ ...editData, display_type: e.target.value })}>
+              {DISPLAY_TYPES.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+            </select>
+            <label className={styles.label}>Background</label>
+            <select className={styles.select} value={editData.background_id ?? ''} onChange={(e) => setEditData({ ...editData, background_id: e.target.value || null })}>
+              <option value="">None</option>
+              {(backgrounds || []).map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+            </select>
+            <div className={tStyles.modalActions}>
+              <button className={styles.btnGhost} onClick={() => setEditing(null)}>Cancel</button>
+              <button className={styles.btnPrimary} onClick={() => saveScreen(editing)}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

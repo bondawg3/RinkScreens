@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.2.5] — 2026-06-26
+
+### Added
+- **Screen thumbnails** — Screens tab now shows a 3-column card grid with a live scaled iframe preview of each TV display; edit moved to a modal overlay
+
 ## [1.2.4] — 2026-06-26
 
 ### Changed

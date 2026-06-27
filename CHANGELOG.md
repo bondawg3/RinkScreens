@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.3.0] — 2026-06-26
+
+### Added
+- **Webpage embed display type** — screens can now be set to "Webpage" mode; a URL field appears in the edit modal and the TV renders it full-screen in an iframe
+
 ## [1.2.9] — 2026-06-26
 
 ### Changed

@@ -447,6 +447,15 @@ function loadScreen() {
         });
       });
 
+    } else if (dtype === 'webpage') {
+      if (screen.webpage_url) {
+        document.getElementById('content').innerHTML =
+          '<iframe src="' + screen.webpage_url + '" style="width:100%;height:100%;border:none;display:block;" allowfullscreen></iframe>';
+      } else {
+        document.getElementById('content').innerHTML =
+          '<div class="empty"><p>No webpage URL configured.</p></div>';
+      }
+
     } else if (dtype === 'message') {
       document.getElementById('content').innerHTML =
         '<div class="empty"><p>' + (screen.custom_message || 'Welcome!') + '</p></div>';

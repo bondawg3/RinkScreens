@@ -7,6 +7,7 @@ const DISPLAY_TYPES = [
   { value: 'games', label: 'Game Board' },
   { value: 'rink_events', label: 'Rink Events' },
   { value: 'skate', label: 'Public Skate' },
+  { value: 'webpage', label: 'Webpage' },
   { value: 'message', label: 'Custom Message' },
 ];
 
@@ -66,6 +67,7 @@ export default function ScreensTab() {
       ip: screen.ip,
       display_type: screen.display_type,
       background_id: screen.background_id ?? '',
+      webpage_url: screen.webpage_url || '',
     });
   }
 
@@ -138,6 +140,17 @@ export default function ScreensTab() {
             <select className={styles.select} value={editData.display_type} onChange={(e) => setEditData({ ...editData, display_type: e.target.value })}>
               {DISPLAY_TYPES.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
             </select>
+            {editData.display_type === 'webpage' && (
+              <>
+                <label className={styles.label}>Webpage URL</label>
+                <input
+                  className={styles.input}
+                  placeholder="https://example.com"
+                  value={editData.webpage_url || ''}
+                  onChange={(e) => setEditData({ ...editData, webpage_url: e.target.value })}
+                />
+              </>
+            )}
             <label className={styles.label}>Background</label>
             <select className={styles.select} value={editData.background_id ?? ''} onChange={(e) => setEditData({ ...editData, background_id: e.target.value || null })}>
               <option value="">None</option>

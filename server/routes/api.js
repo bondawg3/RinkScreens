@@ -64,7 +64,7 @@ router.post('/screens', (req, res) => {
 router.patch('/screens/:id', (req, res) => {
   const screen = db.findById('screens', req.params.id);
   if (!screen) return res.status(404).json({ error: 'not found' });
-  const { name, ip, display_type, background_id, webpage_url, webpage_width, webpage_zoom } = req.body;
+  const { name, ip, display_type, background_id, webpage_url, webpage_width, webpage_zoom, webpage_refresh } = req.body;
   db.update('screens', req.params.id, {
     name: name ?? screen.name,
     ip: ip ?? screen.ip,

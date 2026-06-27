@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.3.3] — 2026-06-26
+
+### Fixed
+- **Screens edit modal** — Save was broken due to `webpage_refresh` missing from the PATCH route destructure, causing a server ReferenceError; also added error display inside the modal so failures are visible
+
 ## [1.3.2] — 2026-06-26
 
 ### Fixed

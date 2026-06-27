@@ -182,6 +182,7 @@ export default function ScreensTab() {
               <option value="">None</option>
               {(backgrounds || []).map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
             </select>
+            {err && <span className={styles.error}>{err}</span>}
             <div className={tStyles.modalActions}>
               <button className={styles.btnGhost} onClick={() => setEditing(null)}>Cancel</button>
               <button className={styles.btnPrimary} onClick={() => saveScreen(editing)}>Save</button>

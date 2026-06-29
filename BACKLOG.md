@@ -18,7 +18,7 @@ Items here are planned but not yet implemented.
 
 - ~~**Games tab — table color reorder**~~ — **Done.** Day headers darkest (`#064878`), calendar sub-headers medium (`#1a7abf`), column `th` lightest (`#4da3d4`).
 
-- **Game import — parse team names and subheadings from title** — parse calendar event titles on import using these rules:
+- ~~**Game import — parse team names and subheadings from title**~~ — **Done.** Parse calendar event titles on import using these rules:
   - If the title contains a colon (`:`), everything before the colon is the **subheading** (e.g. division or category like "Squirt"), and everything after is the matchup
   - If the matchup portion contains "vs" (case-insensitive), split on "vs" to extract team names
   - If no "vs" is present, set both `home_team` and `away_team` to `"<Subheading> TBD"` (or `"<Full Title> TBD"` if no colon)
@@ -31,7 +31,7 @@ Items here are planned but not yet implemented.
       - If the NCWHL games are isolated (no other games within 2 hours), start fresh at 1 & 3, then 2 & 4
     - Store the source calendar on each game record so NCWHL games can be identified and handled separately if needed.
 
-- **Game Board display — subheading group headers** — when games have a `subheading` value, group them on the Game Board display under a header row showing the subheading (e.g. "Squirt"). Multiple subheadings can appear on the same day, each with their games listed below. Games without a subheading display as before with no group header.
+- ~~**Game Board display — subheading group headers**~~ — **Done.** Games with a `subheading` value are grouped under a header row on the TV display; games without a subheading show as before.
 
 
 
@@ -65,8 +65,15 @@ Considerations:
 - Should support an optional auto-refresh interval so the stats page reloads periodically
 - **Ask Hanna:** How often should the standings page refresh/reload on the TV display?
 
-### Admin login
-Protect the admin panel with a username + password login page. The `/tv/:screenId` display pages stay public (no login required on TVs). Use `express-session` with in-memory or file-based persistence.
+### ~~Admin login~~ — **Done** (v1.4.0)
+Single-password login with JWT session. TV display pages remain public. First visit shows setup form; subsequent visits require login. Log out button in header, change password in Settings tab, CLI reset script for lockout recovery.
+
+### External access
+Allow the admin panel to be accessed from outside the rink network. Auth is already in place (v1.4.0). Options:
+- **Cloudflare Tunnel** — free, no static IP or port forwarding needed, automatic HTTPS. Requires `cloudflared` daemon running on the rink PC.
+- **Tailscale** — private VPN, nothing publicly exposed. Requires Tailscale app on every device used for access.
+- **Port forwarding** — open a port on the rink router, point at the PC. Needs static IP or dynamic DNS.
+- **Ask Hanna:** Does the rink PC have a stable enough internet connection to support a persistent tunnel or port forward? Any IT/network constraints at the rink?
 
 ### Upcoming Public Skate display screen
 New display type that shows upcoming public skate sessions pulled from a dedicated iCal calendar. Requirements:
@@ -90,6 +97,11 @@ The Rink Events display will have two modes:
    - Display shows event name, date, time, and description
    - Calendars poll on the same interval as the games calendar
    - **Ask: What iCal calendar URLs will be used for rink events?**
+
+### Daytime / evening split for busy days
+On days with more than 5 games/practices/scrimmages, consider splitting the Game Board display into two sections: **Daytime** (e.g. before 5 PM) and **Evening** (5 PM and later). This avoids the table shrinking too small when fitTable() has to fit many rows. Implementation options:
+- Automatic split triggered by row count threshold
+- Or always show two sections but collapse the empty one
 
 ### Auto-assign locker rooms
 Add a button (or automatic logic) in the Games tab that assigns locker room numbers to a day's games according to these rules:

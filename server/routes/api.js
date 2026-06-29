@@ -3,6 +3,55 @@ const router = express.Router();
 const db = require('../db');
 const ws = require('../ws');
 const { triggerRefresh, parseTitle } = require('../calendar');
+const { autoAssign } = require('../locker-assign');
+const { requireAuth, signToken, verifyToken } = require('../auth');
+const bcrypt = require('bcryptjs');
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+
+router.get('/auth/check', (req, res) => {
+  const settings = db.getSettings();
+  const configured = !!settings.admin_password_hash;
+  const header = req.headers['authorization'] || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) return res.json({ configured, valid: false });
+  try {
+    verifyToken(token);
+    res.json({ configured, valid: true });
+  } catch {
+    res.json({ configured, valid: false });
+  }
+});
+
+router.post('/auth/login', async (req, res) => {
+  const { password } = req.body;
+  const settings = db.getSettings();
+  if (!settings.admin_password_hash) return res.status(401).json({ error: 'not_configured' });
+  const match = await bcrypt.compare(password || '', settings.admin_password_hash);
+  if (!match) return res.status(401).json({ error: 'Invalid password.' });
+  res.json({ token: signToken() });
+});
+
+router.post('/auth/setup', async (req, res) => {
+  const settings = db.getSettings();
+  if (settings.admin_password_hash) return res.status(409).json({ error: 'already_configured' });
+  const { password } = req.body;
+  if (!password || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  const hash = await bcrypt.hash(password, 12);
+  db.setSetting('admin_password_hash', hash);
+  res.json({ token: signToken() });
+});
+
+router.post('/auth/change-password', requireAuth, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  const settings = db.getSettings();
+  const match = await bcrypt.compare(currentPassword || '', settings.admin_password_hash || '');
+  if (!match) return res.status(401).json({ error: 'Current password is incorrect.' });
+  if (!newPassword || newPassword.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+  const hash = await bcrypt.hash(newPassword, 12);
+  db.setSetting('admin_password_hash', hash);
+  res.json({ token: signToken() });
+});
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
@@ -10,7 +59,7 @@ router.get('/settings', (req, res) => {
   res.json(db.getSettings());
 });
 
-router.patch('/settings', async (req, res) => {
+router.patch('/settings', requireAuth, async (req, res) => {
   const incoming = req.body;
 
   if (incoming.ical_url) {
@@ -54,14 +103,14 @@ router.get('/screens', (req, res) => {
   })));
 });
 
-router.post('/screens', (req, res) => {
+router.post('/screens', requireAuth, (req, res) => {
   const { name, ip, display_type = 'games', webpage_url = '', webpage_width = 100, webpage_zoom = 100, webpage_refresh = 0 } = req.body;
   if (!name || !ip) return res.status(400).json({ error: 'name and ip required' });
   const row = db.insert('screens', { name, ip, display_type, background_id: null, webpage_url, webpage_width: Number(webpage_width), webpage_zoom: Number(webpage_zoom), webpage_refresh: Number(webpage_refresh) });
   res.json({ id: row.id });
 });
 
-router.patch('/screens/:id', (req, res) => {
+router.patch('/screens/:id', requireAuth, (req, res) => {
   const screen = db.findById('screens', req.params.id);
   if (!screen) return res.status(404).json({ error: 'not found' });
   const { name, ip, display_type, background_id, webpage_url, webpage_width, webpage_zoom, webpage_refresh } = req.body;
@@ -79,7 +128,7 @@ router.patch('/screens/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-router.delete('/screens/:id', (req, res) => {
+router.delete('/screens/:id', requireAuth, (req, res) => {
   db.remove('screens', req.params.id);
   res.json({ ok: true });
 });
@@ -103,26 +152,47 @@ router.get('/games', (req, res) => {
   res.json(db.findAll('games', 'start_time'));
 });
 
-router.patch('/games/:id', (req, res) => {
+router.patch('/games/:id', requireAuth, (req, res) => {
   const game = db.findById('games', req.params.id);
   if (!game) return res.status(404).json({ error: 'not found' });
   const { home_team, away_team, home_locker, away_locker } = req.body;
+  const lockerChanged = home_locker !== undefined || away_locker !== undefined;
   db.update('games', req.params.id, {
     home_team: home_team ?? game.home_team,
     away_team: away_team ?? game.away_team,
     home_locker: home_locker ?? game.home_locker,
     away_locker: away_locker ?? game.away_locker,
+    lr_auto_assigned: lockerChanged ? 0 : (game.lr_auto_assigned || 0),
   });
   ws.broadcast({ type: 'refresh_data' });
   res.json({ ok: true });
 });
 
-router.post('/games/refresh', (req, res) => {
+router.delete('/games/:id', requireAuth, (req, res) => {
+  const game = db.findById('games', req.params.id);
+  if (!game) return res.status(404).json({ error: 'not found' });
+  db.remove('games', req.params.id);
+  ws.broadcast({ type: 'refresh_data' });
+  res.json({ ok: true });
+});
+
+router.post('/games/refresh', requireAuth, (req, res) => {
   triggerRefresh();
   res.json({ ok: true });
 });
 
-router.post('/games/reparse', (req, res) => {
+router.post('/games/auto-assign', requireAuth, (req, res) => {
+  const { date, reset } = req.body || {};
+  try {
+    const result = autoAssign({ dateStr: date || null, resetExisting: !!reset });
+    ws.broadcast({ type: 'refresh_data' });
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/games/reparse', requireAuth, (req, res) => {
   const calendars = db.findAll('calendars');
   const calMap = Object.fromEntries(calendars.map((c) => [c.id, c]));
   const games = db.findAll('games');
@@ -139,7 +209,7 @@ router.post('/games/reparse', (req, res) => {
   res.json({ updated });
 });
 
-router.delete('/games/unassigned', (req, res) => {
+router.delete('/games/unassigned', requireAuth, (req, res) => {
   const data = require('../db');
   const all = data.findAll('games');
   const toRemove = all.filter((g) => !g.calendar_id);
@@ -205,7 +275,7 @@ router.get('/calendars', (req, res) => {
   res.json(db.findAll('calendars', 'created_at'));
 });
 
-router.post('/calendars', async (req, res) => {
+router.post('/calendars', requireAuth, async (req, res) => {
   const { name, url, type, poll_interval_minutes = 5, team_order = 'away_home' } = req.body;
   if (!name || !url || !type) return res.status(400).json({ error: 'name, url, and type are required' });
 
@@ -238,7 +308,7 @@ router.post('/calendars', async (req, res) => {
   res.json({ id: row.id });
 });
 
-router.patch('/calendars/:id', async (req, res) => {
+router.patch('/calendars/:id', requireAuth, async (req, res) => {
   const cal = db.findById('calendars', req.params.id);
   if (!cal) return res.status(404).json({ error: 'not found' });
 
@@ -282,7 +352,7 @@ router.patch('/calendars/:id', async (req, res) => {
   res.json({ ok: true });
 });
 
-router.delete('/calendars/:id', (req, res) => {
+router.delete('/calendars/:id', requireAuth, (req, res) => {
   db.remove('calendars', req.params.id);
   res.json({ ok: true });
 });
@@ -294,14 +364,14 @@ router.get('/skate-prices', (req, res) => {
   res.json(prices);
 });
 
-router.post('/skate-prices', (req, res) => {
+router.post('/skate-prices', requireAuth, (req, res) => {
   const { label, subheading = '', price, sort_order = 0 } = req.body;
   if (!label || !price) return res.status(400).json({ error: 'label and price required' });
   const row = db.insert('skate_prices', { label, subheading, price, sort_order: Number(sort_order) });
   res.json({ id: row.id });
 });
 
-router.patch('/skate-prices/:id', (req, res) => {
+router.patch('/skate-prices/:id', requireAuth, (req, res) => {
   const row = db.findById('skate_prices', req.params.id);
   if (!row) return res.status(404).json({ error: 'not found' });
   const { label, subheading, price, sort_order } = req.body;
@@ -314,7 +384,7 @@ router.patch('/skate-prices/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-router.delete('/skate-prices/:id', (req, res) => {
+router.delete('/skate-prices/:id', requireAuth, (req, res) => {
   db.remove('skate_prices', req.params.id);
   res.json({ ok: true });
 });
@@ -325,7 +395,7 @@ router.get('/locker-sequences', (req, res) => {
   res.json(db.findAll('locker_sequences', 'name'));
 });
 
-router.post('/locker-sequences', (req, res) => {
+router.post('/locker-sequences', requireAuth, (req, res) => {
   const { name, pairs } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
   if (!pairs || !pairs.length) return res.status(400).json({ error: 'At least one pair is required' });
@@ -337,7 +407,7 @@ router.post('/locker-sequences', (req, res) => {
   res.json(row);
 });
 
-router.patch('/locker-sequences/:id', (req, res) => {
+router.patch('/locker-sequences/:id', requireAuth, (req, res) => {
   const seq = db.findById('locker_sequences', req.params.id);
   if (!seq) return res.status(404).json({ error: 'not found' });
   const { name, pairs } = req.body;
@@ -354,7 +424,7 @@ router.patch('/locker-sequences/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-router.delete('/locker-sequences/:id', (req, res) => {
+router.delete('/locker-sequences/:id', requireAuth, (req, res) => {
   db.remove('locker_sequences', req.params.id);
   res.json({ ok: true });
 });
@@ -365,7 +435,7 @@ router.get('/locker-rooms', (req, res) => {
   res.json(db.findAll('locker_rooms', 'name'));
 });
 
-router.post('/locker-rooms', (req, res) => {
+router.post('/locker-rooms', requireAuth, (req, res) => {
   const { name } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
   const all = db.findAll('locker_rooms');
@@ -376,7 +446,7 @@ router.post('/locker-rooms', (req, res) => {
   res.json(row);
 });
 
-router.patch('/locker-rooms/:id', (req, res) => {
+router.patch('/locker-rooms/:id', requireAuth, (req, res) => {
   const room = db.findById('locker_rooms', req.params.id);
   if (!room) return res.status(404).json({ error: 'not found' });
   const { name } = req.body;
@@ -389,14 +459,14 @@ router.patch('/locker-rooms/:id', (req, res) => {
   res.json({ ok: true });
 });
 
-router.delete('/locker-rooms/:id', (req, res) => {
+router.delete('/locker-rooms/:id', requireAuth, (req, res) => {
   db.remove('locker_rooms', req.params.id);
   res.json({ ok: true });
 });
 
 // ── Logo ──────────────────────────────────────────────────────────────────────
 
-router.delete('/logo', (req, res) => {
+router.delete('/logo', requireAuth, (req, res) => {
   const filename = db.getSettings().logo_filename;
   if (filename) {
     const fs = require('fs');
@@ -409,12 +479,12 @@ router.delete('/logo', (req, res) => {
 
 // ── Backgrounds ───────────────────────────────────────────────────────────────
 
-router.get('/backgrounds', (req, res) => {
+router.get('/backgrounds', requireAuth, (req, res) => {
   const bgs = db.findAll('backgrounds');
   res.json(bgs.reverse()); // newest first
 });
 
-router.delete('/backgrounds/:id', (req, res) => {
+router.delete('/backgrounds/:id', requireAuth, (req, res) => {
   const row = db.findById('backgrounds', req.params.id);
   if (!row) return res.status(404).json({ error: 'not found' });
   const fs = require('fs');
@@ -422,6 +492,79 @@ router.delete('/backgrounds/:id', (req, res) => {
   const filePath = path.join(__dirname, '..', '..', 'uploads', row.filename);
   try { fs.unlinkSync(filePath); } catch (_) {}
   db.remove('backgrounds', req.params.id);
+  res.json({ ok: true });
+});
+
+// ── Leagues & Teams ───────────────────────────────────────────────────────────
+
+router.get('/leagues', (req, res) => {
+  const leagues = db.findAll('leagues', 'name');
+  const teams = db.findAll('teams', 'name');
+  const result = leagues.map((l) => ({
+    ...l,
+    teams: teams.filter((t) => t.league_id === l.id),
+  }));
+  res.json(result);
+});
+
+router.post('/leagues', requireAuth, (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+  const all = db.findAll('leagues');
+  if (all.find((l) => l.name.toLowerCase() === name.trim().toLowerCase())) {
+    return res.status(400).json({ error: `A league named "${name}" already exists.` });
+  }
+  const row = db.insert('leagues', { name: name.trim(), locker_sequence_id: null });
+  res.json(row);
+});
+
+router.patch('/leagues/:id', requireAuth, (req, res) => {
+  const league = db.findById('leagues', req.params.id);
+  if (!league) return res.status(404).json({ error: 'not found' });
+  const { name, locker_sequence_id } = req.body;
+  if (name && name.trim()) {
+    const all = db.findAll('leagues');
+    if (all.find((l) => l.id !== league.id && l.name.toLowerCase() === name.trim().toLowerCase())) {
+      return res.status(400).json({ error: `A league named "${name}" already exists.` });
+    }
+  }
+  db.update('leagues', req.params.id, {
+    name: name ? name.trim() : league.name,
+    locker_sequence_id: locker_sequence_id !== undefined ? (locker_sequence_id || null) : league.locker_sequence_id,
+  });
+  res.json({ ok: true });
+});
+
+router.delete('/leagues/:id', requireAuth, (req, res) => {
+  db.remove('leagues', req.params.id);
+  db.findAll('teams').filter((t) => t.league_id === Number(req.params.id)).forEach((t) => db.remove('teams', t.id));
+  res.json({ ok: true });
+});
+
+router.post('/leagues/:id/teams', requireAuth, (req, res) => {
+  const league = db.findById('leagues', req.params.id);
+  if (!league) return res.status(404).json({ error: 'not found' });
+  const { name, color, text_color, display_name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Team name is required' });
+  const row = db.insert('teams', { name: name.trim(), display_name: display_name || '', league_id: league.id, color: color || '', text_color: text_color || '' });
+  res.json(row);
+});
+
+router.patch('/teams/:id', requireAuth, (req, res) => {
+  const team = db.findById('teams', req.params.id);
+  if (!team) return res.status(404).json({ error: 'not found' });
+  const { name, color, text_color, display_name } = req.body;
+  db.update('teams', req.params.id, {
+    name: name ? name.trim() : team.name,
+    display_name: display_name !== undefined ? display_name : (team.display_name || ''),
+    color: color !== undefined ? color : team.color,
+    text_color: text_color !== undefined ? text_color : (team.text_color || ''),
+  });
+  res.json({ ok: true });
+});
+
+router.delete('/teams/:id', requireAuth, (req, res) => {
+  db.remove('teams', req.params.id);
   res.json({ ok: true });
 });
 

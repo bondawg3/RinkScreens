@@ -1,6 +1,7 @@
 const ical = require('node-ical');
 const db = require('./db');
 const ws = require('./ws');
+const { autoAssign } = require('./locker-assign');
 
 const pollTimers = new Map();
 
@@ -24,8 +25,8 @@ function parseTitle(rawTitle, cal) {
     matchup = rawTitle.slice(colonIdx + 1).trim();
   }
 
-  let away_team = '';
-  let home_team = '';
+  let away_team = isPickup ? 'Open' : '';
+  let home_team = isPickup ? 'Open' : '';
 
   if (!isPickup) {
     const vsMatch = matchup.match(/^(.+?)\s+vs\.?\s+(.+)$/i);
@@ -42,8 +43,8 @@ function parseTitle(rawTitle, cal) {
       // No colon means the full title was just the matchup — clear it since teams say it all
       if (title === rawTitle) title = '';
     } else {
-      away_team = 'Away TBD';
-      home_team = 'Home TBD';
+      away_team = '';
+      home_team = '';
     }
   }
 
@@ -80,7 +81,7 @@ async function syncCalendar(cal) {
     const rawTitle = event.summary || '';
     const { title, away_team, home_team } = parseTitle(rawTitle, cal);
 
-    const isAdminTeam = (t) => t && t !== 'Away TBD' && t !== 'Home TBD';
+    const isAdminTeam = (t) => !!t;
 
     db.upsertByField('games', 'calendar_uid', event.uid, {
       calendar_uid: event.uid,
@@ -112,6 +113,41 @@ async function syncCalendar(cal) {
   }
 
   console.log(`[calendar] "${cal.name}" synced ${count} events`);
+
+  // Auto-assign locker rooms for newly-imported unassigned games
+  if (cal.type === 'hockey_games') {
+    autoAssign();
+  }
+
+  // Auto-extract league + teams from hockey_games calendars
+  if (cal.type === 'hockey_games' && cal.id) {
+    const SKIP = new Set(['open', 'tbd', 'away tbd', 'home tbd', '']);
+    const calGames = db.findAll('games').filter((g) => g.calendar_id === cal.id);
+    const teamNames = new Set();
+    for (const g of calGames) {
+      if (g.home_team && !SKIP.has(g.home_team.toLowerCase())) teamNames.add(g.home_team);
+      if (g.away_team && !SKIP.has(g.away_team.toLowerCase())) teamNames.add(g.away_team);
+    }
+
+    if (teamNames.size > 0) {
+      // Find or create league named after this calendar
+      let league = db.findAll('leagues').find((l) => l.name.toLowerCase() === cal.name.toLowerCase());
+      if (!league) {
+        league = db.insert('leagues', { name: cal.name, locker_sequence_id: null });
+        console.log(`[calendar] created league "${cal.name}"`);
+      }
+
+      const existingTeams = db.findAll('teams').filter((t) => t.league_id === league.id);
+      const existingNames = new Set(existingTeams.map((t) => t.name.toLowerCase()));
+
+      for (const name of teamNames) {
+        if (!existingNames.has(name.toLowerCase())) {
+          db.insert('teams', { name, league_id: league.id, color: '' });
+          console.log(`[calendar] added team "${name}" to league "${cal.name}"`);
+        }
+      }
+    }
+  }
 }
 
 function scheduleCalendar(cal) {

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useApi, apiFetch } from '../../hooks/useApi';
+import { useApi, apiFetch, getToken, setToken } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 import settStyles from './RinkSettings.module.css';
 import calStyles from './CalendarModal.module.css';
@@ -183,10 +183,35 @@ export default function RinkSettingsTab() {
   const [addError, setAddError] = useState('');
   const [seqModal, setSeqModal] = useState(null); // null | 'add' | sequence object
   const fileRef = useRef();
+  const [pwCurrent, setPwCurrent] = useState('');
+  const [pwNew, setPwNew] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
+  const [pwError, setPwError] = useState('');
+  const [pwSaved, setPwSaved] = useState(false);
+  const [pwSubmitting, setPwSubmitting] = useState(false);
 
   useEffect(() => {
     if (settings) setRinkName(settings.rink_name ?? '');
   }, [settings]);
+
+  async function changePassword(e) {
+    e.preventDefault();
+    setPwError('');
+    if (pwNew !== pwConfirm) { setPwError('New passwords do not match.'); return; }
+    if (pwNew.length < 8) { setPwError('Password must be at least 8 characters.'); return; }
+    setPwSubmitting(true);
+    try {
+      const data = await apiFetch('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ currentPassword: pwCurrent, newPassword: pwNew }),
+      });
+      if (data && data.token) setToken(data.token);
+      setPwCurrent(''); setPwNew(''); setPwConfirm('');
+      setPwSaved(true);
+      setTimeout(() => setPwSaved(false), 3000);
+    } catch (err) { setPwError(err.message); }
+    finally { setPwSubmitting(false); }
+  }
 
   async function saveRinkName(e) {
     e.preventDefault();
@@ -202,7 +227,7 @@ export default function RinkSettingsTab() {
     setUploading(true);
     const fd = new FormData();
     fd.append('file', file);
-    await fetch('/api/logo', { method: 'POST', body: fd });
+    await fetch('/api/logo', { method: 'POST', body: fd, headers: { Authorization: `Bearer ${getToken()}` } });
     setUploading(false);
     reloadSettings();
   }
@@ -338,6 +363,30 @@ export default function RinkSettingsTab() {
           onSaved={reloadSequences}
         />
       )}
+
+      {/* Admin Password */}
+      <h2 className={styles.heading} style={{ marginTop: '2rem' }}>Admin Password</h2>
+      <form onSubmit={changePassword} className={styles.settingsForm}>
+        <div className={styles.field}>
+          <label className={styles.label}>Current Password</label>
+          <input className={styles.input} type="password" value={pwCurrent} onChange={(e) => setPwCurrent(e.target.value)} required />
+        </div>
+        <div className={styles.field}>
+          <label className={styles.label}>New Password</label>
+          <input className={styles.input} type="password" value={pwNew} onChange={(e) => setPwNew(e.target.value)} required />
+        </div>
+        <div className={styles.field}>
+          <label className={styles.label}>Confirm New Password</label>
+          <input className={styles.input} type="password" value={pwConfirm} onChange={(e) => setPwConfirm(e.target.value)} required />
+        </div>
+        {pwError && <p className={styles.error}>{pwError}</p>}
+        <div className={styles.formFooter}>
+          <button className={styles.btnPrimary} type="submit" disabled={pwSubmitting}>
+            {pwSubmitting ? 'Saving…' : 'Change Password'}
+          </button>
+          {pwSaved && <span className={styles.savedMsg}>Password updated!</span>}
+        </div>
+      </form>
     </div>
   );
 }

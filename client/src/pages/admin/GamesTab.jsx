@@ -15,6 +15,8 @@ export default function GamesTab() {
   const [editData, setEditData] = useState({});
   const [refreshing, setRefreshing] = useState(false);
   const [reparsing, setReparsing] = useState(false);
+  const [autoAssigning, setAutoAssigning] = useState(false);
+  const [autoAssignMsg, setAutoAssignMsg] = useState(null);
   const [sortBy, setSortBy] = useState('datetime');
   const [weekOffset, setWeekOffset] = useState(0);
 
@@ -31,9 +33,35 @@ export default function GamesTab() {
     setReparsing(false);
   }
 
+  async function runAutoAssign({ date, reset } = {}) {
+    setAutoAssigning(true);
+    setAutoAssignMsg(null);
+    try {
+      const result = await apiFetch('/games/auto-assign', {
+        method: 'POST',
+        body: JSON.stringify({ date, reset }),
+      });
+      reload();
+      let msg = `Auto-assigned ${result.assigned} game${result.assigned !== 1 ? 's' : ''}.`;
+      if (result.conflicts && result.conflicts.length > 0) {
+        msg += ` ⚠ ${result.conflicts.length} locker room conflict${result.conflicts.length !== 1 ? 's' : ''} detected.`;
+      }
+      setAutoAssignMsg({ text: msg, isWarning: result.conflicts && result.conflicts.length > 0 });
+    } catch (err) {
+      setAutoAssignMsg({ text: `Error: ${err.message}`, isWarning: true });
+    }
+    setAutoAssigning(false);
+  }
+
   async function saveGame(id) {
     await apiFetch(`/games/${id}`, { method: 'PATCH', body: JSON.stringify(editData) });
     setEditing(null);
+    reload();
+  }
+
+  async function deleteGame(game) {
+    if (!confirm(`Delete "${game.title || game.raw_title || 'this game'}" at ${fmt(game.start_time)}?`)) return;
+    await apiFetch(`/games/${game.id}`, { method: 'DELETE' });
     reload();
   }
 
@@ -110,8 +138,17 @@ export default function GamesTab() {
       }
       return dayOrder.map((dayKey) => {
         const day = byDay[dayKey];
+        const firstGame = day.byCal[day.calOrder[0]][0];
+        const d = new Date(firstGame.start_time);
+        const dateStr =
+          d.getFullYear() +
+          '-' +
+          String(d.getMonth() + 1).padStart(2, '0') +
+          '-' +
+          String(d.getDate()).padStart(2, '0');
         return {
           label: day.label,
+          dateStr,
           subgroups: day.calOrder.map((calKey) => ({
             label: calKey === '__none__' ? 'Unassigned' : (calMap[calKey] || `Calendar ${calKey}`),
             games: day.byCal[calKey],
@@ -175,7 +212,10 @@ export default function GamesTab() {
             <td>{lockerSelect(g, 'home_locker')}</td>
             <td>{g.away_team || <span className={styles.muted}>—</span>}</td>
             <td>{lockerSelect(g, 'away_locker')}</td>
-            <td><button className={styles.btnGhost} onClick={() => startEdit(g)}>Edit</button></td>
+            <td className={styles.actions}>
+              <button className={styles.btnGhost} onClick={() => startEdit(g)}>Edit</button>
+              <button className={styles.btnDanger} onClick={() => deleteGame(g)} title="Delete game" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>🗑</button>
+            </td>
           </>
         )}
       </tr>
@@ -215,8 +255,27 @@ export default function GamesTab() {
           <button className={styles.btnGhost} onClick={reparse} disabled={reparsing}>
             {reparsing ? 'Reparsing…' : 'Reparse Titles'}
           </button>
+          <button className={styles.btnGhost} onClick={() => runAutoAssign({ reset: true })} disabled={autoAssigning}>
+            {autoAssigning ? 'Assigning…' : 'Reset Auto-Assign LRs'}
+          </button>
         </div>
       </div>
+      {autoAssignMsg && (
+        <div style={{
+          marginBottom: '0.75rem',
+          padding: '0.5rem 0.75rem',
+          borderRadius: 6,
+          background: autoAssignMsg.isWarning ? '#fff3cd' : '#d4edda',
+          color: autoAssignMsg.isWarning ? '#856404' : '#155724',
+          fontSize: '0.9rem',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '0.75rem',
+        }}>
+          <span style={{ flex: 1 }}>{autoAssignMsg.text}</span>
+          <button onClick={() => setAutoAssignMsg(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'inherit', padding: 0 }}>✕</button>
+        </div>
+      )}
       <p className={styles.hint}>
         Game times are pulled from Google Calendar. Assign team names and locker rooms here.
       </p>
@@ -225,7 +284,21 @@ export default function GamesTab() {
 
       {groups.map((group, gi) => (
         <div key={gi} className={tabStyles.group}>
-          {group.label && <div className={tabStyles.groupHeader}>{group.label}</div>}
+          {group.label && (
+            <div className={tabStyles.groupHeader} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>{group.label}</span>
+              {group.dateStr && (
+                <button
+                  className={styles.btnGhost}
+                  style={{ fontSize: '0.78rem', padding: '0.2rem 0.6rem', marginLeft: '0.75rem', flexShrink: 0 }}
+                  onClick={() => runAutoAssign({ date: group.dateStr, reset: true })}
+                  disabled={autoAssigning}
+                >
+                  Reset Auto-Assign LRs
+                </button>
+              )}
+            </div>
+          )}
           <table className={styles.table}>
             <thead>
               <tr>

@@ -107,18 +107,8 @@ header {
 /* ── Game Board ── */
 .game-table { width: 100%; border-collapse: separate; border-spacing: 0px 20px; }
 
-.game-table .cal-sub-row td {
-  background: rgba(26,122,191,0.92);
-  color: #fff;
-  padding: 14px 20px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  border-radius: 8px;
-}
-
 .game-table .col-header-row td {
-  background: rgba(77,163,212,0.92);
+  background: #62B0D0;
   color: #fff;
   padding: 14px 20px;
   font-size: 1.3rem;
@@ -130,6 +120,15 @@ header {
 .game-table .col-header-row td.col-transparent {
   background: transparent !important;
   padding: 0 !important;
+}
+
+.game-table .col-header-row td.col-cal-name {
+  width: 1%;
+  white-space: nowrap;
+  font-size: 1em;
+  border-radius: 8px;
+  text-transform: none;
+  letter-spacing: 0.03em;
 }
 
 .game-table tbody td {
@@ -145,17 +144,17 @@ header {
 
 .td-time  { font-weight: bold; white-space: nowrap; text-align: right; width: 1%; }
 .td-title { font-weight: 600; color: #0a84c8; white-space: nowrap; }
-.td-away  { font-weight: bold; text-align: left; white-space: nowrap; }
-.td-home  { font-weight: bold; white-space: nowrap; }
+.td-away  { font-weight: bold; text-align: left; white-space: nowrap; width: 15%; }
+.td-home  { font-weight: bold; white-space: nowrap; width: 15%; }
 .td-gap    { width: 20px; background: transparent !important; padding: 0 !important; }
 .td-locker { font-weight: bold; text-align: center; background: #000 !important; color: #fff !important; white-space: nowrap; width: 70px; min-width: 70px; }
 
 /* ── Rounded corners ── */
-/* col-header row: Home/LR# and Away/LR# segments */
-.game-table .col-header-row td:nth-child(4) { border-radius: 8px 0 0 8px; }
-.game-table .col-header-row td:nth-child(5) { border-radius: 0 8px 8px 0; }
-.game-table .col-header-row td:nth-child(7) { border-radius: 8px 0 0 8px; }
-.game-table .col-header-row td:nth-child(8) { border-radius: 0 8px 8px 0; }
+/* col-header row: Home/LR# and Away/LR# pills (7 cells: colspan-2 cal name + gap + home + lr + gap + away + lr) */
+.game-table .col-header-row td:nth-child(3) { border-radius: 8px 0 0 8px; }
+.game-table .col-header-row td:nth-child(4) { border-radius: 0 8px 8px 0; }
+.game-table .col-header-row td:nth-child(6) { border-radius: 8px 0 0 8px; }
+.game-table .col-header-row td:nth-child(7) { border-radius: 0 8px 8px 0; }
 /* game rows */
 .game-table tbody tr.game-row td:nth-child(1) { border-radius: 8px 0 0 8px; }
 .game-table tbody tr.game-row td:nth-child(2) { border-radius: 0 8px 8px 0; }
@@ -290,7 +289,8 @@ function fmtDate(iso) {
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────
-function renderGames(games, calMap) {
+function renderGames(games, calMap, teamMap) {
+  teamMap = teamMap || {};
   if (!games || games.length === 0) {
     document.getElementById('content').innerHTML =
       '<div class="empty"><div class="empty-icon">&#127944;</div><p>No games scheduled for today</p></div>';
@@ -306,37 +306,35 @@ function renderGames(games, calMap) {
     groups[key].push(games[i]);
   }
 
-  var colHeader =
-    '<tr class="col-header-row">' +
-      '<td class="col-transparent" style="width:1%"></td>' +
-      '<td class="col-transparent"></td>' +
-      '<td class="col-transparent td-gap"></td>' +
-      '<td style="white-space:nowrap">Home</td>' +
-      '<td style="width:70px;min-width:70px;text-align:center">LR#</td>' +
-      '<td class="col-transparent td-gap"></td>' +
-      '<td style="white-space:nowrap">Away</td>' +
-      '<td style="width:70px;min-width:70px;text-align:center">LR#</td>' +
-    '</tr>';
-
   var tbody = '';
   for (var gi = 0; gi < groupOrder.length; gi++) {
     var key = groupOrder[gi];
     var calName = calMap && calMap[key] ? calMap[key] : '';
-    if (calName) {
-      tbody += '<tr class="cal-sub-row"><td colspan="8">' + calName + '</td></tr>';
-    }
-    tbody += colHeader;
+    tbody +=
+      '<tr class="col-header-row">' +
+        '<td class="col-cal-name" colspan="2">' + calName + '</td>' +
+        '<td class="col-transparent td-gap"></td>' +
+        '<td style="white-space:nowrap">Home</td>' +
+        '<td style="width:70px;min-width:70px;text-align:center">LR#</td>' +
+        '<td class="col-transparent td-gap"></td>' +
+        '<td style="white-space:nowrap">Away</td>' +
+        '<td style="width:70px;min-width:70px;text-align:center">LR#</td>' +
+      '</tr>';
     var grpGames = groups[key];
     for (var j = 0; j < grpGames.length; j++) {
       var g = grpGames[j];
+      var homeInfo = g.home_team ? (teamMap[g.home_team.toLowerCase()] || { label: g.home_team, color: '', textColor: '' }) : { label: 'TBD', color: '', textColor: '' };
+      var awayInfo = g.away_team ? (teamMap[g.away_team.toLowerCase()] || { label: g.away_team, color: '', textColor: '' }) : { label: 'TBD', color: '', textColor: '' };
+      var homeStyle = homeInfo.color ? 'background:' + homeInfo.color + ';' + (homeInfo.textColor ? 'color:' + homeInfo.textColor + ';' : '') : '';
+      var awayStyle = awayInfo.color ? 'background:' + awayInfo.color + ';' + (awayInfo.textColor ? 'color:' + awayInfo.textColor + ';' : '') : '';
       tbody += '<tr class="game-row">' +
         '<td class="td-time">' + fmtTime(g.start_time) + '</td>' +
         '<td class="td-title">' + (g.title || '') + '</td>' +
         '<td class="td-gap"></td>' +
-        '<td class="td-home">' + (g.home_team || 'TBD') + '</td>' +
+        '<td class="td-home"' + (homeStyle ? ' style="' + homeStyle + '"' : '') + '>' + homeInfo.label + '</td>' +
         '<td class="td-locker">' + (g.home_locker || '') + '</td>' +
         '<td class="td-gap"></td>' +
-        '<td class="td-away">' + (g.away_team || 'TBD') + '</td>' +
+        '<td class="td-away"' + (awayStyle ? ' style="' + awayStyle + '"' : '') + '>' + awayInfo.label + '</td>' +
         '<td class="td-locker">' + (g.away_locker || '') + '</td>' +
         '</tr>';
     }
@@ -428,8 +426,24 @@ function loadScreen() {
               calMap[String(calendars[i].id)] = calendars[i].name;
             }
           }
-          renderGames(filtered, calMap);
-          fitTable();
+          get('/api/leagues', function(err4, leagues) {
+            var teamMap = {};
+            if (leagues) {
+              for (var i = 0; i < leagues.length; i++) {
+                var teams = leagues[i].teams || [];
+                for (var j = 0; j < teams.length; j++) {
+                  var t = teams[j];
+                  teamMap[t.name.toLowerCase()] = {
+                    label: t.display_name || t.name,
+                    color: t.color || '',
+                    textColor: t.text_color || '',
+                  };
+                }
+              }
+            }
+            renderGames(filtered, calMap, teamMap);
+            fitTable();
+          });
         });
       });
 

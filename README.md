@@ -33,7 +33,7 @@ npm run build
 node server/index.js
 ```
 
-Open `http://localhost:3001/admin` to configure the system.
+Open `http://localhost:3001/admin` to configure the system. The first visit redirects to `/login` where you create a password; subsequent visits require that password to access the admin panel.
 
 For development (hot reload on both client and server):
 
@@ -59,7 +59,9 @@ Navigate to `/admin` from any browser on the local network.
 - Sort by **Date & Time** (grouped by day, then by calendar with week pagination) or **By Calendar**
 - Assign home/away team names and locker rooms per game via dropdowns
 - Locker room dropdowns auto-save on change; Edit button for team name changes
+- Delete individual games with the 🗑 button (re-import on next calendar sync)
 - **Refresh Calendar** button forces an immediate re-sync
+- **Reset Auto-Assign LRs** resets all auto-assigned locker rooms and re-runs assignment; per-day reset button on each day group header
 
 ### Public Skate tab
 - Configure admission pricing tiers (label + price + sort order)
@@ -73,11 +75,18 @@ Navigate to `/admin` from any browser on the local network.
 - Each calendar has a name, iCal URL, poll interval (minutes), and for Hockey Games a **team order** setting (Away vs. Home or Home vs. Away)
 - Validates iCal format on save; rejects duplicate names and URLs
 
+### Leagues & Teams tab
+- One tab per league; leagues are auto-created from Hockey Games calendars on sync
+- Set a team's background and text color (shown on the Game Board TV display)
+- Set a display name override per team (used on TV instead of the calendar name)
+- Assign a **Locker Room Sequence** per league used by auto-assignment
+
 ### Settings tab
 - Set the rink name (shown in the TV header)
 - Upload a rink logo (replaces the text name in the TV header)
 - Manage **Locker Rooms** — add/edit/delete rooms available in game assignment dropdowns
-- Manage **Locker Room Sequences** — define named pairing patterns for auto-assignment
+- Manage **Locker Room Sequences** — define named pairing patterns for auto-assignment; a sequence named **"Standard"** is used as the fallback for leagues with no sequence set
+- **Admin Password** — change the login password
 
 ---
 
@@ -98,7 +107,7 @@ Events are imported if they start within the last 12 hours through the next 30 d
 | Title has a colon | Everything before `:` (e.g. "CON") | Parsed from matchup after colon | Parsed from matchup after colon |
 | No colon, has "vs" | _(blank)_ | First team per team order setting | Second team per team order setting |
 | No colon, no "vs" | Full raw title | `Away TBD` | `Home TBD` |
-| Title contains "Practice", "Scrimmage", or "League Pickup" | Full raw title | _(blank)_ | _(blank)_ |
+| Title contains "Practice", "Scrimmage", or "League Pickup" | Full raw title | `Open` | `Open` |
 
 ### NCWHL calendar special rules
 Calendars with "NCWHL" in the name use a different parsing strategy:
@@ -153,9 +162,23 @@ All data is stored in `data/db.json` — a flat JSON file, no database binary re
 | `skate_prices` | Public skate admission tiers |
 | `locker_rooms` | Available locker room names |
 | `locker_sequences` | Named locker room pairing patterns |
+| `leagues` | Leagues with locker sequence assignment |
+| `teams` | Teams with display name and color per league |
 | `settings` | Rink name, logo filename, legacy iCal URL |
 
 Uploaded files are stored in `uploads/` (gitignored).
+
+---
+
+## Forgot admin password
+
+Run this on the server machine (RDP or physical access):
+
+```powershell
+node server/reset-password.js
+```
+
+This clears the stored password hash. The next visit to `/login` shows the first-run setup form to create a new password. No data is lost.
 
 ---
 
@@ -172,6 +195,7 @@ Register-ScheduledTask -TaskName "RinkScreens" -Action $action -Trigger $trigger
 
 ## Tech stack
 
+- **Auth**: `bcryptjs` password hashing + JWT (30-day, stored in localStorage)
 - **Server**: Node.js + Express 5 + `node-ical` + `ws` + `multer`
 - **Client**: React 18 + Vite + React Router v6 + CSS Modules
 - **TV display**: Plain HTML/CSS/JS (no framework, TV browser compatible)

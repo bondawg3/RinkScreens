@@ -4,6 +4,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const db = require('../db');
+const { requireAuth } = require('../auth');
 
 const UPLOAD_DIR = path.join(__dirname, '..', '..', 'uploads');
 if (!fs.existsSync(UPLOAD_DIR)) fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -26,7 +27,7 @@ const upload = multer({
   },
 });
 
-router.post('/backgrounds', upload.single('file'), (req, res) => {
+router.post('/backgrounds', requireAuth, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'no valid image file' });
   const label = req.body.label || req.file.originalname;
   const row = db.insert('backgrounds', { filename: req.file.filename, label });
@@ -51,7 +52,7 @@ const logoUpload = multer({
   },
 });
 
-router.post('/logo', logoUpload.single('file'), (req, res) => {
+router.post('/logo', requireAuth, logoUpload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'no valid image file' });
   const old = db.getSettings().logo_filename;
   if (old) {

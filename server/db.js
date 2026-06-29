@@ -24,7 +24,9 @@ const DEFAULTS = {
   calendars: [],
   locker_rooms: [],
   locker_sequences: [],
-  _seq: { screens: 1, backgrounds: 1, games: 1, skate_prices: 1, calendars: 1, locker_rooms: 1, locker_sequences: 1 },
+  leagues: [],
+  teams: [],
+  _seq: { screens: 1, backgrounds: 1, games: 1, skate_prices: 1, calendars: 1, locker_rooms: 1, locker_sequences: 1, leagues: 1, teams: 1 },
 };
 
 function load() {

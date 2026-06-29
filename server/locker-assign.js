@@ -1,0 +1,178 @@
+const db = require('./db');
+
+const GAP_MS = 150 * 60 * 1000; // 150 minutes
+
+function localDateStr(isoStr) {
+  const d = new Date(isoStr);
+  return (
+    d.getFullYear() +
+    '-' +
+    String(d.getMonth() + 1).padStart(2, '0') +
+    '-' +
+    String(d.getDate()).padStart(2, '0')
+  );
+}
+
+function buildCalLeagueMap() {
+  const calendars = db.findAll('calendars');
+  const leagues = db.findAll('leagues');
+  const map = {};
+  for (const cal of calendars) {
+    const league = leagues.find((l) => l.name.toLowerCase() === cal.name.toLowerCase());
+    if (league) map[cal.id] = league;
+  }
+  return map;
+}
+
+function processDay(dayGames, calLeagueMap, seqMap, standardSeq) {
+  const updates = [];
+  const conflicts = [];
+
+  let blockPairIdx = 0;
+  let prevEndMs = null;
+  let prevAssignedHome = null;
+  let prevAssignedAway = null;
+  let blockSeq = null; // sequence carried forward within a block
+
+  for (const game of dayGames) {
+    const startMs = new Date(game.start_time).getTime();
+    const endMs = game.end_time
+      ? new Date(game.end_time).getTime()
+      : startMs + 60 * 60 * 1000;
+
+    const isNewBlock = prevEndMs !== null && startMs - prevEndMs > GAP_MS;
+    if (isNewBlock || prevEndMs === null) {
+      if (isNewBlock) {
+        blockPairIdx = 0;
+        blockSeq = null;
+        prevAssignedHome = null;
+        prevAssignedAway = null;
+      }
+    }
+
+    // Determine sequence: game's own league → carry-over from block → standard
+    const league = game.calendar_id ? calLeagueMap[game.calendar_id] : null;
+    const gameSeq =
+      league && league.locker_sequence_id ? seqMap[league.locker_sequence_id] : null;
+    if (gameSeq) blockSeq = gameSeq;
+    const seq = gameSeq || blockSeq || standardSeq;
+
+    const isManual = !!(game.home_locker || game.away_locker) && !game.lr_auto_assigned;
+
+    if (seq && seq.pairs && seq.pairs.length > 0) {
+      const pair = seq.pairs[blockPairIdx % seq.pairs.length];
+
+      if (!isManual) {
+        // Conflict check: same locker used in consecutive games within a block
+        if (
+          prevAssignedHome !== null &&
+          !isNewBlock &&
+          (pair.home === prevAssignedHome ||
+            pair.away === prevAssignedAway ||
+            pair.home === prevAssignedAway ||
+            pair.away === prevAssignedHome)
+        ) {
+          const conflicting =
+            pair.home === prevAssignedHome || pair.home === prevAssignedAway
+              ? pair.home
+              : pair.away;
+          conflicts.push({
+            game_id: game.id,
+            start_time: game.start_time,
+            locker: conflicting,
+          });
+        }
+
+        updates.push({
+          id: game.id,
+          home_locker: pair.home,
+          away_locker: pair.away,
+        });
+        prevAssignedHome = pair.home;
+        prevAssignedAway = pair.away;
+      } else {
+        prevAssignedHome = game.home_locker;
+        prevAssignedAway = game.away_locker;
+      }
+
+      blockPairIdx++;
+    }
+
+    if (endMs > (prevEndMs || 0)) prevEndMs = endMs;
+  }
+
+  return { updates, conflicts };
+}
+
+function autoAssign({ dateStr, resetExisting } = {}) {
+  // Step 1: Reset games if requested — clears ALL locker assignments for the scope
+  // (not just lr_auto_assigned ones, since older records may predate that flag)
+  if (resetExisting) {
+    const toReset = db.findAll('games').filter((g) => {
+      if (!g.is_skate && (g.home_locker || g.away_locker)) {
+        if (dateStr) return localDateStr(g.start_time) === dateStr;
+        return true;
+      }
+      return false;
+    });
+    for (const g of toReset) {
+      db.update('games', g.id, { home_locker: '', away_locker: '', lr_auto_assigned: 0 });
+    }
+  }
+
+  // Step 2: Reload games after reset
+  const allGames = db.findAll('games', 'start_time').filter((g) => !g.is_skate);
+
+  // Step 3: Determine candidate dates (days that have at least one unassigned game)
+  const candidateDates = new Set(
+    allGames
+      .filter((g) => {
+        if (dateStr && localDateStr(g.start_time) !== dateStr) return false;
+        return !g.home_locker && !g.away_locker;
+      })
+      .map((g) => localDateStr(g.start_time))
+  );
+
+  if (candidateDates.size === 0) return { assigned: 0, conflicts: [] };
+
+  // Step 4: Build lookup maps
+  const calLeagueMap = buildCalLeagueMap();
+  const seqList = db.findAll('locker_sequences');
+  const seqMap = Object.fromEntries(seqList.map((s) => [s.id, s]));
+  const standardSeq = seqList.find((s) => s.name.toLowerCase() === 'standard') || null;
+
+  // Step 5: For each candidate date, load ALL games that day (for correct block tracking)
+  const byDate = {};
+  for (const g of allGames) {
+    const d = localDateStr(g.start_time);
+    if (!candidateDates.has(d)) continue;
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push(g);
+  }
+
+  // Step 6: Process each day
+  let totalAssigned = 0;
+  const allConflicts = [];
+
+  for (const date of Object.keys(byDate).sort()) {
+    const sorted = byDate[date].sort(
+      (a, b) => new Date(a.start_time) - new Date(b.start_time)
+    );
+    const { updates, conflicts } = processDay(sorted, calLeagueMap, seqMap, standardSeq);
+
+    for (const u of updates) {
+      db.update('games', u.id, {
+        home_locker: u.home_locker,
+        away_locker: u.away_locker,
+        lr_auto_assigned: 1,
+      });
+      totalAssigned++;
+    }
+    allConflicts.push(...conflicts);
+  }
+
+  console.log(`[locker-assign] assigned ${totalAssigned} games, ${allConflicts.length} conflicts`);
+  return { assigned: totalAssigned, conflicts: allConflicts };
+}
+
+module.exports = { autoAssign };

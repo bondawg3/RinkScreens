@@ -2,6 +2,39 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.6.0] — 2026-06-28
+
+### Added
+- **Locker room auto-assignment** — locker rooms are automatically assigned after each calendar sync for newly-imported games with no lockers set; uses each league's configured sequence (falling back to a sequence named "Standard"); groups games within a day into 150-minute blocks and cycles through the sequence pairs continuously, including cross-league continuation within a block
+- **Reset Auto-Assign LRs button** in the Games tab — resets all auto-assigned locker rooms and re-runs assignment with current sequence settings; manually-set locker rooms are always preserved
+- **Per-day Reset Auto-Assign LRs button** in each day group header — same reset-and-reassign but scoped to one day only
+- **Conflict detection** — when two consecutive games in a block would share a locker room, a warning is shown after auto-assign runs
+- Manually editing a locker room via the Games tab now marks that assignment as manual so auto-assign won't overwrite it
+
+## [1.5.0] — 2026-06-27
+
+### Added
+- **Leagues tab** — manage leagues and their teams; set a team's color with a color picker; assign a default locker room sequence per league via dropdown
+
+## [1.4.2] — 2026-06-27
+
+### Changed
+- **Game Board TV** — calendar group header is now a single compact row: calendar name fills the time/title area as a dark blue pill, with Home/LR# and Away/LR# pills on the right (was two separate rows)
+
+## [1.4.1] — 2026-06-27
+
+### Fixed
+- **Game import** — games with no parseable "vs" matchup now leave home/away team blank instead of showing "Away TBD" / "Home TBD"
+
+## [1.4.0] — 2026-06-27
+
+### Added
+- **Admin authentication** — single-password login protecting all write operations; first run shows a setup form to create the password
+- **JWT session** — 30-day token stored in localStorage; auto-redirects to `/login` on 401 or when token is missing
+- **Log out button** in the admin header
+- **Change password** section at the bottom of the Settings tab
+- TV display endpoints remain open (no auth required) so screens continue working without credentials
+
 ## [1.3.3] — 2026-06-26
 
 ### Fixed

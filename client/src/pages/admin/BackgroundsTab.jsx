@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { useApi, apiFetch } from '../../hooks/useApi';
+import { useApi, apiFetch, getToken } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 import bgStyles from './BackgroundsTab.module.css';
 
@@ -17,7 +17,7 @@ export default function BackgroundsTab() {
     const fd = new FormData();
     fd.append('file', file);
     fd.append('label', label || file.name);
-    await fetch('/api/backgrounds', { method: 'POST', body: fd });
+    await fetch('/api/backgrounds', { method: 'POST', body: fd, headers: { Authorization: `Bearer ${getToken()}` } });
     setLabel('');
     fileRef.current.value = '';
     setUploading(false);

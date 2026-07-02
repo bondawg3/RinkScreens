@@ -71,21 +71,25 @@ Navigate to `/admin` from any browser on the local network.
 - Assign a background to any screen; delete unused backgrounds
 
 ### Calendars tab
-- Add Hockey Games, Public Skates, and Rink Events calendars
-- Each calendar has a name, iCal URL, poll interval (minutes), and for Hockey Games a **team order** setting (Away vs. Home or Home vs. Away)
+- Add **Hockey Games**, **Public Skates**, **Rink Events**, and **Figure Skating** calendars
+- Each calendar has a name, iCal URL, poll interval (with a **Minutes / Days** toggle), and for Hockey Games a **team order** setting and **Locker Room Sequence** override
 - Validates iCal format on save; rejects duplicate names and URLs
 
 ### Leagues & Teams tab
 - One tab per league; leagues are auto-created from Hockey Games calendars on sync
 - Set a team's background and text color (shown on the Game Board TV display)
 - Set a display name override per team (used on TV instead of the calendar name)
-- Assign a **Locker Room Sequence** per league used by auto-assignment
+- Assign a **Locker Room Sequence** per league used by auto-assignment; syncs automatically to/from the matching calendar's sequence setting
+
+### Figure Skating tab
+- Lists upcoming figure skating events grouped by day with week pagination
+- Recurring events (RRULE) are fully expanded
 
 ### Settings tab
 - Set the rink name (shown in the TV header)
 - Upload a rink logo (replaces the text name in the TV header)
 - Manage **Locker Rooms** — add/edit/delete rooms available in game assignment dropdowns
-- Manage **Locker Room Sequences** — define named pairing patterns for auto-assignment; a sequence named **"Standard"** is used as the fallback for leagues with no sequence set
+- Manage **Locker Room Sequences** — define named pairing patterns for auto-assignment; mark one as the **Default** to use when no league- or calendar-level sequence is set
 - **Admin Password** — change the login password
 
 ---
@@ -107,7 +111,7 @@ Events are imported if they start within the last 12 hours through the next 30 d
 | Title has a colon | Everything before `:` (e.g. "CON") | Parsed from matchup after colon | Parsed from matchup after colon |
 | No colon, has "vs" | _(blank)_ | First team per team order setting | Second team per team order setting |
 | No colon, no "vs" | Full raw title | `Away TBD` | `Home TBD` |
-| Title contains "Practice", "Scrimmage", or "League Pickup" | Full raw title | `Open` | `Open` |
+| Title contains "Practice", "Scrimmage", "League Pickup", or "Stick & Shoot" | Full raw title (normalized to "Stick & Shoot") | `Open` | `Open` |
 
 ### NCWHL calendar special rules
 Calendars with "NCWHL" in the name use a different parsing strategy:
@@ -131,6 +135,8 @@ All display pages live at `/tv/:screenId` — plain HTML/CSS/JS with no React or
 |---|---|
 | Game Board | Today's games with time, away vs. home team, locker rooms |
 | Public Skate | Upcoming public skate sessions and admission pricing |
+| Rink Events | Today's rink events in table format |
+| Figure Skating | Today's figure skating events in table format |
 | Custom Message | Static text message configured per screen |
 
 The TV header shows the rink logo (or name) on the left, a live clock on the right, and the current date centered.

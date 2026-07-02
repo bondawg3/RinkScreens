@@ -483,6 +483,41 @@ function loadScreen() {
           '<div class="empty"><p>No webpage URL configured.</p></div>';
       }
 
+    } else if (dtype === 'figure_skating' || dtype === 'rink_events') {
+      var apiEndpoint = dtype === 'figure_skating' ? '/api/figure-skating' : '/api/rink-events';
+      get(apiEndpoint, function(err2, events) {
+        if (err2 || !events) return;
+        var now = new Date();
+        var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        var todayEnd = new Date(todayStart.getTime() + 86400000);
+        var todayEvents = [];
+        for (var i = 0; i < events.length; i++) {
+          var s = new Date(events[i].start_time);
+          if (s >= todayStart && s < todayEnd) todayEvents.push(events[i]);
+        }
+        todayEvents.sort(function(a, b) { return new Date(a.start_time) - new Date(b.start_time); });
+        var html = '';
+        if (todayEvents.length === 0) {
+          html = '<div class="empty"><p>No events scheduled for today.</p></div>';
+        } else {
+          html = '<table class="game-table"><tbody>';
+          for (var i = 0; i < todayEvents.length; i++) {
+            var ev = todayEvents[i];
+            var t = new Date(ev.start_time);
+            var timeStr = t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            var title = ev.raw_title || ev.title || '';
+            var rowClass = i % 2 === 0 ? 'row-even' : 'row-odd';
+            html += '<tr class="' + rowClass + '">' +
+              '<td class="td-time">' + timeStr + '</td>' +
+              '<td style="padding:0.4em 0.6em;font-size:1em;">' + title + '</td>' +
+              '</tr>';
+          }
+          html += '</tbody></table>';
+        }
+        document.getElementById('content').innerHTML = html;
+        fitTable();
+      });
+
     } else if (dtype === 'message') {
       document.getElementById('content').innerHTML =
         '<div class="empty"><p>' + (screen.custom_message || 'Welcome!') + '</p></div>';

@@ -7,26 +7,53 @@ const CALENDAR_TYPES = [
   { value: 'hockey_games', label: 'Hockey Games' },
   { value: 'public_skates', label: 'Public Skates' },
   { value: 'rink_events', label: 'Rink Events' },
+  { value: 'figure_skating', label: 'Figure Skating' },
 ];
 
 const TYPE_LABELS = Object.fromEntries(CALENDAR_TYPES.map((t) => [t.value, t.label]));
 
+function inferUnit(minutes) {
+  if (minutes && minutes % (24 * 60) === 0) return 'days';
+  return 'minutes';
+}
+
 function CalendarModal({ type, existing, onClose, onSaved }) {
   const [name, setName] = useState(existing?.name ?? '');
   const [url, setUrl] = useState(existing?.url ?? '');
-  const [interval, setInterval] = useState(String(existing?.poll_interval_minutes ?? '5'));
+  const existingMins = existing?.poll_interval_minutes ?? 5;
+  const initUnit = inferUnit(existingMins);
+  const [intervalUnit, setIntervalUnit] = useState(initUnit);
+  const [intervalVal, setIntervalVal] = useState(
+    String(initUnit === 'days' ? existingMins / (24 * 60) : existingMins)
+  );
   const [teamOrder, setTeamOrder] = useState(existing?.team_order ?? 'away_home');
+  const [seqId, setSeqId] = useState(existing?.locker_sequence_id ? String(existing.locker_sequence_id) : '');
+  const { data: sequences } = useApi('/locker-sequences');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const isEdit = !!existing;
+
+  function switchUnit(unit) {
+    const cur = Number(intervalVal) || 1;
+    if (unit === 'days' && intervalUnit === 'minutes') {
+      setIntervalVal(String(Math.max(1, Math.round(cur / (24 * 60))) || 1));
+    } else if (unit === 'minutes' && intervalUnit === 'days') {
+      setIntervalVal(String(cur * 24 * 60));
+    }
+    setIntervalUnit(unit);
+  }
 
   async function submit(e) {
     e.preventDefault();
     setError('');
     setSaving(true);
+    const mins = intervalUnit === 'days' ? Number(intervalVal) * 24 * 60 : Number(intervalVal);
     try {
-      const body = { name, url, poll_interval_minutes: Number(interval) };
-      if (type === 'hockey_games') body.team_order = teamOrder;
+      const body = { name, url, poll_interval_minutes: mins };
+      if (type === 'hockey_games') {
+        body.team_order = teamOrder;
+        body.locker_sequence_id = seqId ? Number(seqId) : null;
+      }
       if (isEdit) {
         await apiFetch(`/calendars/${existing.id}`, { method: 'PATCH', body: JSON.stringify(body) });
       } else {
@@ -70,16 +97,50 @@ function CalendarModal({ type, existing, onClose, onSaved }) {
             />
           </div>
           <div className={styles.field}>
-            <label className={styles.label}>Poll Interval (minutes)</label>
-            <input
-              className={styles.input}
-              type="number"
-              min="1"
-              value={interval}
-              onChange={(e) => setInterval(e.target.value)}
-              required
-            />
+            <label className={styles.label}>Poll Interval</label>
+            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+              <input
+                className={styles.input}
+                type="number"
+                min="1"
+                style={{ width: '80px', marginBottom: 0 }}
+                value={intervalVal}
+                onChange={(e) => setIntervalVal(e.target.value)}
+                required
+              />
+              <div className={calStyles.teamOrderToggle} style={{ marginBottom: 0 }}>
+                <button
+                  type="button"
+                  className={intervalUnit === 'minutes' ? calStyles.teamOrderActive : calStyles.teamOrderBtn}
+                  onClick={() => switchUnit('minutes')}
+                >
+                  Minutes
+                </button>
+                <button
+                  type="button"
+                  className={intervalUnit === 'days' ? calStyles.teamOrderActive : calStyles.teamOrderBtn}
+                  onClick={() => switchUnit('days')}
+                >
+                  Days
+                </button>
+              </div>
+            </div>
           </div>
+          {type === 'hockey_games' && sequences && sequences.length > 0 && (
+            <div className={styles.field}>
+              <label className={styles.label}>Locker Room Sequence</label>
+              <select
+                style={{ border: '1.5px solid var(--border)', borderRadius: 5, padding: '0.4rem 0.7rem', fontSize: '0.95rem', background: '#fff', width: 'fit-content' }}
+                value={seqId}
+                onChange={(e) => setSeqId(e.target.value)}
+              >
+                <option value="">— Use default —</option>
+                {sequences.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
           {type === 'hockey_games' && (
             <div className={styles.field}>
               <label className={styles.label}>Team Order in Event Title</label>
@@ -154,7 +215,7 @@ export default function CalendarsTab() {
                 <tr>
                   <th>Name</th>
                   <th>iCal URL</th>
-                  <th>Poll (min)</th>
+                  <th>Poll Interval</th>
                   {value === 'hockey_games' && <th>Team Order</th>}
                   <th></th>
                 </tr>
@@ -166,7 +227,7 @@ export default function CalendarsTab() {
                     <td className={`${styles.mono} ${calStyles.urlCell}`} title={cal.url}>
                       {cal.url.length > 60 ? cal.url.slice(0, 60) + '…' : cal.url}
                     </td>
-                    <td>{cal.poll_interval_minutes}</td>
+                    <td>{cal.poll_interval_minutes % (24 * 60) === 0 ? `${cal.poll_interval_minutes / (24 * 60)}d` : `${cal.poll_interval_minutes}m`}</td>
                     {value === 'hockey_games' && (
                       <td>{cal.team_order === 'home_away' ? 'Home vs. Away' : 'Away vs. Home'}</td>
                     )}

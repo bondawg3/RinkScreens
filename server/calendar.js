@@ -1,4 +1,5 @@
 const ical = require('node-ical');
+const IcalExpander = require('ical-expander');
 const db = require('./db');
 const ws = require('./ws');
 const { autoAssign } = require('./locker-assign');
@@ -8,9 +9,11 @@ const pollTimers = new Map();
 // Shared title parsing logic used by both sync and reparse
 function parseTitle(rawTitle, cal) {
   const isNcwhl = cal && cal.name && cal.name.toUpperCase().includes('NCWHL');
-  const isPickup = /league\s+pickup|scrimmage|practice/i.test(rawTitle);
+  const isPickup = /league\s+pickup|scrimmage|practice|stick\s*&\s*shoot/i.test(rawTitle);
 
-  let title = rawTitle;
+  let title = /stick\s*&\s*shoot/i.test(rawTitle)
+    ? rawTitle.replace(/stick\s*&\s*shoot/i, 'Stick & Shoot')
+    : rawTitle;
   let matchup = rawTitle;
 
   if (isNcwhl) {
@@ -55,49 +58,115 @@ function parseTitle(rawTitle, cal) {
 async function syncCalendar(cal) {
   const settings = db.getSettings();
   const keyword = settings.skate_keyword || 'Public Skate';
-
-  let events;
-  try {
-    events = await ical.async.fromURL(cal.url);
-  } catch (err) {
-    console.error(`[calendar] fetch failed for "${cal.name}":`, err.message);
-    return;
-  }
-
   const cutoff = new Date(Date.now() - 12 * 60 * 60 * 1000);
   const horizon = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   let count = 0;
   const importedUids = new Set();
 
-  for (const [, event] of Object.entries(events)) {
-    if (event.type !== 'VEVENT') continue;
-    const start = event.start ? new Date(event.start) : null;
-    if (!start || start < cutoff || start > horizon) continue;
+  // figure_skating and rink_events calendars use ical-expander to properly expand
+  // recurring events (RRULE). hockey_games typically has individual VEVENTs so
+  // node-ical is sufficient and preserves existing uid-based upsert behaviour.
+  const useExpander = cal.type === 'figure_skating' || cal.type === 'rink_events';
 
-    const location = (event.location || '').trim();
-    if (location && !location.toLowerCase().includes('san mateo')) continue;
+  if (useExpander) {
+    let text;
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      try {
+        const resp = await fetch(cal.url, { signal: controller.signal });
+        text = await resp.text();
+      } finally {
+        clearTimeout(timeout);
+      }
+    } catch (err) {
+      console.error(`[calendar] fetch failed for "${cal.name}":`, err.message);
+      return;
+    }
 
-    const existing = db.findByField('games', 'calendar_uid', event.uid);
-    const rawTitle = event.summary || '';
-    const { title, away_team, home_team } = parseTitle(rawTitle, cal);
+    let expander;
+    try {
+      expander = new IcalExpander({ ics: text, maxIterations: 2000 });
+    } catch (err) {
+      console.error(`[calendar] parse failed for "${cal.name}":`, err.message);
+      return;
+    }
 
-    const isAdminTeam = (t) => !!t;
+    const result = expander.between(cutoff, horizon);
 
-    db.upsertByField('games', 'calendar_uid', event.uid, {
-      calendar_uid: event.uid,
-      calendar_id: cal.id,
-      start_time: start.toISOString(),
-      end_time: event.end ? new Date(event.end).toISOString() : start.toISOString(),
-      raw_title: rawTitle,
-      title: title || '(No title)',
-      home_team: (existing && isAdminTeam(existing.home_team)) ? existing.home_team : home_team,
-      away_team: (existing && isAdminTeam(existing.away_team)) ? existing.away_team : away_team,
-      home_locker: existing ? existing.home_locker : '',
-      away_locker: existing ? existing.away_locker : '',
-      is_skate: event.summary && event.summary.includes(keyword) ? 1 : 0,
-    });
-    importedUids.add(event.uid);
-    count++;
+    function processOccurrence(startDate, endDate, item) {
+      const start = startDate.toJSDate();
+      if (start < cutoff || start > horizon) return;
+      const end = endDate ? endDate.toJSDate() : new Date(start.getTime() + 3600000);
+      const baseUid = item.uid || String(start.getTime());
+      const uid = `${baseUid}__${start.toISOString()}`;
+      const rawTitle = item.summary || '';
+
+      importedUids.add(uid);
+      const existing = db.findByField('games', 'calendar_uid', uid);
+      db.upsertByField('games', 'calendar_uid', uid, {
+        calendar_uid: uid,
+        calendar_id: cal.id,
+        start_time: start.toISOString(),
+        end_time: end.toISOString(),
+        raw_title: rawTitle,
+        title: rawTitle,
+        home_team: existing?.home_team || '',
+        away_team: existing?.away_team || '',
+        home_locker: existing?.home_locker || '',
+        away_locker: existing?.away_locker || '',
+        lr_auto_assigned: existing?.lr_auto_assigned || 0,
+        is_skate: rawTitle.includes(keyword) ? 1 : 0,
+      });
+      count++;
+    }
+
+    for (const event of result.events) {
+      processOccurrence(event.startDate, event.endDate, event);
+    }
+    for (const occ of result.occurrences) {
+      processOccurrence(occ.startDate, occ.endDate, occ.item);
+    }
+  } else {
+    // hockey_games: use node-ical (preserves existing uid-based records)
+    let events;
+    try {
+      events = await ical.async.fromURL(cal.url);
+    } catch (err) {
+      console.error(`[calendar] fetch failed for "${cal.name}":`, err.message);
+      return;
+    }
+
+    for (const [, event] of Object.entries(events)) {
+      if (event.type !== 'VEVENT') continue;
+      const start = event.start ? new Date(event.start) : null;
+      if (!start || start < cutoff || start > horizon) continue;
+
+      const location = (event.location || '').trim();
+      if (location && !location.toLowerCase().includes('san mateo')) continue;
+
+      const existing = db.findByField('games', 'calendar_uid', event.uid);
+      const rawTitle = event.summary || '';
+      const { title, away_team, home_team } = parseTitle(rawTitle, cal);
+      const isAdminTeam = (t) => !!t;
+
+      db.upsertByField('games', 'calendar_uid', event.uid, {
+        calendar_uid: event.uid,
+        calendar_id: cal.id,
+        start_time: start.toISOString(),
+        end_time: event.end ? new Date(event.end).toISOString() : start.toISOString(),
+        raw_title: rawTitle,
+        title: title || '',
+        home_team: (existing && isAdminTeam(existing.home_team)) ? existing.home_team : home_team,
+        away_team: (existing && isAdminTeam(existing.away_team)) ? existing.away_team : away_team,
+        home_locker: existing ? existing.home_locker : '',
+        away_locker: existing ? existing.away_locker : '',
+        lr_auto_assigned: existing ? (existing.lr_auto_assigned || 0) : 0,
+        is_skate: event.summary && event.summary.includes(keyword) ? 1 : 0,
+      });
+      importedUids.add(event.uid);
+      count++;
+    }
   }
 
   // Remove games from this calendar that are in the import window but were filtered out
@@ -163,7 +232,7 @@ function scheduleCalendar(cal) {
 
 async function fetchAndSync() {
   const allCals = db.findAll('calendars');
-  const calendars = allCals.filter((c) => c.type === 'hockey_games' || c.type === 'rink_events');
+  const calendars = allCals.filter((c) => c.type === 'hockey_games' || c.type === 'rink_events' || c.type === 'figure_skating');
 
   // Fall back to legacy single ical_url setting if no calendars configured yet
   if (calendars.length === 0) {
@@ -180,7 +249,7 @@ async function fetchAndSync() {
 
 function startPolling() {
   fetchAndSync();
-  const calendars = db.findAll('calendars').filter((c) => c.type === 'hockey_games' || c.type === 'rink_events');
+  const calendars = db.findAll('calendars').filter((c) => c.type === 'hockey_games' || c.type === 'rink_events' || c.type === 'figure_skating');
   if (calendars.length > 0) {
     calendars.forEach(scheduleCalendar);
   } else {

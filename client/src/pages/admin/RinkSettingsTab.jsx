@@ -329,26 +329,38 @@ export default function RinkSettingsTab() {
         <table className={styles.table}>
           <thead><tr><th>Name</th><th>Pairs (in order)</th><th></th></tr></thead>
           <tbody>
-            {sequences.map((seq) => (
-              <tr key={seq.id}>
-                <td style={{ fontWeight: 600 }}>{seq.name}</td>
-                <td>
-                  <div className={settStyles.pairChips}>
-                    {(seq.pairs || []).map((p, i) => (
-                      <span key={i} className={settStyles.pairChip}>
-                        {i + 1}. {p.home} vs {p.away}
-                      </span>
-                    ))}
-                  </div>
-                </td>
-                <td>
-                  <div className={styles.actions}>
-                    <button className={styles.btnGhost} onClick={() => setSeqModal(seq)}>Edit</button>
-                    <button className={styles.btnDanger} onClick={() => deleteSequence(seq)}>Delete</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {sequences.map((seq) => {
+              const isDefault = String(settings?.default_locker_sequence_id) === String(seq.id);
+              return (
+                <tr key={seq.id}>
+                  <td style={{ fontWeight: 600 }}>
+                    {seq.name}
+                    {isDefault && <span style={{ marginLeft: 8, fontSize: '0.75rem', background: 'var(--ice-blue)', color: '#fff', borderRadius: 4, padding: '1px 6px' }}>Default</span>}
+                  </td>
+                  <td>
+                    <div className={settStyles.pairChips}>
+                      {(seq.pairs || []).map((p, i) => (
+                        <span key={i} className={settStyles.pairChip}>
+                          {i + 1}. {p.home} vs {p.away}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td>
+                    <div className={styles.actions}>
+                      {!isDefault && (
+                        <button className={styles.btnGhost} onClick={async () => {
+                          await apiFetch('/settings', { method: 'PATCH', body: JSON.stringify({ default_locker_sequence_id: seq.id }) });
+                          reloadSettings();
+                        }}>Set Default</button>
+                      )}
+                      <button className={styles.btnGhost} onClick={() => setSeqModal(seq)}>Edit</button>
+                      <button className={styles.btnDanger} onClick={() => deleteSequence(seq)}>Delete</button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       ) : (

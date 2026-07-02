@@ -2,6 +2,28 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.7.0] — 2026-07-01
+
+### Added
+- **Figure Skating calendar type** — new calendar type with its own admin tab showing events grouped by day and week pagination; recurring events expanded via `ical-expander` (RRULE support)
+- **Figure Skating TV display type** — new screen display showing today's figure skating events in table format
+- **Game delete button** — red trashcan icon (🗑) on each game row in the Games tab
+- **Default locker sequence setting** — Settings tab now shows a "Set Default" button per sequence; the selected sequence is used as the auto-assign fallback when no league- or calendar-level sequence is configured
+- **Per-calendar locker sequence** — hockey games calendar edit modal now includes a Locker Room Sequence dropdown; setting it here also syncs to the matching league and vice versa (one source of truth)
+- **Poll interval unit toggle** — calendar poll interval field now has a Minutes / Days toggle alongside the number input (same pill-style as the Home/Away toggle); table column shows `5m` or `1d` etc.
+
+### Changed
+- **Locker sequence sync** — setting the sequence in the Leagues tab now propagates to the matching hockey calendar and vice versa; `GET /calendars` falls back to the league's sequence for the modal display
+- **Games tab** — server now filters to only return hockey_games calendar events (freestyle/figure skating events excluded)
+- **Auto-assign reset** — now clears all locker assignments for the scope (not just `lr_auto_assigned=1` ones) to handle games imported before the flag was added
+
+### Fixed
+- **Stick & Shoot parsing** — `Stick&Shoot` (no spaces) now parsed the same as practices; title normalized to `Stick & Shoot` on import
+- **Blank event titles** — events with no title now import with an empty string instead of `(No title)`
+- **ical-expander TypeError** — fixed `Cannot read properties of undefined (reading 'uid')` when resyncing figure skating calendars
+- **Location filter** — San Mateo location filter now only applies to hockey_games calendars (was incorrectly excluding figure skating events)
+- **Background upload auth** — upload request now includes `Authorization: Bearer` header
+
 ## [1.6.0] — 2026-06-28
 
 ### Added

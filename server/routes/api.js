@@ -146,10 +146,28 @@ router.get('/rink-events', (req, res) => {
   res.json(events);
 });
 
+// ── Figure Skating ────────────────────────────────────────────────────────────
+
+router.get('/figure-skating', (req, res) => {
+  const calIds = new Set(
+    db.findAll('calendars')
+      .filter((c) => c.type === 'figure_skating')
+      .map((c) => c.id)
+  );
+  res.json(db.findAll('games', 'start_time').filter((g) => calIds.has(g.calendar_id)));
+});
+
 // ── Games ─────────────────────────────────────────────────────────────────────
 
 router.get('/games', (req, res) => {
-  res.json(db.findAll('games', 'start_time'));
+  const hockeyCalIds = new Set(
+    db.findAll('calendars')
+      .filter((c) => c.type === 'hockey_games')
+      .map((c) => c.id)
+  );
+  const all = db.findAll('games', 'start_time');
+  // Only return games from hockey_games calendars (or legacy unassigned games with no calendar)
+  res.json(all.filter((g) => !g.calendar_id || hockeyCalIds.has(g.calendar_id)));
 });
 
 router.patch('/games/:id', requireAuth, (req, res) => {
@@ -272,7 +290,15 @@ router.get('/games/debug-calendar', async (req, res) => {
 // ── Calendars ─────────────────────────────────────────────────────────────────
 
 router.get('/calendars', (req, res) => {
-  res.json(db.findAll('calendars', 'created_at'));
+  const leagues = db.findAll('leagues');
+  const calendars = db.findAll('calendars', 'created_at').map((cal) => {
+    const league = leagues.find((l) => l.name.toLowerCase() === cal.name.toLowerCase());
+    return {
+      ...cal,
+      locker_sequence_id: cal.locker_sequence_id ?? (league ? league.locker_sequence_id : null),
+    };
+  });
+  res.json(calendars);
 });
 
 router.post('/calendars', requireAuth, async (req, res) => {
@@ -304,7 +330,8 @@ router.post('/calendars', requireAuth, async (req, res) => {
     return res.status(400).json({ error: `Could not load the calendar URL: ${err.message}` });
   }
 
-  const row = db.insert('calendars', { name, url, type, poll_interval_minutes: Number(poll_interval_minutes), team_order });
+  const { locker_sequence_id } = req.body;
+  const row = db.insert('calendars', { name, url, type, poll_interval_minutes: Number(poll_interval_minutes), team_order, locker_sequence_id: locker_sequence_id || null });
   res.json({ id: row.id });
 });
 
@@ -312,7 +339,7 @@ router.patch('/calendars/:id', requireAuth, async (req, res) => {
   const cal = db.findById('calendars', req.params.id);
   if (!cal) return res.status(404).json({ error: 'not found' });
 
-  const { name, url, poll_interval_minutes, team_order } = req.body;
+  const { name, url, poll_interval_minutes, team_order, locker_sequence_id } = req.body;
   const all = db.findAll('calendars');
 
   if (name && name.toLowerCase() !== cal.name.toLowerCase()) {
@@ -343,12 +370,20 @@ router.patch('/calendars/:id', requireAuth, async (req, res) => {
     }
   }
 
+  const newSeqId = locker_sequence_id !== undefined ? (locker_sequence_id || null) : (cal.locker_sequence_id || null);
   db.update('calendars', req.params.id, {
     name: name ?? cal.name,
     url: url ?? cal.url,
     poll_interval_minutes: poll_interval_minutes !== undefined ? Number(poll_interval_minutes) : cal.poll_interval_minutes,
     team_order: team_order ?? cal.team_order ?? 'away_home',
+    locker_sequence_id: newSeqId,
   });
+  // Keep league in sync when sequence is explicitly set via calendar modal
+  if (locker_sequence_id !== undefined && cal.type === 'hockey_games') {
+    const calName = name ?? cal.name;
+    const league = db.findAll('leagues').find((l) => l.name.toLowerCase() === calName.toLowerCase());
+    if (league) db.update('leagues', league.id, { locker_sequence_id: newSeqId });
+  }
   res.json({ ok: true });
 });
 
@@ -528,10 +563,14 @@ router.patch('/leagues/:id', requireAuth, (req, res) => {
       return res.status(400).json({ error: `A league named "${name}" already exists.` });
     }
   }
-  db.update('leagues', req.params.id, {
-    name: name ? name.trim() : league.name,
-    locker_sequence_id: locker_sequence_id !== undefined ? (locker_sequence_id || null) : league.locker_sequence_id,
-  });
+  const newName = name ? name.trim() : league.name;
+  const newLeagueSeqId = locker_sequence_id !== undefined ? (locker_sequence_id || null) : league.locker_sequence_id;
+  db.update('leagues', req.params.id, { name: newName, locker_sequence_id: newLeagueSeqId });
+  // Keep matching calendar in sync when sequence is set via Leagues tab
+  if (locker_sequence_id !== undefined) {
+    const cal = db.findAll('calendars').find((c) => c.type === 'hockey_games' && c.name.toLowerCase() === newName.toLowerCase());
+    if (cal) db.update('calendars', cal.id, { locker_sequence_id: newLeagueSeqId });
+  }
   res.json({ ok: true });
 });
 

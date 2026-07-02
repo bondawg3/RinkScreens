@@ -10,6 +10,7 @@ import BackgroundsTab from './pages/admin/BackgroundsTab';
 import SettingsTab from './pages/admin/SettingsTab';
 import RinkSettingsTab from './pages/admin/RinkSettingsTab';
 import RinkEventsTab from './pages/admin/RinkEventsTab';
+import FigureSkatingTab from './pages/admin/FigureSkatingTab';
 import LeaguesTab from './pages/admin/LeaguesTab';
 import { getToken } from './hooks/useApi';
 
@@ -30,6 +31,7 @@ export default function App() {
           <Route path="screens" element={<ScreensTab />} />
           <Route path="games" element={<GamesTab />} />
           <Route path="rink-events" element={<RinkEventsTab />} />
+          <Route path="figure-skating" element={<FigureSkatingTab />} />
           <Route path="skate" element={<SkateTab />} />
           <Route path="backgrounds" element={<BackgroundsTab />} />
           <Route path="settings" element={<SettingsTab />} />

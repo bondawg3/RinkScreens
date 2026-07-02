@@ -16,10 +16,10 @@ function localDateStr(isoStr) {
 function buildCalLeagueMap() {
   const calendars = db.findAll('calendars');
   const leagues = db.findAll('leagues');
-  const map = {};
+  const map = {}; // calId → { league, calSeqId }
   for (const cal of calendars) {
     const league = leagues.find((l) => l.name.toLowerCase() === cal.name.toLowerCase());
-    if (league) map[cal.id] = league;
+    map[cal.id] = { league: league || null, calSeqId: cal.locker_sequence_id || null };
   }
   return map;
 }
@@ -50,10 +50,14 @@ function processDay(dayGames, calLeagueMap, seqMap, standardSeq) {
       }
     }
 
-    // Determine sequence: game's own league → carry-over from block → standard
-    const league = game.calendar_id ? calLeagueMap[game.calendar_id] : null;
+    // Sequence priority: calendar-level → league-level → carry-over within block → default
+    const calEntry = game.calendar_id ? calLeagueMap[game.calendar_id] : null;
+    const league = calEntry ? calEntry.league : null;
+    const calSeqId = calEntry ? calEntry.calSeqId : null;
     const gameSeq =
-      league && league.locker_sequence_id ? seqMap[league.locker_sequence_id] : null;
+      (calSeqId && seqMap[calSeqId]) ||
+      (league && league.locker_sequence_id && seqMap[league.locker_sequence_id]) ||
+      null;
     if (gameSeq) blockSeq = gameSeq;
     const seq = gameSeq || blockSeq || standardSeq;
 
@@ -139,7 +143,12 @@ function autoAssign({ dateStr, resetExisting } = {}) {
   const calLeagueMap = buildCalLeagueMap();
   const seqList = db.findAll('locker_sequences');
   const seqMap = Object.fromEntries(seqList.map((s) => [s.id, s]));
-  const standardSeq = seqList.find((s) => s.name.toLowerCase() === 'standard') || null;
+  const settings = db.getSettings();
+  const defaultSeqId = settings.default_locker_sequence_id;
+  const standardSeq =
+    (defaultSeqId && seqMap[defaultSeqId]) ||
+    seqList.find((s) => s.name.toLowerCase() === 'standard') ||
+    null;
 
   // Step 5: For each candidate date, load ALL games that day (for correct block tracking)
   const byDate = {};

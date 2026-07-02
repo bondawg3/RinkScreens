@@ -7,6 +7,7 @@ const tabs = [
   { to: 'screens', label: 'Screens' },
   { to: 'games', label: 'Games' },
   { to: 'rink-events', label: 'Rink Events' },
+  { to: 'figure-skating', label: 'Figure Skating' },
   { to: 'skate', label: 'Public Skate' },
   { to: 'leagues', label: 'Leagues' },
   { to: 'backgrounds', label: 'Backgrounds' },

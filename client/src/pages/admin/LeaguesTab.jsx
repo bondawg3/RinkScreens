@@ -32,7 +32,9 @@ function ColorPicker({ value, onChange }) {
         {SWATCHES.map((c) => (
           <button key={c} type="button" onClick={() => pick(c)} title={c}
             style={{ width: 18, height: 18, borderRadius: 3, background: c, cursor: 'pointer', flexShrink: 0, padding: 0,
-              border: value === c ? '2px solid #064878' : '1px solid #ccc' }} />
+              border: value === c ? '3px solid #064878' : '1px solid #ccc',
+              outline: value === c ? '1px solid #fff' : 'none',
+              outlineOffset: '-4px' }} />
         ))}
         <button type="button" onClick={() => pick('')} title="Clear"
           style={{ width: 18, height: 18, borderRadius: 3, background: '#fff', cursor: 'pointer', border: '1px solid #ccc', fontSize: 10, padding: 0, color: '#999', lineHeight: 1 }}>✕</button>

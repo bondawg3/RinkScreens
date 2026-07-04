@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Display from './pages/Display';
 import LoginPage from './pages/LoginPage';
 import AdminLayout from './pages/admin/AdminLayout';
-import ScreensTab from './pages/admin/ScreensTab';
+import DisplaysTab from './pages/admin/DisplaysTab';
 import GamesTab from './pages/admin/GamesTab';
 import SkateTab from './pages/admin/SkateTab';
 import BackgroundsTab from './pages/admin/BackgroundsTab';
@@ -27,8 +27,8 @@ export default function App() {
         <Route path="/admin" element={
           <ProtectedRoute><AdminLayout /></ProtectedRoute>
         }>
-          <Route index element={<Navigate to="screens" replace />} />
-          <Route path="screens" element={<ScreensTab />} />
+          <Route index element={<Navigate to="displays" replace />} />
+          <Route path="displays" element={<DisplaysTab />} />
           <Route path="games" element={<GamesTab />} />
           <Route path="rink-events" element={<RinkEventsTab />} />
           <Route path="figure-skating" element={<FigureSkatingTab />} />

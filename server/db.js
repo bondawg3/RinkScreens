@@ -18,6 +18,7 @@ const DEFAULTS = {
     skate_keyword: 'Public Skate',
   },
   screens: [],
+  displays: [],
   backgrounds: [],
   games: [],
   skate_prices: [],
@@ -26,7 +27,7 @@ const DEFAULTS = {
   locker_sequences: [],
   leagues: [],
   teams: [],
-  _seq: { screens: 1, backgrounds: 1, games: 1, skate_prices: 1, calendars: 1, locker_rooms: 1, locker_sequences: 1, leagues: 1, teams: 1 },
+  _seq: { screens: 1, displays: 1, backgrounds: 1, games: 1, skate_prices: 1, calendars: 1, locker_rooms: 1, locker_sequences: 1, leagues: 1, teams: 1 },
 };
 
 function load() {

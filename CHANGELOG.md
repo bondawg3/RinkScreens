@@ -2,6 +2,18 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.8.0] — 2026-07-04
+
+### Added
+- **Displays management in Settings** — register physical TV devices (name + IP) in the Settings tab; full add/edit/delete with duplicate name and IP validation
+- **Displays tab** — Screens tab renamed to Displays; add form removed from tab (displays registered in Settings only)
+- **Conflict dates in auto-assign warning** — locker room conflict alert now lists the specific dates affected (e.g. "conflicts detected on: Wed Jul 2, Sun Jul 12") instead of just the count
+
+### Fixed
+- **Locker auto-assign excludes non-hockey calendars** — figure skating and rink events calendars no longer consume pair indices or receive locker assignments; only `hockey_games` type calendars participate
+- **Pair index carries forward across blocks** — when a new 150-minute block starts, the pair index continues from where the previous block left off so the same pair is never assigned twice in a row across a block boundary
+- **Blackstars / per-calendar locker order** — removed calendar-change pair-index reset that was causing conflicts when multiple hockey leagues share the same day; sequence now flows continuously within and across blocks
+
 ## [1.7.0] — 2026-07-01
 
 ### Added

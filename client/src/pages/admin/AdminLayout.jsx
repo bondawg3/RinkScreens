@@ -4,7 +4,7 @@ import styles from './AdminLayout.module.css';
 import { clearToken } from '../../hooks/useApi';
 
 const tabs = [
-  { to: 'screens', label: 'Screens' },
+  { to: 'displays', label: 'Displays' },
   { to: 'games', label: 'Games' },
   { to: 'rink-events', label: 'Rink Events' },
   { to: 'figure-skating', label: 'Figure Skating' },

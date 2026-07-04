@@ -63,10 +63,11 @@ async function syncCalendar(cal) {
   let count = 0;
   const importedUids = new Set();
 
-  // figure_skating and rink_events calendars use ical-expander to properly expand
-  // recurring events (RRULE). hockey_games typically has individual VEVENTs so
-  // node-ical is sufficient and preserves existing uid-based upsert behaviour.
-  const useExpander = cal.type === 'figure_skating' || cal.type === 'rink_events';
+  // figure_skating, rink_events, and public_skates use ical-expander to expand
+  // recurring events (RRULE). hockey_games uses node-ical for uid-based upsert.
+  const useExpander = cal.type === 'figure_skating' || cal.type === 'rink_events' || cal.type === 'public_skates';
+  // For public_skates calendars every event is a skate session regardless of title keyword
+  const forceSkate = cal.type === 'public_skates';
 
   if (useExpander) {
     let text;
@@ -116,7 +117,7 @@ async function syncCalendar(cal) {
         home_locker: existing?.home_locker || '',
         away_locker: existing?.away_locker || '',
         lr_auto_assigned: existing?.lr_auto_assigned || 0,
-        is_skate: rawTitle.includes(keyword) ? 1 : 0,
+        is_skate: forceSkate ? 1 : (rawTitle.includes(keyword) ? 1 : 0),
       });
       count++;
     }
@@ -232,7 +233,7 @@ function scheduleCalendar(cal) {
 
 async function fetchAndSync() {
   const allCals = db.findAll('calendars');
-  const calendars = allCals.filter((c) => c.type === 'hockey_games' || c.type === 'rink_events' || c.type === 'figure_skating');
+  const calendars = allCals.filter((c) => c.type === 'hockey_games' || c.type === 'rink_events' || c.type === 'figure_skating' || c.type === 'public_skates');
 
   // Fall back to legacy single ical_url setting if no calendars configured yet
   if (calendars.length === 0) {
@@ -249,7 +250,7 @@ async function fetchAndSync() {
 
 function startPolling() {
   fetchAndSync();
-  const calendars = db.findAll('calendars').filter((c) => c.type === 'hockey_games' || c.type === 'rink_events' || c.type === 'figure_skating');
+  const calendars = db.findAll('calendars').filter((c) => c.type === 'hockey_games' || c.type === 'rink_events' || c.type === 'figure_skating' || c.type === 'public_skates');
   if (calendars.length > 0) {
     calendars.forEach(scheduleCalendar);
   } else {
@@ -267,4 +268,11 @@ function triggerRefresh() {
   fetchAndSync().then(startPolling);
 }
 
-module.exports = { startPolling, triggerRefresh, parseTitle };
+async function triggerCalendarRefresh(calId) {
+  const cal = db.findById('calendars', calId);
+  if (!cal) throw new Error('Calendar not found');
+  await syncCalendar(cal);
+  ws.broadcast({ type: 'refresh_data' });
+}
+
+module.exports = { startPolling, triggerRefresh, triggerCalendarRefresh, parseTitle };

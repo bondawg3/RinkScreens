@@ -2,7 +2,15 @@ import React, { useState } from 'react';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 
+function formatDate(iso) {
+  return new Date(iso).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+}
+function formatTime(iso) {
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
 export default function SkateTab() {
+  const { data: sessions } = useApi('/skate-sessions');
   const { data: prices, reload } = useApi('/skate-prices');
   const [form, setForm] = useState({ label: '', subheading: '', price: '', sort_order: '' });
   const [editing, setEditing] = useState(null);
@@ -28,11 +36,37 @@ export default function SkateTab() {
 
   return (
     <div>
-      <h2 className={styles.heading}>Public Skate Pricing</h2>
-      <p className={styles.hint}>
-        These prices are shown on the Public Skate display. Sessions are calendar events whose
-        title contains the keyword configured in Settings.
-      </p>
+      <h2 className={styles.heading}>Public Skate</h2>
+      <div style={{ display: 'flex', gap: '2.5rem', alignItems: 'flex-start' }}>
+
+        {/* Sessions panel */}
+        <div style={{ flex: '1 1 0', minWidth: 0 }}>
+          <h3 className={styles.subheading}>Upcoming Sessions</h3>
+          {(!sessions || sessions.length === 0) ? (
+            <p className={styles.muted}>No upcoming sessions. Add a Public Skates calendar in the Calendars tab to pull sessions automatically.</p>
+          ) : (
+            <table className={styles.table}>
+              <thead><tr><th>Date</th><th>Start</th><th>End</th><th>Title</th></tr></thead>
+              <tbody>
+                {sessions.map((s) => (
+                  <tr key={s.id}>
+                    <td>{formatDate(s.start_time)}</td>
+                    <td>{formatTime(s.start_time)}</td>
+                    <td>{s.end_time ? formatTime(s.end_time) : '—'}</td>
+                    <td>{s.title || <span className={styles.muted}>—</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {/* Pricing panel */}
+        <div style={{ flex: '1 1 0', minWidth: 0 }}>
+          <h3 className={styles.subheading}>Pricing</h3>
+          <p className={styles.hint}>
+            Shown on the Public Skate TV display alongside upcoming sessions.
+          </p>
 
       <form onSubmit={addPrice} className={styles.addForm}>
         <input className={styles.input} placeholder="Label (e.g. Adult)" value={form.label}
@@ -81,6 +115,8 @@ export default function SkateTab() {
           {prices && prices.length === 0 && <tr><td colSpan={5} className={styles.muted}>No prices yet.</td></tr>}
         </tbody>
       </table>
+        </div>{/* end pricing panel */}
+      </div>{/* end flex row */}
     </div>
   );
 }

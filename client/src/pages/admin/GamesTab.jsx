@@ -43,10 +43,15 @@ export default function GamesTab() {
       });
       reload();
       let msg = `Auto-assigned ${result.assigned} game${result.assigned !== 1 ? 's' : ''}.`;
-      if (result.conflicts && result.conflicts.length > 0) {
-        msg += ` ⚠ ${result.conflicts.length} locker room conflict${result.conflicts.length !== 1 ? 's' : ''} detected.`;
+      const hasConflicts = result.conflicts && result.conflicts.length > 0;
+      if (hasConflicts) {
+        const dates = [...new Set(result.conflicts.map((c) => {
+          const d = new Date(c.start_time);
+          return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+        }))];
+        msg += ` ⚠ ${result.conflicts.length} locker room conflict${result.conflicts.length !== 1 ? 's' : ''} detected on: ${dates.join(', ')}.`;
       }
-      setAutoAssignMsg({ text: msg, isWarning: result.conflicts && result.conflicts.length > 0 });
+      setAutoAssignMsg({ text: msg, isWarning: hasConflicts });
     } catch (err) {
       setAutoAssignMsg({ text: `Error: ${err.message}`, isWarning: true });
     }

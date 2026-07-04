@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const ws = require('../ws');
-const { triggerRefresh, parseTitle } = require('../calendar');
+const { triggerRefresh, triggerCalendarRefresh, parseTitle } = require('../calendar');
 const { autoAssign } = require('../locker-assign');
 const { requireAuth, signToken, verifyToken } = require('../auth');
 const bcrypt = require('bcryptjs');
@@ -133,6 +133,44 @@ router.delete('/screens/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// ── Displays ──────────────────────────────────────────────────────────────────
+
+router.get('/displays', (req, res) => {
+  res.json(db.findAll('displays', 'created_at'));
+});
+
+router.post('/displays', requireAuth, (req, res) => {
+  const { name, ip } = req.body;
+  if (!name || !ip) return res.status(400).json({ error: 'name and ip required' });
+  const all = db.findAll('displays');
+  const dupName = all.find((d) => d.name.toLowerCase() === name.toLowerCase());
+  if (dupName) return res.status(400).json({ error: `A display named "${dupName.name}" already exists.` });
+  const dupIp = all.find((d) => d.ip === ip);
+  if (dupIp) return res.status(400).json({ error: `IP ${ip} is already used by "${dupIp.name}".` });
+  const row = db.insert('displays', { name, ip });
+  res.json({ id: row.id });
+});
+
+router.patch('/displays/:id', requireAuth, (req, res) => {
+  const display = db.findById('displays', req.params.id);
+  if (!display) return res.status(404).json({ error: 'not found' });
+  const { name, ip } = req.body;
+  const newName = name ?? display.name;
+  const newIp = ip ?? display.ip;
+  const others = db.findAll('displays').filter((d) => d.id !== display.id);
+  const dupName = others.find((d) => d.name.toLowerCase() === newName.toLowerCase());
+  if (dupName) return res.status(400).json({ error: `A display named "${dupName.name}" already exists.` });
+  const dupIp = others.find((d) => d.ip === newIp);
+  if (dupIp) return res.status(400).json({ error: `IP ${newIp} is already used by "${dupIp.name}".` });
+  db.update('displays', req.params.id, { name: newName, ip: newIp });
+  res.json({ ok: true });
+});
+
+router.delete('/displays/:id', requireAuth, (req, res) => {
+  db.remove('displays', req.params.id);
+  res.json({ ok: true });
+});
+
 // ── Rink Events ───────────────────────────────────────────────────────────────
 
 router.get('/rink-events', (req, res) => {
@@ -197,6 +235,15 @@ router.delete('/games/:id', requireAuth, (req, res) => {
 router.post('/games/refresh', requireAuth, (req, res) => {
   triggerRefresh();
   res.json({ ok: true });
+});
+
+router.post('/calendars/:id/sync', requireAuth, async (req, res) => {
+  try {
+    await triggerCalendarRefresh(Number(req.params.id));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 router.post('/games/auto-assign', requireAuth, (req, res) => {
@@ -390,6 +437,16 @@ router.patch('/calendars/:id', requireAuth, async (req, res) => {
 router.delete('/calendars/:id', requireAuth, (req, res) => {
   db.remove('calendars', req.params.id);
   res.json({ ok: true });
+});
+
+// ── Public Skate Sessions ─────────────────────────────────────────────────────
+
+router.get('/skate-sessions', (req, res) => {
+  const skateCals = db.findAll('calendars').filter((c) => c.type === 'public_skates').map((c) => c.id);
+  const now = new Date().toISOString();
+  const sessions = db.findAll('games', 'start_time')
+    .filter((g) => g.is_skate && g.start_time >= now && (skateCals.length === 0 || skateCals.includes(g.calendar_id)));
+  res.json(sessions);
 });
 
 // ── Public Skate Prices ───────────────────────────────────────────────────────

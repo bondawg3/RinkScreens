@@ -111,10 +111,9 @@ header {
   background: #62B0D0;
   color: #fff;
   padding: 14px 20px;
-  font-size: 1.3rem;
+  font-size: 1em;
   font-weight: bold;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .game-table .col-header-row td.col-transparent {
@@ -125,7 +124,6 @@ header {
 .game-table .col-header-row td.col-cal-name {
   width: 1%;
   white-space: nowrap;
-  font-size: 1em;
   border-radius: 8px;
   text-transform: none;
   letter-spacing: 0.03em;
@@ -163,6 +161,10 @@ header {
 .game-table tbody tr.game-row td:nth-child(7) { border-radius: 8px 0 0 8px; }
 .game-table tbody tr.game-row td:nth-child(8) { border-radius: 0 8px 8px 0; }
 
+.game-table tbody tr.event-row td:nth-child(1) { border-radius: 8px 0 0 8px; }
+.game-table tbody tr.event-row td:nth-child(2) { border-radius: 0 8px 8px 0; }
+.game-table tbody tr.event-row:nth-child(even) td { background: rgba(235,245,255,0.88); }
+
 /* ── Public Skate ── */
 .skate-wrap {
   display: -webkit-box;
@@ -172,8 +174,8 @@ header {
   height: 100%;
 }
 
-.skate-sessions { -webkit-box-flex: 1; -ms-flex: 1; flex: 1; }
-.skate-pricing  { width: 360px; }
+.skate-sessions { -webkit-box-flex: 1; -ms-flex: 1; flex: 1; border-radius: 6px; overflow: hidden; }
+.skate-pricing  { width: 360px; border-radius: 6px; overflow: hidden; }
 
 .section-title {
   background: rgba(6,72,120,0.85);
@@ -184,6 +186,7 @@ header {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   margin-bottom: 0;
+  border-radius: 6px 6px 0 0;
 }
 
 .session-row {
@@ -337,6 +340,9 @@ function renderGames(games, calMap, teamMap) {
         '<td class="td-away"' + (awayStyle ? ' style="' + awayStyle + '"' : '') + '>' + awayInfo.label + '</td>' +
         '<td class="td-locker">' + (g.away_locker || '') + '</td>' +
         '</tr>';
+    }
+    if (gi < groupOrder.length - 1) {
+      tbody += '<tr style="height:0.6em"><td colspan="8" style="padding:0;border:none;background:transparent"></td></tr>';
     }
   }
 
@@ -497,17 +503,18 @@ function loadScreen() {
         }
         todayEvents.sort(function(a, b) { return new Date(a.start_time) - new Date(b.start_time); });
         var html = '';
+        var heading = dtype === 'figure_skating' ? 'Figure Skating' : 'Rink Events';
         if (todayEvents.length === 0) {
           html = '<div class="empty"><p>No events scheduled for today.</p></div>';
         } else {
           html = '<table class="game-table"><tbody>';
+          html += '<tr class="col-header-row"><td class="col-cal-name" colspan="2">' + heading + '</td></tr>';
           for (var i = 0; i < todayEvents.length; i++) {
             var ev = todayEvents[i];
             var t = new Date(ev.start_time);
             var timeStr = t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
             var title = ev.raw_title || ev.title || '';
-            var rowClass = i % 2 === 0 ? 'row-even' : 'row-odd';
-            html += '<tr class="' + rowClass + '">' +
+            html += '<tr class="event-row">' +
               '<td class="td-time">' + timeStr + '</td>' +
               '<td style="padding:0.4em 0.6em;font-size:1em;">' + title + '</td>' +
               '</tr>';

@@ -17,13 +17,11 @@ export default function PublicSkate() {
 
   async function load() {
     try {
-      const [gamesRes, pricesRes] = await Promise.all([
-        fetch('/api/games'),
+      const [sessionsRes, pricesRes] = await Promise.all([
+        fetch('/api/skate-sessions'),
         fetch('/api/skate-prices'),
       ]);
-      const all = await gamesRes.json();
-      const now = new Date();
-      setSessions(all.filter((g) => g.is_skate && new Date(g.start_time) >= now));
+      setSessions(await sessionsRes.json());
       setPrices(await pricesRes.json());
     } catch (_) {}
   }

@@ -184,28 +184,56 @@ export default function CalendarsTab() {
   const { data: calendars, reload: reloadCalendars } = useApi('/calendars');
   const [modalType, setModalType] = useState(null);
   const [editingCal, setEditingCal] = useState(null);
+  const [syncing, setSyncing] = useState(null); // calId | 'all' | null
 
   async function removeCalendar(id) {
     await apiFetch(`/calendars/${id}`, { method: 'DELETE' });
     reloadCalendars();
   }
 
+  async function syncAll() {
+    setSyncing('all');
+    try { await apiFetch('/games/refresh', { method: 'POST' }); } finally { setSyncing(null); }
+  }
+
+  async function syncCalendar(id) {
+    setSyncing(id);
+    try { await apiFetch(`/calendars/${id}/sync`, { method: 'POST' }); } finally { setSyncing(null); }
+  }
+
   function openAdd(type) { setEditingCal(null); setModalType(type); }
   function openEdit(cal) { setEditingCal(cal); setModalType(cal.type); }
 
   const byType = (type) => (calendars || []).filter((c) => c.type === type);
+  const syncableTypes = new Set(['hockey_games', 'rink_events', 'figure_skating', 'public_skates']);
 
   return (
     <div>
-      <h2 className={styles.heading}>Calendars</h2>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+        <h2 className={styles.heading} style={{ margin: 0 }}>Calendars</h2>
+        <button className={styles.btnGhost} onClick={syncAll} disabled={syncing === 'all'}>
+          {syncing === 'all' ? 'Syncing…' : '↻ Sync All'}
+        </button>
+      </div>
 
       {CALENDAR_TYPES.map(({ value, label }) => (
         <div key={value} className={calStyles.calSection}>
           <div className={calStyles.calSectionHeader}>
             <span>{label}</span>
-            <button className={styles.btnPrimary} onClick={() => openAdd(value)}>
-              + Add {label} Calendar
-            </button>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              {syncableTypes.has(value) && byType(value).length > 0 && (
+                <button
+                  className={styles.btnGhost}
+                  onClick={() => Promise.all(byType(value).map((c) => syncCalendar(c.id)))}
+                  disabled={!!syncing}
+                >
+                  {syncing && byType(value).some((c) => c.id === syncing) ? 'Syncing…' : `↻ Sync ${label}`}
+                </button>
+              )}
+              <button className={styles.btnPrimary} onClick={() => openAdd(value)}>
+                + Add {label} Calendar
+              </button>
+            </div>
           </div>
           {byType(value).length === 0 ? (
             <p className={calStyles.empty}>No {label.toLowerCase()} calendars added yet.</p>
@@ -233,6 +261,11 @@ export default function CalendarsTab() {
                     )}
                     <td>
                       <div className={styles.actions}>
+                        {syncableTypes.has(value) && (
+                          <button className={styles.btnGhost} onClick={() => syncCalendar(cal.id)} disabled={!!syncing}>
+                            {syncing === cal.id ? 'Syncing…' : '↻ Sync'}
+                          </button>
+                        )}
                         <button className={styles.btnGhost} onClick={() => openEdit(cal)}>Edit</button>
                         <button className={styles.btnDanger} onClick={() => removeCalendar(cal.id)}>Remove</button>
                       </div>

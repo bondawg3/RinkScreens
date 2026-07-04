@@ -56,6 +56,62 @@ function LockerRoomRow({ room, onSaved, onDeleted }) {
   );
 }
 
+// ── Display row ────────────────────────────────────────────────────────────────
+
+function DisplayRow({ display, onSaved, onDeleted }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(display.name);
+  const [ip, setIp] = useState(display.ip);
+  const [error, setError] = useState('');
+
+  async function save() {
+    setError('');
+    try {
+      await apiFetch(`/displays/${display.id}`, { method: 'PATCH', body: JSON.stringify({ name, ip }) });
+      setEditing(false);
+      onSaved();
+    } catch (err) { setError(err.message); }
+  }
+
+  async function remove() {
+    if (!confirm(`Delete display "${display.name}"?`)) return;
+    await apiFetch(`/displays/${display.id}`, { method: 'DELETE' });
+    onDeleted();
+  }
+
+  if (editing) {
+    return (
+      <tr>
+        <td>
+          <input className={styles.input} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+        </td>
+        <td>
+          <input className={styles.input} value={ip} onChange={(e) => setIp(e.target.value)} />
+          {error && <div className={styles.error} style={{ marginTop: 4 }}>{error}</div>}
+        </td>
+        <td>
+          <div className={styles.actions}>
+            <button className={styles.btnPrimary} onClick={save}>Save</button>
+            <button className={styles.btnGhost} onClick={() => { setEditing(false); setName(display.name); setIp(display.ip); setError(''); }}>Cancel</button>
+          </div>
+        </td>
+      </tr>
+    );
+  }
+  return (
+    <tr>
+      <td>{display.name}</td>
+      <td>{display.ip}</td>
+      <td>
+        <div className={styles.actions}>
+          <button className={styles.btnGhost} onClick={() => setEditing(true)}>Edit</button>
+          <button className={styles.btnDanger} onClick={remove}>Delete</button>
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 // ── Sequence modal ─────────────────────────────────────────────────────────────
 
 function SequenceModal({ existing, lockerRooms, onClose, onSaved }) {
@@ -176,12 +232,16 @@ export default function RinkSettingsTab() {
   const { data: settings, reload: reloadSettings } = useApi('/settings');
   const { data: lockerRooms, reload: reloadRooms } = useApi('/locker-rooms');
   const { data: sequences, reload: reloadSequences } = useApi('/locker-sequences');
+  const { data: displays, reload: reloadDisplays } = useApi('/displays');
   const [rinkName, setRinkName] = useState('');
   const [saved, setSaved] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [newRoom, setNewRoom] = useState('');
   const [addError, setAddError] = useState('');
   const [seqModal, setSeqModal] = useState(null); // null | 'add' | sequence object
+  const [newDispName, setNewDispName] = useState('');
+  const [newDispIp, setNewDispIp] = useState('');
+  const [dispAddErr, setDispAddErr] = useState('');
   const fileRef = useRef();
   const [pwCurrent, setPwCurrent] = useState('');
   const [pwNew, setPwNew] = useState('');
@@ -245,6 +305,17 @@ export default function RinkSettingsTab() {
       setNewRoom('');
       reloadRooms();
     } catch (err) { setAddError(err.message); }
+  }
+
+  async function addDisplay(e) {
+    e.preventDefault();
+    setDispAddErr('');
+    try {
+      await apiFetch('/displays', { method: 'POST', body: JSON.stringify({ name: newDispName, ip: newDispIp }) });
+      setNewDispName('');
+      setNewDispIp('');
+      reloadDisplays();
+    } catch (err) { setDispAddErr(err.message); }
   }
 
   async function deleteSequence(seq) {
@@ -374,6 +445,30 @@ export default function RinkSettingsTab() {
           onClose={() => setSeqModal(null)}
           onSaved={reloadSequences}
         />
+      )}
+
+      {/* Displays */}
+      <h2 className={styles.heading} style={{ marginTop: '2rem' }}>Displays</h2>
+      <p className={styles.hint}>Register the TV devices on your network.</p>
+      <form onSubmit={addDisplay} className={styles.addForm}>
+        <input className={styles.input} value={newDispName} onChange={(e) => setNewDispName(e.target.value)}
+          placeholder="Display name (e.g. Lobby TV)" required />
+        <input className={styles.input} value={newDispIp} onChange={(e) => setNewDispIp(e.target.value)}
+          placeholder="IP address (e.g. 192.168.1.50)" required />
+        <button className={styles.btnPrimary} type="submit" disabled={!newDispName.trim() || !newDispIp.trim()}>Add Display</button>
+        {dispAddErr && <span className={styles.error}>{dispAddErr}</span>}
+      </form>
+      {displays && displays.length > 0 ? (
+        <table className={styles.table}>
+          <thead><tr><th>Name</th><th>IP Address</th><th></th></tr></thead>
+          <tbody>
+            {displays.map((d) => (
+              <DisplayRow key={d.id} display={d} onSaved={reloadDisplays} onDeleted={reloadDisplays} />
+            ))}
+          </tbody>
+        </table>
+      ) : (
+        <p className={styles.muted}>No displays added yet.</p>
       )}
 
       {/* Admin Password */}

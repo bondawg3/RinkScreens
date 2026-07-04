@@ -33,6 +33,7 @@ function processDay(dayGames, calLeagueMap, seqMap, standardSeq) {
   let prevAssignedHome = null;
   let prevAssignedAway = null;
   let blockSeq = null; // sequence carried forward within a block
+  let prevCalId = null; // last calendar seen — used to detect calendar change within a block
 
   for (const game of dayGames) {
     const startMs = new Date(game.start_time).getTime();
@@ -41,13 +42,13 @@ function processDay(dayGames, calLeagueMap, seqMap, standardSeq) {
       : startMs + 60 * 60 * 1000;
 
     const isNewBlock = prevEndMs !== null && startMs - prevEndMs > GAP_MS;
-    if (isNewBlock || prevEndMs === null) {
-      if (isNewBlock) {
-        blockPairIdx = 0;
-        blockSeq = null;
-        prevAssignedHome = null;
-        prevAssignedAway = null;
-      }
+    if (isNewBlock) {
+      // New block: clear conflict tracking but continue pair index so we don't
+      // repeat the same pair at the start of the next block
+      blockSeq = null;
+      prevAssignedHome = null;
+      prevAssignedAway = null;
+      prevCalId = null;
     }
 
     // Sequence priority: calendar-level → league-level → carry-over within block → default
@@ -103,6 +104,7 @@ function processDay(dayGames, calLeagueMap, seqMap, standardSeq) {
     }
 
     if (endMs > (prevEndMs || 0)) prevEndMs = endMs;
+    prevCalId = game.calendar_id;
   }
 
   return { updates, conflicts };
@@ -124,8 +126,13 @@ function autoAssign({ dateStr, resetExisting } = {}) {
     }
   }
 
-  // Step 2: Reload games after reset
-  const allGames = db.findAll('games', 'start_time').filter((g) => !g.is_skate);
+  // Step 2: Reload games after reset — only hockey_games calendars use locker rooms
+  const hockeyCalIds = new Set(
+    db.findAll('calendars').filter((c) => c.type === 'hockey_games').map((c) => c.id)
+  );
+  const allGames = db.findAll('games', 'start_time').filter(
+    (g) => !g.is_skate && hockeyCalIds.has(g.calendar_id)
+  );
 
   // Step 3: Determine candidate dates (days that have at least one unassigned game)
   const candidateDates = new Set(

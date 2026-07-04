@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 import tStyles from './ScreensTab.module.css';
+import sStyles from './ScreensSection.module.css';
 
 const DISPLAY_TYPES = [
   { value: 'games', label: 'Game Board' },
@@ -22,6 +23,14 @@ function Thumbnail({ screenId }) {
     setScale(w / 1920);
   }, []);
 
+  if (!screenId) {
+    return (
+      <div className={tStyles.thumbWrap} ref={wrapRef} style={{ '--thumb-scale': scale, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', position: 'absolute' }}>No screen assigned</span>
+      </div>
+    );
+  }
+
   return (
     <div className={tStyles.thumbWrap} ref={wrapRef} style={{ '--thumb-scale': scale }}>
       <iframe src={`/tv/${screenId}`} title={`Screen ${screenId}`} scrolling="no" />
@@ -30,126 +39,134 @@ function Thumbnail({ screenId }) {
 }
 
 export default function DisplaysTab() {
-  const { data: screens, reload } = useApi('/screens');
-  const { data: backgrounds } = useApi('/backgrounds');
+  const { data: displays, reload } = useApi('/displays');
+  const { data: screens } = useApi('/screens');
   const [editing, setEditing] = useState(null);
   const [editData, setEditData] = useState({});
   const [err, setErr] = useState('');
 
-  async function saveScreen(id) {
+  async function saveDisplay(id) {
     try {
-      await apiFetch(`/screens/${id}`, { method: 'PATCH', body: JSON.stringify(editData) });
+      await apiFetch(`/displays/${id}`, { method: 'PATCH', body: JSON.stringify(editData) });
       setEditing(null);
       reload();
     } catch (ex) { setErr(ex.message); }
   }
 
-  async function deleteScreen(id) {
-    if (!confirm('Remove this display?')) return;
-    await apiFetch(`/screens/${id}`, { method: 'DELETE' });
+  async function assignScreen(displayId, screenId) {
+    await apiFetch(`/displays/${displayId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ screen_id: screenId || null }),
+    });
     reload();
   }
 
-  function startEdit(screen) {
-    setEditing(screen.id);
-    setEditData({
-      name: screen.name,
-      ip: screen.ip,
-      display_type: screen.display_type,
-      background_id: screen.background_id ?? '',
-      webpage_url: screen.webpage_url || '',
-      webpage_width: screen.webpage_width ?? 100,
-      webpage_zoom: screen.webpage_zoom ?? 100,
-      webpage_refresh: screen.webpage_refresh ?? 0,
-    });
+  async function deleteDisplay(id) {
+    if (!confirm('Remove this display?')) return;
+    await apiFetch(`/displays/${id}`, { method: 'DELETE' });
+    reload();
   }
 
-  const editingScreen = editing && (screens || []).find((s) => s.id === editing);
+  function startEdit(display) {
+    setEditing(display.id);
+    setEditData({ name: display.name, ip: display.ip });
+    setErr('');
+  }
+
+  function screenLabel(screen) {
+    const typeLabel = DISPLAY_TYPES.find((d) => d.value === screen.display_type)?.label || screen.display_type;
+    return `${screen.name} (${typeLabel})`;
+  }
 
   return (
     <div>
       <h2 className={styles.heading}>Displays</h2>
 
       <div className={tStyles.grid}>
-        {(screens || []).map((s) => (
-          <div key={s.id} className={tStyles.card}>
-            <Thumbnail screenId={s.id} />
-            <div className={tStyles.cardBody}>
-              <div className={tStyles.cardName}>{s.name}</div>
-              <div className={tStyles.cardMeta}>
-                <span>{DISPLAY_TYPES.find((d) => d.value === s.display_type)?.label || s.display_type}</span>
-                <span className={s.online ? styles.online : styles.offline}>
-                  {s.online ? '● Online' : '● Offline'}
-                </span>
-              </div>
-              <div className={tStyles.cardActions}>
-                <a href={`/tv/${s.id}`} target="_blank" rel="noreferrer" className={styles.btnGhost}>Preview</a>
-                <button className={styles.btnGhost} onClick={() => startEdit(s)}>Edit</button>
-                <button className={styles.btnDanger} onClick={() => deleteScreen(s.id)}>Remove</button>
+        {(displays || []).map((d) => {
+          const assignedScreen = (screens || []).find((sc) => sc.id === d.screen_id) || null;
+          return (
+            <div key={d.id} className={tStyles.card}>
+              <Thumbnail screenId={assignedScreen?.id} />
+              <div className={tStyles.cardBody}>
+                <div className={tStyles.cardName}>{d.name}</div>
+                <div className={tStyles.cardMeta}>
+                  <span>{d.ip}</span>
+                  <span className={d.online ? styles.online : styles.offline}>
+                    {d.online ? '● Online' : '● Offline'}
+                  </span>
+                </div>
+
+                <div style={{ marginTop: '0.4rem' }}>
+                  <label className={styles.label} style={{ marginBottom: '0.2rem', display: 'block' }}>Screen</label>
+                  <select
+                    className={styles.select}
+                    value={d.screen_id ?? ''}
+                    onChange={(e) => assignScreen(d.id, e.target.value ? Number(e.target.value) : null)}
+                  >
+                    <option value="">— None —</option>
+                    {(screens || []).map((sc) => (
+                      <option key={sc.id} value={sc.id}>{screenLabel(sc)}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className={tStyles.cardActions}>
+                  {assignedScreen && (
+                    <a href={`/tv/${assignedScreen.id}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost}>Preview</a>
+                  )}
+                  <button className={styles.btnGhost} onClick={() => startEdit(d)}>Edit</button>
+                  <button className={styles.btnDanger} onClick={() => deleteDisplay(d.id)}>Remove</button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-        {screens && screens.length === 0 && (
-          <p className={styles.muted}>No displays added yet.</p>
+          );
+        })}
+        {displays && displays.length === 0 && (
+          <p className={styles.muted}>No displays added yet. Add displays in Settings.</p>
         )}
       </div>
 
-      {editing && editingScreen && (
+      <h2 className={styles.heading} style={{ marginTop: '2.5rem' }}>Available Screens</h2>
+      <div className={tStyles.grid}>
+        {(screens || []).filter((sc) => sc.visible !== false).map((sc) => {
+          const typeLabel = DISPLAY_TYPES.find((d) => d.value === sc.display_type)?.label || sc.display_type;
+          const assignedTo = (displays || []).filter((d) => d.screen_id === sc.id).map((d) => d.name);
+          return (
+            <div key={sc.id} className={tStyles.card}>
+              <Thumbnail screenId={sc.id} />
+              <div className={tStyles.cardBody}>
+                <div className={tStyles.cardName}>{sc.name}</div>
+                <div className={tStyles.cardMeta}>
+                  <span>{typeLabel}</span>
+                  {assignedTo.length > 0
+                    ? <span className={styles.online}>● {assignedTo.join(', ')}</span>
+                    : <span className={styles.offline}>● Unassigned</span>}
+                </div>
+                <div className={tStyles.cardActions}>
+                  <a href={`/tv/${sc.id}`} target="_blank" rel="noreferrer" className={styles.btnGhost}>Preview</a>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+        {screens && screens.length === 0 && (
+          <p className={styles.muted}>No screens configured yet.</p>
+        )}
+      </div>
+
+      {editing && (
         <div className={tStyles.modalBackdrop} onClick={() => setEditing(null)}>
           <div className={tStyles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={tStyles.modalTitle}>Edit — {editingScreen.name}</div>
+            <div className={tStyles.modalTitle}>Edit Display</div>
             <label className={styles.label}>Name</label>
             <input className={styles.input} value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} />
             <label className={styles.label}>IP Address</label>
             <input className={styles.input} value={editData.ip} onChange={(e) => setEditData({ ...editData, ip: e.target.value })} />
-            <label className={styles.label}>Display Type</label>
-            <select className={styles.select} value={editData.display_type} onChange={(e) => setEditData({ ...editData, display_type: e.target.value })}>
-              {DISPLAY_TYPES.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-            </select>
-            {editData.display_type === 'webpage' && (
-              <>
-                <label className={styles.label}>Webpage URL</label>
-                <input
-                  className={styles.input}
-                  placeholder="https://example.com"
-                  value={editData.webpage_url || ''}
-                  onChange={(e) => setEditData({ ...editData, webpage_url: e.target.value })}
-                />
-                <label className={styles.label}>Width — {editData.webpage_width ?? 100}%</label>
-                <input
-                  type="range" min="10" max="100" step="5"
-                  value={editData.webpage_width ?? 100}
-                  onChange={(e) => setEditData({ ...editData, webpage_width: Number(e.target.value) })}
-                  style={{ width: '100%' }}
-                />
-                <label className={styles.label}>Zoom — {editData.webpage_zoom ?? 100}%</label>
-                <input
-                  type="range" min="25" max="300" step="5"
-                  value={editData.webpage_zoom ?? 100}
-                  onChange={(e) => setEditData({ ...editData, webpage_zoom: Number(e.target.value) })}
-                  style={{ width: '100%' }}
-                />
-                <label className={styles.label}>
-                  Refresh Interval — {(editData.webpage_refresh ?? 0) === 0 ? 'Off' : `Every ${editData.webpage_refresh} min`}
-                </label>
-                <input
-                  type="range" min="0" max="60" step="1"
-                  value={editData.webpage_refresh ?? 0}
-                  onChange={(e) => setEditData({ ...editData, webpage_refresh: Number(e.target.value) })}
-                  style={{ width: '100%' }}
-                />
-              </>
-            )}
-            <label className={styles.label}>Background</label>
-            <select className={styles.select} value={editData.background_id ?? ''} onChange={(e) => setEditData({ ...editData, background_id: e.target.value || null })}>
-              <option value="">None</option>
-              {(backgrounds || []).map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
-            </select>
             {err && <span className={styles.error}>{err}</span>}
             <div className={tStyles.modalActions}>
               <button className={styles.btnGhost} onClick={() => setEditing(null)}>Cancel</button>
-              <button className={styles.btnPrimary} onClick={() => saveScreen(editing)}>Save</button>
+              <button className={styles.btnPrimary} onClick={() => saveDisplay(editing)}>Save</button>
             </div>
           </div>
         </div>

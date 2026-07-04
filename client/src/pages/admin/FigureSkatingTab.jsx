@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 import tabStyles from './GamesTab.module.css';
+import ScreensSection from './ScreensSection';
 
 function fmt(iso) {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -80,6 +81,7 @@ export default function FigureSkatingTab() {
 
   return (
     <div>
+      <ScreensSection displayType="figure_skating" calendarType="figure_skating" />
       <div className={styles.rowBetween}>
         <h2 className={styles.heading}>Figure Skating</h2>
         <button className={styles.btnPrimary} onClick={forceRefresh} disabled={refreshing}>

@@ -1,4 +1,4 @@
-# RinkScreens — v1.8.0
+# RinkScreens — v1.9.0
 
 Digital signage system for ice rinks. Pulls games from Google Calendar (iCal) and displays them on smart TVs around the facility. An admin panel on any local browser lets staff control what each screen shows and manage locker room assignments, pricing, and backgrounds.
 
@@ -47,12 +47,11 @@ npm run dev
 
 Navigate to `/admin` from any browser on the local network.
 
-### Screens tab
-- Register TVs by name and IP address
-- Assign a display type per screen: **Game Board**, **Public Skate**, or **Custom Message**
-- Assign a background image per screen
-- Preview link opens the TV display URL
-- Online/offline status shown via WebSocket presence
+### Displays tab
+- View all registered TV displays with live thumbnails of their assigned screen
+- Assign a screen to each display via dropdown (auto-saves)
+- **Available Screens** section shows all visible, unassigned screens with type label and current assignment
+- Preview link opens the TV display with the date navigation bar
 
 ### Games tab
 - Lists all imported hockey games
@@ -66,31 +65,44 @@ Navigate to `/admin` from any browser on the local network.
 ### Public Skate tab
 - Configure admission pricing tiers (label + price + sort order)
 
-### Backgrounds tab
-- Upload JPG/PNG/GIF/WebP images up to 20 MB
-- Assign a background to any screen; delete unused backgrounds
+### Webpage tab
+- Create screens that display an external URL in a scaled iframe
+- Configure width %, zoom %, and auto-refresh interval (minutes or days)
+- Resync button forces an immediate iframe reload on the live TV
 
-### Calendars tab
-- Add **Hockey Games**, **Public Skates**, **Rink Events**, and **Figure Skating** calendars
-- Each calendar has a name, iCal URL, poll interval (with a **Minutes / Days** toggle), and for Hockey Games a **team order** setting and **Locker Room Sequence** override
-- Validates iCal format on save; rejects duplicate names and URLs
+### Announcements tab
+- Full-screen canvas editor: drag text and image elements freely
+- Text controls: font, size, color, bold, alignment
+- Background: color picker (presets + custom hex) and background image with opacity
+- Images tab (formerly Backgrounds) splits uploads into **Background** and **General** types; inline label editing with ✏ / ✓ / ✕
+
+### Custom tab
+- Create screens that pull from any combination of calendars across all types
+- TV shows a time-sorted unified schedule for the day
+
+### Figure Skating tab
+- Lists upcoming figure skating events grouped by day with week pagination
+- Per-tab Screens section: configure figure skating display screens with optional **two-column layout** (12 rows per column), **rotate pages** (cycles through all events at a set interval), or **flow with time** (shows only upcoming events, auto-updates every 5 minutes)
+- Events sharing the same start time are consolidated: time shown once, all groups listed beneath
+
+### Images tab
+- Upload JPG/PNG/GIF/WebP/SVG images up to 20 MB
+- Tag each image as **Background** (used as screen backgrounds with opacity) or **General** (used as elements in announcement canvases)
+- Inline label editing per image
+
+### Settings tab
+Settings is organized into sub-tabs:
+- **General** — rink name and logo (logo replaces text in TV header)
+- **Calendars** — add/edit/delete iCal calendars (Hockey Games, Public Skates, Rink Events, Figure Skating) with poll interval and locker sequence overrides
+- **Locker Rooms** — add/edit/delete rooms; define named **Locker Room Sequences** for auto-assignment
+- **Displays** — register physical TV devices (name + IP address)
+- **Admin** — change the admin login password
 
 ### Leagues & Teams tab
 - One tab per league; leagues are auto-created from Hockey Games calendars on sync
 - Set a team's background and text color (shown on the Game Board TV display)
 - Set a display name override per team (used on TV instead of the calendar name)
 - Assign a **Locker Room Sequence** per league used by auto-assignment; syncs automatically to/from the matching calendar's sequence setting
-
-### Figure Skating tab
-- Lists upcoming figure skating events grouped by day with week pagination
-- Recurring events (RRULE) are fully expanded
-
-### Settings tab
-- Set the rink name (shown in the TV header)
-- Upload a rink logo (replaces the text name in the TV header)
-- Manage **Locker Rooms** — add/edit/delete rooms available in game assignment dropdowns
-- Manage **Locker Room Sequences** — define named pairing patterns for auto-assignment; mark one as the **Default** to use when no league- or calendar-level sequence is set
-- **Admin Password** — change the login password
 
 ---
 

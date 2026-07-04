@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 import tabStyles from './GamesTab.module.css';
+import ScreensSection from './ScreensSection';
 
 function fmt(iso) {
   return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -237,6 +238,7 @@ export default function GamesTab() {
 
   return (
     <div>
+      <ScreensSection displayType="games" calendarType="hockey_games" />
       <div className={styles.rowBetween}>
         <h2 className={styles.heading}>Games</h2>
         <div className={tabStyles.controls}>

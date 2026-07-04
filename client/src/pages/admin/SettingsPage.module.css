@@ -1,0 +1,35 @@
+.subNav {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 2px solid var(--border, #e5e7eb);
+  margin-bottom: 1.75rem;
+}
+
+.subTab {
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 4px 4px 0 0;
+  transition: color 0.15s;
+}
+
+.subTab:hover { color: var(--text); }
+
+.subTabActive {
+  background: none;
+  border: none;
+  border-bottom: 3px solid var(--ice-blue);
+  margin-bottom: -2px;
+  padding: 0.5rem 1.1rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--ice-blue);
+  cursor: default;
+  border-radius: 4px 4px 0 0;
+}

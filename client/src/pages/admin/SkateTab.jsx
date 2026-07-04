@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
+import ScreensSection from './ScreensSection';
 
 function formatDate(iso) {
   return new Date(iso).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
@@ -36,6 +37,7 @@ export default function SkateTab() {
 
   return (
     <div>
+      <ScreensSection displayType="skate" calendarType="public_skates" />
       <h2 className={styles.heading}>Public Skate</h2>
       <div style={{ display: 'flex', gap: '2.5rem', alignItems: 'flex-start' }}>
 

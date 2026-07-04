@@ -9,10 +9,12 @@ const tabs = [
   { to: 'rink-events', label: 'Rink Events' },
   { to: 'figure-skating', label: 'Figure Skating' },
   { to: 'skate', label: 'Public Skate' },
+  { to: 'webpage', label: 'Webpage' },
+  { to: 'announcements', label: 'Announcements' },
+  { to: 'custom', label: 'Custom' },
   { to: 'leagues', label: 'Leagues' },
-  { to: 'backgrounds', label: 'Backgrounds' },
-  { to: 'settings', label: 'Calendars' },
-  { to: 'rink-settings', label: 'Settings' },
+  { to: 'backgrounds', label: 'Images' },
+  { to: 'settings', label: 'Settings' },
 ];
 
 export default function AdminLayout() {

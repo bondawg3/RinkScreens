@@ -7,6 +7,24 @@ const wsManager = require('./ws');
 const { startPolling } = require('./calendar');
 const apiRouter = require('./routes/api');
 const uploadRouter = require('./routes/upload');
+const db = require('./db');
+
+// Seed a default screen for each display type if none exists yet
+(function seedDefaultScreens() {
+  const types = [
+    { display_type: 'games',          name: 'Games' },
+    { display_type: 'rink_events',    name: 'Rink Events' },
+    { display_type: 'figure_skating', name: 'Figure Skating' },
+    { display_type: 'skate',          name: 'Public Skate' },
+  ];
+  const existing = db.findAll('screens');
+  for (const t of types) {
+    const has = existing.some((s) => s.display_type === t.display_type);
+    if (!has) {
+      db.insert('screens', { name: t.name, display_type: t.display_type, bg_opacity: 100 });
+    }
+  }
+}());
 
 const app = express();
 const server = http.createServer(app);

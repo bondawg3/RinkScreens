@@ -1,0 +1,352 @@
+/* ── Editor overlay ── */
+.editorOverlay {
+  position: fixed;
+  inset: 0;
+  background: #1a1a2e;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.editorHeader {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.25rem;
+  background: #12122a;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+  flex-shrink: 0;
+}
+
+.editorTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #fff;
+  flex: 1;
+}
+
+.editorNameInput {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 5px;
+  color: #fff;
+  padding: 0.35rem 0.75rem;
+  font-size: 0.95rem;
+  width: 220px;
+}
+
+.editorNameInput::placeholder { color: rgba(255,255,255,0.4); }
+.editorNameInput:focus { outline: none; border-color: rgba(255,255,255,0.6); }
+
+/* ── Editor body ── */
+.editorBody {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ── Canvas column ── */
+.canvasCol {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  overflow: hidden;
+  gap: 0.75rem;
+}
+
+.canvasOuter {
+  position: relative;
+  width: 100%;
+  padding-top: 56.25%;
+  background: #0a2a42;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: default;
+  flex-shrink: 0;
+}
+
+.canvas {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+}
+
+.canvasBg {
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-size: cover;
+  background-position: center;
+  pointer-events: none;
+}
+
+.canvasEl {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  cursor: grab;
+  user-select: none;
+  padding: 2px;
+  border: 2px solid transparent;
+  border-radius: 3px;
+}
+
+.canvasEl:hover {
+  border-color: rgba(255,255,255,0.3);
+}
+
+.canvasElSelected {
+  border-color: rgba(255, 230, 0, 0.85) !important;
+}
+
+.canvasEl:active { cursor: grabbing; }
+
+/* ── BG controls ── */
+.bgControls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.bgLabel {
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.6);
+  font-weight: 600;
+}
+
+.bgSelect {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 5px;
+  color: #fff;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+.bgSelect option { background: #1a1a2e; color: #fff; }
+
+.opacityWrap {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.opacityWrap input[type="range"] { width: 120px; }
+
+/* ── Properties panel ── */
+.propsPanel {
+  width: 280px;
+  flex-shrink: 0;
+  background: #12122a;
+  border-left: 1px solid rgba(255,255,255,0.1);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 0.75rem;
+  gap: 0.5rem;
+}
+
+.propSection {
+  background: rgba(255,255,255,0.05);
+  border-radius: 7px;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.propSectionTitle {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.15rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.propLabel {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.6);
+  font-weight: 600;
+  margin-bottom: 0.1rem;
+}
+
+.propInput {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 5px;
+  color: #fff;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+  width: 100%;
+}
+
+.propInput:focus { outline: none; border-color: rgba(255,255,255,0.5); }
+
+.propTextarea {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 5px;
+  color: #fff;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+  width: 100%;
+  resize: vertical;
+  min-height: 60px;
+  font-family: inherit;
+}
+
+.propTextarea:focus { outline: none; border-color: rgba(255,255,255,0.5); }
+
+.propSelect {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 5px;
+  color: #fff;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+  width: 100%;
+}
+
+.propSelect option { background: #1a1a2e; color: #fff; }
+
+.propRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.propRow input[type="range"] { flex: 1; }
+
+/* ── Add buttons ── */
+.addBtns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.addBtn {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 5px;
+  color: #fff;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.82rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.addBtn:hover { background: rgba(255,255,255,0.2); }
+
+/* ── Align toggle ── */
+.alignToggle {
+  display: flex;
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 5px;
+  overflow: hidden;
+  width: fit-content;
+}
+
+.alignBtn {
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.6);
+  padding: 0.3rem 0.65rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.alignBtn:hover { background: rgba(255,255,255,0.1); }
+
+.alignActive {
+  background: rgba(255,255,255,0.2);
+  border: none;
+  color: #fff;
+  padding: 0.3rem 0.65rem;
+  font-size: 0.9rem;
+  cursor: default;
+}
+
+/* ── Bold / checkbox row ── */
+.checkRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: rgba(255,255,255,0.8);
+  cursor: pointer;
+}
+
+/* ── Delete btn (dark theme) ── */
+.deleteBtnDark {
+  background: rgba(220,50,50,0.2);
+  border: 1px solid rgba(220,50,50,0.5);
+  color: #ff8080;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.deleteBtnDark:hover { background: rgba(220,50,50,0.4); }
+
+/* ── Color swatches ── */
+.colorSwatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  flex-shrink: 0;
+  outline: none;
+}
+
+.swatch:hover {
+  border-color: rgba(255,255,255,0.5);
+}
+
+.swatchActive {
+  border-color: #fff !important;
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.4);
+}
+
+/* ── Color input ── */
+.colorInput {
+  width: 38px;
+  height: 28px;
+  padding: 1px;
+  border: 1px solid rgba(255,255,255,0.25);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+}
+
+/* ── Number input small ── */
+.numInput {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 5px;
+  color: #fff;
+  padding: 0.3rem 0.4rem;
+  font-size: 0.85rem;
+  width: 60px;
+  text-align: center;
+}
+
+/* ── Screen list (card grid) ── */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}

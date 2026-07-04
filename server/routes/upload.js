@@ -30,8 +30,9 @@ const upload = multer({
 router.post('/backgrounds', requireAuth, upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'no valid image file' });
   const label = req.body.label || req.file.originalname;
-  const row = db.insert('backgrounds', { filename: req.file.filename, label });
-  res.json({ id: row.id, filename: row.filename, label: row.label });
+  const image_type = req.body.image_type === 'general' ? 'general' : 'background';
+  const row = db.insert('backgrounds', { filename: req.file.filename, label, image_type });
+  res.json({ id: row.id, filename: row.filename, label: row.label, image_type: row.image_type });
 });
 
 const logoStorage = multer.diskStorage({

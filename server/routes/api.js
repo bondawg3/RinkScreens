@@ -90,6 +90,12 @@ router.patch('/settings', requireAuth, async (req, res) => {
 
 // ── Screens ───────────────────────────────────────────────────────────────────
 
+function parseCalendarIds(raw) {
+  if (!raw) return null;
+  if (Array.isArray(raw)) return raw.length ? raw.map(Number) : null;
+  try { const p = JSON.parse(raw); return p && p.length ? p.map(Number) : null; } catch { return null; }
+}
+
 router.get('/screens', (req, res) => {
   const screens = db.findAll('screens');
   const backgrounds = db.findAll('backgrounds');
@@ -97,23 +103,32 @@ router.get('/screens', (req, res) => {
   const connected = ws.connectedScreenIds();
   res.json(screens.map((s) => ({
     ...s,
+    calendar_ids: parseCalendarIds(s.calendar_ids),
+    bg_opacity: s.bg_opacity ?? 100,
+    visible: s.visible !== false,
+    two_column: !!s.two_column,
+    overflow_mode: s.overflow_mode || 'none',
+    rotate_interval: s.rotate_interval ?? 30,
     bg_filename: s.background_id ? bgMap[s.background_id]?.filename : null,
     bg_label: s.background_id ? bgMap[s.background_id]?.label : null,
     online: connected.includes(String(s.id)),
+    announcement_data: s.announcement_data ? (() => { try { return JSON.parse(s.announcement_data); } catch { return null; } })() : null,
   })));
 });
 
 router.post('/screens', requireAuth, (req, res) => {
-  const { name, ip, display_type = 'games', webpage_url = '', webpage_width = 100, webpage_zoom = 100, webpage_refresh = 0 } = req.body;
-  if (!name || !ip) return res.status(400).json({ error: 'name and ip required' });
-  const row = db.insert('screens', { name, ip, display_type, background_id: null, webpage_url, webpage_width: Number(webpage_width), webpage_zoom: Number(webpage_zoom), webpage_refresh: Number(webpage_refresh) });
+  const { name, ip = '', display_type = 'games', webpage_url = '', webpage_width = 100, webpage_zoom = 100, webpage_refresh = 0, calendar_ids, bg_opacity = 100, background_id, announcement_data, bg_color = '' } = req.body;
+  if (!name) return res.status(400).json({ error: 'name required' });
+  const calIds = parseCalendarIds(calendar_ids);
+  const row = db.insert('screens', { name, ip, display_type, background_id: background_id || null, webpage_url, webpage_width: Number(webpage_width), webpage_zoom: Number(webpage_zoom), webpage_refresh: Number(webpage_refresh), calendar_ids: calIds ? JSON.stringify(calIds) : null, bg_opacity: Number(bg_opacity), announcement_data: announcement_data ? JSON.stringify(announcement_data) : null, bg_color: bg_color || '' });
   res.json({ id: row.id });
 });
 
 router.patch('/screens/:id', requireAuth, (req, res) => {
   const screen = db.findById('screens', req.params.id);
   if (!screen) return res.status(404).json({ error: 'not found' });
-  const { name, ip, display_type, background_id, webpage_url, webpage_width, webpage_zoom, webpage_refresh } = req.body;
+  const { name, ip, display_type, background_id, webpage_url, webpage_width, webpage_zoom, webpage_refresh, calendar_ids, bg_opacity, announcement_data, bg_color, visible } = req.body;
+  const calIds = calendar_ids !== undefined ? parseCalendarIds(calendar_ids) : parseCalendarIds(screen.calendar_ids);
   db.update('screens', req.params.id, {
     name: name ?? screen.name,
     ip: ip ?? screen.ip,
@@ -123,6 +138,14 @@ router.patch('/screens/:id', requireAuth, (req, res) => {
     webpage_width: webpage_width !== undefined ? Number(webpage_width) : (screen.webpage_width || 100),
     webpage_zoom: webpage_zoom !== undefined ? Number(webpage_zoom) : (screen.webpage_zoom || 100),
     webpage_refresh: webpage_refresh !== undefined ? Number(webpage_refresh) : (screen.webpage_refresh || 0),
+    calendar_ids: calIds ? JSON.stringify(calIds) : null,
+    bg_opacity: bg_opacity !== undefined ? Number(bg_opacity) : (screen.bg_opacity ?? 100),
+    announcement_data: announcement_data !== undefined ? JSON.stringify(announcement_data) : (screen.announcement_data || null),
+    bg_color: bg_color !== undefined ? (bg_color || '') : (screen.bg_color || ''),
+    visible: visible !== undefined ? visible !== false : (screen.visible !== false),
+    two_column: 'two_column' in req.body ? !!req.body.two_column : !!screen.two_column,
+    overflow_mode: req.body.overflow_mode ?? screen.overflow_mode ?? 'none',
+    rotate_interval: req.body.rotate_interval !== undefined ? Number(req.body.rotate_interval) : (screen.rotate_interval ?? 30),
   });
   ws.push(String(req.params.id), { type: 'reload' });
   res.json({ ok: true });
@@ -130,6 +153,11 @@ router.patch('/screens/:id', requireAuth, (req, res) => {
 
 router.delete('/screens/:id', requireAuth, (req, res) => {
   db.remove('screens', req.params.id);
+  res.json({ ok: true });
+});
+
+router.post('/screens/:id/reload', requireAuth, (req, res) => {
+  ws.push(String(req.params.id), { type: 'reload' });
   res.json({ ok: true });
 });
 
@@ -154,7 +182,7 @@ router.post('/displays', requireAuth, (req, res) => {
 router.patch('/displays/:id', requireAuth, (req, res) => {
   const display = db.findById('displays', req.params.id);
   if (!display) return res.status(404).json({ error: 'not found' });
-  const { name, ip } = req.body;
+  const { name, ip, screen_id } = req.body;
   const newName = name ?? display.name;
   const newIp = ip ?? display.ip;
   const others = db.findAll('displays').filter((d) => d.id !== display.id);
@@ -162,7 +190,9 @@ router.patch('/displays/:id', requireAuth, (req, res) => {
   if (dupName) return res.status(400).json({ error: `A display named "${dupName.name}" already exists.` });
   const dupIp = others.find((d) => d.ip === newIp);
   if (dupIp) return res.status(400).json({ error: `IP ${newIp} is already used by "${dupIp.name}".` });
-  db.update('displays', req.params.id, { name: newName, ip: newIp });
+  const changes = { name: newName, ip: newIp };
+  if ('screen_id' in req.body) changes.screen_id = screen_id ? Number(screen_id) : null;
+  db.update('displays', req.params.id, changes);
   res.json({ ok: true });
 });
 
@@ -574,6 +604,19 @@ router.delete('/logo', requireAuth, (req, res) => {
 router.get('/backgrounds', requireAuth, (req, res) => {
   const bgs = db.findAll('backgrounds');
   res.json(bgs.reverse()); // newest first
+});
+
+router.patch('/backgrounds/:id', requireAuth, (req, res) => {
+  const row = db.findById('backgrounds', req.params.id);
+  if (!row) return res.status(404).json({ error: 'not found' });
+  const { image_type, label } = req.body;
+  if (image_type && image_type !== 'background' && image_type !== 'general')
+    return res.status(400).json({ error: 'invalid image_type' });
+  db.update('backgrounds', req.params.id, {
+    image_type: image_type ?? row.image_type ?? 'background',
+    label: label !== undefined ? (label.trim() || row.label) : row.label,
+  });
+  res.json({ ok: true });
 });
 
 router.delete('/backgrounds/:id', requireAuth, (req, res) => {

@@ -22,10 +22,61 @@
 
 .cardFooter {
   display: flex;
+  flex-direction: column;
+  padding: 0.5rem 0.75rem;
+  gap: 0.4rem;
+}
+
+.cardActions {
+  display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 0.75rem;
-  gap: 0.5rem;
+}
+
+.typeToggle {
+  display: flex;
+  border: 1.5px solid var(--ice-blue);
+  border-radius: 5px;
+  overflow: hidden;
+  width: fit-content;
+}
+
+.typeBtn {
+  background: transparent;
+  color: var(--ice-blue);
+  border: none;
+  padding: 0.28rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.typeBtn:hover { background: var(--ice-light); }
+
+.typeActive {
+  background: var(--ice-blue);
+  color: #fff;
+  border: none;
+  padding: 0.28rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: default;
+}
+
+.sectionHeading {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin: 1.5rem 0 0.5rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 2px solid var(--border, #e5e7eb);
+}
+
+.labelRow {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
 }
 
 .label {
@@ -35,4 +86,39 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
+
+.labelEditRow {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.labelInput {
+  flex: 1;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1.5px solid var(--ice-blue);
+  border-radius: 4px;
+  padding: 0.15rem 0.4rem;
+  min-width: 0;
+  color: var(--text);
+}
+
+.labelInput:focus { outline: none; }
+
+.iconBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.9rem;
+  padding: 1px 3px;
+  line-height: 1;
+  flex-shrink: 0;
+  border-radius: 3px;
+}
+
+.iconBtn:hover { color: var(--text); background: var(--ice-light); }

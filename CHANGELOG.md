@@ -2,6 +2,26 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.9.0] — 2026-07-04
+
+### Added
+- **Settings sub-tabs** — Settings page now has sub-tabs: General, Calendars, Locker Rooms (includes sequences), Displays, and Admin; Calendars tab merged in from its own top-level tab
+- **Available Screens section in Displays tab** — shows all visible screens as thumbnails below the assigned displays, with type label and which display (if any) is using each screen
+- **Screen visibility toggle (eye icon)** — eye icon on every screen card toggles whether the screen appears in Available Screens; blocked with helper text when the screen is currently assigned to a display
+- **Custom tab** — new tab for creating screens from any combination of calendars across all types (hockey, rink events, figure skating, public skate); TV renders a time-sorted unified schedule for the day
+- **Figure Skating: two-column layout** — optional two-column display fitting up to 12 rows per column (24 events per page)
+- **Figure Skating: overflow rotate mode** — when events exceed one page, the TV automatically cycles through pages at a configurable interval (seconds)
+- **Figure Skating: overflow flow mode** — shows only upcoming events from the current time onward; past events drop off automatically; reloads every 5 minutes instead of 60 seconds
+- **Figure Skating: time consolidation** — events sharing the same start minute are grouped; the time label appears once and all groups are listed beneath it
+- **Preview date bar** — floating overlay on all preview links (opened with `?preview`) showing ← prev / date picker / → next / Today buttons; changing the date rerenders the screen in place without a full page reload
+
+### Changed
+- **Displays tab** — display registration moved to Settings → Displays sub-tab; Displays tab now focuses on screen assignment and Available Screens
+- **Preview links** — all Preview buttons throughout the admin now open with `?preview` so the date navigation bar is always shown
+
+### Fixed
+- **figure_skating TV branch missing closing bracket** — a missing `});` caused the entire `loadScreen` function to short-circuit, leaving all displays blank after the figure skating refactor
+
 ## [1.8.0] — 2026-07-04
 
 ### Added

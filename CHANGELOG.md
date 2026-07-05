@@ -2,6 +2,16 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.10.0] — 2026-07-04
+
+### Added
+- **Calendar sync status** — Settings → Calendars now shows a "Last Sync" column per calendar: green ✓ with time-ago and event count on success, red ✗ with the error message on failure, or "Never synced" if it hasn't run yet
+- **Public Skate: days to show** — public skate screens have a "Days to show" setting (1–14 days) controlling how far ahead upcoming sessions are listed on the TV
+
+### Changed
+- **Pricing moved to Settings** — admission pricing management moved out of the Public Skate tab into a dedicated Settings → Pricing sub-tab; description generalized since pricing applies to public skate and other rink events. Public Skate tab now shows only its screens section and upcoming sessions list
+- **Calendar URL validation removed** — adding or editing a calendar no longer pre-fetches and validates the iCal URL (Google and some providers return non-iCal responses to server requests, causing false rejections); the URL is saved immediately and any real fetch problem surfaces in the sync status column on the first sync. Duplicate name and duplicate URL checks remain
+
 ## [1.9.0] — 2026-07-04
 
 ### Added

@@ -82,6 +82,7 @@ async function syncCalendar(cal) {
       }
     } catch (err) {
       console.error(`[calendar] fetch failed for "${cal.name}":`, err.message);
+      if (cal.id) db.update('calendars', cal.id, { last_sync_at: new Date().toISOString(), last_sync_error: `Fetch failed: ${err.message}` });
       return;
     }
 
@@ -90,6 +91,7 @@ async function syncCalendar(cal) {
       expander = new IcalExpander({ ics: text, maxIterations: 2000 });
     } catch (err) {
       console.error(`[calendar] parse failed for "${cal.name}":`, err.message);
+      if (cal.id) db.update('calendars', cal.id, { last_sync_at: new Date().toISOString(), last_sync_error: `Parse failed: ${err.message}` });
       return;
     }
 
@@ -135,6 +137,7 @@ async function syncCalendar(cal) {
       events = await ical.async.fromURL(cal.url);
     } catch (err) {
       console.error(`[calendar] fetch failed for "${cal.name}":`, err.message);
+      if (cal.id) db.update('calendars', cal.id, { last_sync_at: new Date().toISOString(), last_sync_error: `Fetch failed: ${err.message}` });
       return;
     }
 
@@ -183,6 +186,7 @@ async function syncCalendar(cal) {
   }
 
   console.log(`[calendar] "${cal.name}" synced ${count} events`);
+  if (cal.id) db.update('calendars', cal.id, { last_sync_at: new Date().toISOString(), last_sync_error: null, last_sync_count: count });
 
   // Auto-assign locker rooms for newly-imported unassigned games
   if (cal.type === 'hockey_games') {

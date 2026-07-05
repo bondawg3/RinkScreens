@@ -109,6 +109,7 @@ router.get('/screens', (req, res) => {
     two_column: !!s.two_column,
     overflow_mode: s.overflow_mode || 'none',
     rotate_interval: s.rotate_interval ?? 30,
+    days_ahead: s.days_ahead ?? 14,
     bg_filename: s.background_id ? bgMap[s.background_id]?.filename : null,
     bg_label: s.background_id ? bgMap[s.background_id]?.label : null,
     online: connected.includes(String(s.id)),
@@ -146,6 +147,7 @@ router.patch('/screens/:id', requireAuth, (req, res) => {
     two_column: 'two_column' in req.body ? !!req.body.two_column : !!screen.two_column,
     overflow_mode: req.body.overflow_mode ?? screen.overflow_mode ?? 'none',
     rotate_interval: req.body.rotate_interval !== undefined ? Number(req.body.rotate_interval) : (screen.rotate_interval ?? 30),
+    days_ahead: req.body.days_ahead !== undefined ? Number(req.body.days_ahead) : (screen.days_ahead ?? 14),
   });
   ws.push(String(req.params.id), { type: 'reload' });
   res.json({ ok: true });
@@ -373,6 +375,9 @@ router.get('/calendars', (req, res) => {
     return {
       ...cal,
       locker_sequence_id: cal.locker_sequence_id ?? (league ? league.locker_sequence_id : null),
+      last_sync_at: cal.last_sync_at || null,
+      last_sync_error: cal.last_sync_error || null,
+      last_sync_count: cal.last_sync_count ?? null,
     };
   });
   res.json(calendars);
@@ -388,23 +393,6 @@ router.post('/calendars', requireAuth, async (req, res) => {
   }
   if (all.find((c) => c.url === url)) {
     return res.status(400).json({ error: 'This iCal URL is already in use by another calendar.' });
-  }
-
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    let text;
-    try {
-      const response = await fetch(url, { signal: controller.signal });
-      text = await response.text();
-    } finally {
-      clearTimeout(timeout);
-    }
-    if (!text.includes('BEGIN:VCALENDAR')) {
-      return res.status(400).json({ error: 'The URL does not appear to be a valid iCal calendar. Make sure you copied the iCal (.ics) link.' });
-    }
-  } catch (err) {
-    return res.status(400).json({ error: `Could not load the calendar URL: ${err.message}` });
   }
 
   const { locker_sequence_id } = req.body;
@@ -428,22 +416,6 @@ router.patch('/calendars/:id', requireAuth, async (req, res) => {
   if (url && url !== cal.url) {
     if (all.find((c) => c.id !== cal.id && c.url === url)) {
       return res.status(400).json({ error: 'This iCal URL is already in use by another calendar.' });
-    }
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
-      let text;
-      try {
-        const response = await fetch(url, { signal: controller.signal });
-        text = await response.text();
-      } finally {
-        clearTimeout(timeout);
-      }
-      if (!text.includes('BEGIN:VCALENDAR')) {
-        return res.status(400).json({ error: 'The URL does not appear to be a valid iCal calendar.' });
-      }
-    } catch (err) {
-      return res.status(400).json({ error: `Could not load the calendar URL: ${err.message}` });
     }
   }
 

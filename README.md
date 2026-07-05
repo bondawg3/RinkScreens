@@ -1,4 +1,4 @@
-# RinkScreens — v1.9.0
+# RinkScreens — v1.10.0
 
 Digital signage system for ice rinks. Pulls games from Google Calendar (iCal) and displays them on smart TVs around the facility. An admin panel on any local browser lets staff control what each screen shows and manage locker room assignments, pricing, and backgrounds.
 
@@ -63,7 +63,8 @@ Navigate to `/admin` from any browser on the local network.
 - **Reset Auto-Assign LRs** resets all auto-assigned locker rooms and re-runs assignment; per-day reset button on each day group header
 
 ### Public Skate tab
-- Configure admission pricing tiers (label + price + sort order)
+- Per-tab Screens section: configure public skate display screens, including a **Days to show** setting (1–14 days) controlling how far ahead upcoming sessions are listed
+- Lists upcoming public skate sessions pulled from Public Skates calendars
 
 ### Webpage tab
 - Create screens that display an external URL in a scaled iframe
@@ -93,7 +94,8 @@ Navigate to `/admin` from any browser on the local network.
 ### Settings tab
 Settings is organized into sub-tabs:
 - **General** — rink name and logo (logo replaces text in TV header)
-- **Calendars** — add/edit/delete iCal calendars (Hockey Games, Public Skates, Rink Events, Figure Skating) with poll interval and locker sequence overrides
+- **Calendars** — add/edit/delete iCal calendars (Hockey Games, Public Skates, Rink Events, Figure Skating) with poll interval and locker sequence overrides; **Last Sync** column shows success/failure status per calendar
+- **Pricing** — admission pricing tiers (label + subheading + price + sort order) shown on TV displays for public skate and other rink events
 - **Locker Rooms** — add/edit/delete rooms; define named **Locker Room Sequences** for auto-assignment
 - **Displays** — register physical TV devices (name + IP address)
 - **Admin** — change the admin login password

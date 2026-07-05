@@ -561,10 +561,13 @@ function loadScreen() {
       get('/api/games', function(err2, games) {
         get('/api/skate-prices', function(err3, prices) {
           var now = getNow();
+          var daysAhead = screen.days_ahead != null ? screen.days_ahead : 14;
+          var cutoff = new Date(now.getTime() + daysAhead * 86400000);
           var sessions = [];
           if (games) {
             for (var i = 0; i < games.length; i++) {
-              if (games[i].is_skate && new Date(games[i].start_time) >= now) sessions.push(games[i]);
+              var st = new Date(games[i].start_time);
+              if (games[i].is_skate && st >= now && st < cutoff) sessions.push(games[i]);
             }
           }
           sessions = filterByCalIds(sessions, screen.calendar_ids);

@@ -12,6 +12,31 @@ const CALENDAR_TYPES = [
 
 const TYPE_LABELS = Object.fromEntries(CALENDAR_TYPES.map((t) => [t.value, t.label]));
 
+function timeAgo(isoStr) {
+  if (!isoStr) return null;
+  const diff = Math.floor((Date.now() - new Date(isoStr)) / 1000);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  return `${Math.floor(diff / 86400)}d ago`;
+}
+
+function SyncStatus({ cal }) {
+  if (!cal.last_sync_at) return <span style={{ color: 'var(--muted)', fontSize: '0.78rem' }}>Never synced</span>;
+  if (cal.last_sync_error) {
+    return (
+      <span style={{ color: '#c0392b', fontSize: '0.78rem' }} title={cal.last_sync_error}>
+        ✗ Failed {timeAgo(cal.last_sync_at)} — {cal.last_sync_error.length > 60 ? cal.last_sync_error.slice(0, 60) + '…' : cal.last_sync_error}
+      </span>
+    );
+  }
+  return (
+    <span style={{ color: '#27ae60', fontSize: '0.78rem' }}>
+      ✓ {timeAgo(cal.last_sync_at)}{cal.last_sync_count != null ? ` · ${cal.last_sync_count} events` : ''}
+    </span>
+  );
+}
+
 function inferUnit(minutes) {
   if (minutes && minutes % (24 * 60) === 0) return 'days';
   return 'minutes';
@@ -245,6 +270,7 @@ export default function CalendarsTab() {
                   <th>iCal URL</th>
                   <th>Poll Interval</th>
                   {value === 'hockey_games' && <th>Team Order</th>}
+                  <th>Last Sync</th>
                   <th></th>
                 </tr>
               </thead>
@@ -259,6 +285,7 @@ export default function CalendarsTab() {
                     {value === 'hockey_games' && (
                       <td>{cal.team_order === 'home_away' ? 'Home vs. Away' : 'Away vs. Home'}</td>
                     )}
+                    <td><SyncStatus cal={cal} /></td>
                     <td>
                       <div className={styles.actions}>
                         {syncableTypes.has(value) && (

@@ -51,7 +51,7 @@ export default function ScreensSection({ displayType, calendarType }) {
   const [previewDates, setPreviewDates] = useState({});
   const [eyeHint, setEyeHint] = useState(null); // screen id showing hint
   const [modal, setModal] = useState(null); // null | 'add' | screen object
-  const [form, setForm] = useState({ name: '', calendar_ids: [], background_id: '', bg_opacity: 100, two_column: false, overflow_mode: 'none', rotate_interval: 30 });
+  const [form, setForm] = useState({ name: '', calendar_ids: [], background_id: '', bg_opacity: 100, two_column: false, overflow_mode: 'none', rotate_interval: 30, days_ahead: 14 });
   const [err, setErr] = useState('');
 
   function getPreviewDate(id) {
@@ -66,7 +66,7 @@ export default function ScreensSection({ displayType, calendarType }) {
   }
 
   function openAdd() {
-    setForm({ name: '', calendar_ids: [], background_id: '', bg_opacity: 100, two_column: false, overflow_mode: 'none', rotate_interval: 30 });
+    setForm({ name: '', calendar_ids: [], background_id: '', bg_opacity: 100, two_column: false, overflow_mode: 'none', rotate_interval: 30, days_ahead: 14 });
     setErr('');
     setModal('add');
   }
@@ -80,6 +80,7 @@ export default function ScreensSection({ displayType, calendarType }) {
       two_column: screen.two_column || false,
       overflow_mode: screen.overflow_mode || 'none',
       rotate_interval: screen.rotate_interval ?? 30,
+      days_ahead: screen.days_ahead ?? 14,
     });
     setErr('');
     setModal(screen);
@@ -106,6 +107,9 @@ export default function ScreensSection({ displayType, calendarType }) {
         two_column: form.two_column,
         overflow_mode: form.overflow_mode,
         rotate_interval: Number(form.rotate_interval),
+      }),
+      ...(displayType === 'skate' && {
+        days_ahead: Number(form.days_ahead),
       }),
     };
     try {
@@ -245,6 +249,16 @@ export default function ScreensSection({ displayType, calendarType }) {
               onChange={(e) => setForm({ ...form, bg_opacity: Number(e.target.value) })}
               style={{ width: '100%' }}
             />
+
+            {displayType === 'skate' && (<>
+              <label className={adminStyles.label}>Days to show</label>
+              <select className={adminStyles.select} value={form.days_ahead}
+                onChange={(e) => setForm({ ...form, days_ahead: Number(e.target.value) })}>
+                {[1,2,3,4,5,6,7,8,9,10,11,12,13,14].map((d) => (
+                  <option key={d} value={d}>{d} {d === 1 ? 'day' : 'days'}</option>
+                ))}
+              </select>
+            </>)}
 
             {displayType === 'figure_skating' && (<>
               <label className={adminStyles.label}>Layout</label>

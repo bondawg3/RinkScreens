@@ -1,4 +1,4 @@
-# RinkScreens — v1.18.0
+# RinkScreens — v1.19.0
 
 Digital signage system for ice rinks. Pulls games from Google Calendar (iCal) and displays them on smart TVs around the facility. An admin panel on any local browser lets staff control what each screen shows and manage locker room assignments, pricing, and backgrounds.
 
@@ -174,13 +174,13 @@ TVs auto-reconnect every 3 seconds if the server restarts.
 
 ## Data storage
 
-All data is stored in `data/db.json` — a flat JSON file, no database binary required. Writes are atomic (temp file + rename), and the previous state is kept as `data/db.json.bak`; if `db.json` is ever corrupted, the server recovers from the backup automatically and preserves the bad file as `db.json.corrupt`.
+All data is stored in `data/db.json` — a flat JSON file, no database binary required. The parsed database is cached in memory (revalidated against the file's timestamp, so hand-edits while the server runs are still picked up), and bulk operations like calendar sync write the file once per run via `db.transaction()` instead of once per row. Writes are atomic (temp file + rename), and the previous state is kept as `data/db.json.bak`; if `db.json` is ever corrupted, the server recovers from the backup automatically and preserves the bad file as `db.json.corrupt`.
 
 | Table | Purpose |
 |---|---|
 | `screens` | Registered TVs and their display config |
 | `backgrounds` | Uploaded background image records |
-| `games` | Imported calendar events + admin assignments |
+| `activities` | Imported calendar events + admin assignments |
 | `calendars` | iCal calendar sources with type and poll settings |
 | `skate_prices` | Public skate admission tiers |
 | `locker_rooms` | Available locker room names |

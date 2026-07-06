@@ -2,6 +2,24 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.19.0] — 2026-07-06
+
+Codebase-wide consolidation pass: same behavior and visuals, less duplicated code and far less disk I/O. No screen types or admin workflows change.
+
+### Changed
+- **JSON store now caches in memory with batched writes** — `db.js` keeps the parsed database in memory (revalidated against the file's mtime/size, so external edits are still picked up) and gains a `transaction()` API that batches many operations into a single file write. Calendar sync previously rewrote the whole `db.json` once per imported event (hundreds of writes per poll cycle); sync, locker-room auto-assign, title reparse, and cascade deletes now each write the file once. Saves also force a strictly increasing mtime so rapid same-size writes can't be mistaken for an unchanged file.
+- **TV display (`tv.html`) render helpers consolidated** — the per-screen-type renderers now share one implementation of the pricing panel, price-list fetch/filter, calendar/team lookup maps, today-window filtering, and the game/event table row builders (a full duplicate of the pricing panel builder inside the figure-skating renderer is gone). Game rows on Game Board and Custom screens are now rendered by the same code, so they can no longer drift apart. Custom screens fetch their six data sources in parallel instead of one after another, and Game Board its three.
+- **Duplicate admin tabs merged** — Rink Events and Figure Skating tabs were byte-for-byte copies except for labels; both are now thin wrappers around a shared `CalendarEventsTab`. The screen-preview `Thumbnail` (five copies), week navigation bar, screen-card visibility/delete controls (`useScreenCards` + `EyeButton`/`InUseBadge`/`EyeHint`), and date formatting helpers (`utils/date.js`) are each defined once and shared across tabs.
+- **API route helpers** — `/games`, `/rink-events`, and `/figure-skating` share one activities-by-calendar-type query; the six copies of the case-insensitive duplicate-name check share `findByNameCi`; both calendar sync branches share one fetch-with-timeout helper.
+
+### Fixed
+- **Stale rotation timer after changing a screen's type** — a Figure Skating screen in "Rotate pages" mode kept its rotation timer running after the screen was switched to another display type, periodically overwriting the new content with stale figure-skating pages. Webpage screens had the same leak with their auto-refresh timer. All per-type timers are now cleared on every screen reload.
+- **Announcement layout bleeding into other screen types** — switching a screen from Announcement to another type kept the announcement's zero-padding content layout until a full page reload; the padding override is now reset on every reload.
+- **Admin screen-preview date defaulted to UTC** — the preview thumbnails' date navigation used the UTC date, so evenings (after 5pm PDT) previewed tomorrow instead of today; it now uses the local date, matching the TV preview bar.
+
+### Removed
+- **Dead admin components** — `RinkSettingsTab.jsx` (superseded by the Settings page) and `ScreensTab.jsx` (superseded by the per-type screen sections) were no longer routed anywhere; ~29 KB of unmaintained source deleted. Their CSS modules remain in use by other tabs.
+
 ## [1.18.0] — 2026-07-06
 
 ### Added

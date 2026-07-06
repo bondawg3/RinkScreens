@@ -17,6 +17,25 @@ function extractCalName(icsText) {
   return match ? match[1].trim() || null : null;
 }
 
+// Fetch the raw ICS text with a 10s timeout; on failure records the sync
+// error on the calendar and returns null
+async function fetchIcalText(cal) {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 10000);
+    try {
+      const resp = await fetch(cal.url, { signal: controller.signal });
+      return await resp.text();
+    } finally {
+      clearTimeout(timeout);
+    }
+  } catch (err) {
+    console.error(`[calendar] fetch failed for "${cal.name}":`, err.message);
+    if (cal.id) db.update('calendars', cal.id, { last_sync_at: new Date().toISOString(), last_sync_error: `Fetch failed: ${err.message}` });
+    return null;
+  }
+}
+
 // Shared title parsing logic used by both sync and reparse
 function parseTitle(rawTitle, cal) {
   const isNcwhl = cal && cal.name && cal.name.toUpperCase().includes('NCWHL');
@@ -88,21 +107,8 @@ async function syncCalendar(cal) {
   const forceSkate = cal.type === 'public_skates';
 
   if (useExpander) {
-    let text;
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
-      try {
-        const resp = await fetch(cal.url, { signal: controller.signal });
-        text = await resp.text();
-      } finally {
-        clearTimeout(timeout);
-      }
-    } catch (err) {
-      console.error(`[calendar] fetch failed for "${cal.name}":`, err.message);
-      if (cal.id) db.update('calendars', cal.id, { last_sync_at: new Date().toISOString(), last_sync_error: `Fetch failed: ${err.message}` });
-      return;
-    }
+    const text = await fetchIcalText(cal);
+    if (text == null) return;
 
     // Calendar may have been deleted while the fetch was in flight
     if (cal.id && !db.findById('calendars', cal.id)) return;
@@ -116,148 +122,153 @@ async function syncCalendar(cal) {
       return;
     }
 
-    if (cal.id) db.update('calendars', cal.id, { cal_name: extractCalName(text) });
-
     const result = expander.between(cutoff, horizon);
 
-    function processOccurrence(startDate, endDate, item) {
-      const start = startDate.toJSDate();
-      if (start < cutoff || start > horizon) return;
-      const end = endDate ? endDate.toJSDate() : new Date(start.getTime() + 3600000);
-      const baseUid = item.uid || String(start.getTime());
-      const uid = `${baseUid}__${start.toISOString()}`;
-      const rawTitle = item.summary || '';
+    // One transaction for the whole import — a calendar of N events costs one
+    // file write instead of N
+    db.transaction((tx) => {
+      if (cal.id) tx.update('calendars', cal.id, { cal_name: extractCalName(text) });
 
-      importedUids.add(uid);
-      const existing = db.findByField('activities', 'calendar_uid', uid);
-      db.upsertByField('activities', 'calendar_uid', uid, {
-        calendar_uid: uid,
-        calendar_id: cal.id,
-        start_time: start.toISOString(),
-        end_time: end.toISOString(),
-        raw_title: rawTitle,
-        title: rawTitle,
-        home_team: existing?.home_team || '',
-        away_team: existing?.away_team || '',
-        home_locker: existing?.home_locker || '',
-        away_locker: existing?.away_locker || '',
-        lr_auto_assigned: existing?.lr_auto_assigned || 0,
-        is_skate: forceSkate ? 1 : (rawTitle.includes(keyword) ? 1 : 0),
-      });
-      count++;
-    }
+      function processOccurrence(startDate, endDate, item) {
+        const start = startDate.toJSDate();
+        if (start < cutoff || start > horizon) return;
+        const end = endDate ? endDate.toJSDate() : new Date(start.getTime() + 3600000);
+        const baseUid = item.uid || String(start.getTime());
+        const uid = `${baseUid}__${start.toISOString()}`;
+        const rawTitle = item.summary || '';
 
-    for (const event of result.events) {
-      processOccurrence(event.startDate, event.endDate, event);
-    }
-    for (const occ of result.occurrences) {
-      processOccurrence(occ.startDate, occ.endDate, occ.item);
-    }
+        importedUids.add(uid);
+        const existing = tx.findByField('activities', 'calendar_uid', uid);
+        tx.upsertByField('activities', 'calendar_uid', uid, {
+          calendar_uid: uid,
+          calendar_id: cal.id,
+          start_time: start.toISOString(),
+          end_time: end.toISOString(),
+          raw_title: rawTitle,
+          title: rawTitle,
+          home_team: existing?.home_team || '',
+          away_team: existing?.away_team || '',
+          home_locker: existing?.home_locker || '',
+          away_locker: existing?.away_locker || '',
+          lr_auto_assigned: existing?.lr_auto_assigned || 0,
+          is_skate: forceSkate ? 1 : (rawTitle.includes(keyword) ? 1 : 0),
+        });
+        count++;
+      }
+
+      for (const event of result.events) {
+        processOccurrence(event.startDate, event.endDate, event);
+      }
+      for (const occ of result.occurrences) {
+        processOccurrence(occ.startDate, occ.endDate, occ.item);
+      }
+    });
   } else {
     // hockey_games: use node-ical (preserves existing uid-based records)
+    const icsText = await fetchIcalText(cal);
+    if (icsText == null) return;
+
     let events;
-    let icsText;
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 10000);
-      try {
-        const resp = await fetch(cal.url, { signal: controller.signal });
-        icsText = await resp.text();
-      } finally {
-        clearTimeout(timeout);
-      }
       events = ical.sync.parseICS(icsText);
     } catch (err) {
-      console.error(`[calendar] fetch failed for "${cal.name}":`, err.message);
-      if (cal.id) db.update('calendars', cal.id, { last_sync_at: new Date().toISOString(), last_sync_error: `Fetch failed: ${err.message}` });
+      console.error(`[calendar] parse failed for "${cal.name}":`, err.message);
+      if (cal.id) db.update('calendars', cal.id, { last_sync_at: new Date().toISOString(), last_sync_error: `Parse failed: ${err.message}` });
       return;
     }
 
     // Calendar may have been deleted while the fetch was in flight
     if (cal.id && !db.findById('calendars', cal.id)) return;
 
-    if (cal.id) db.update('calendars', cal.id, { cal_name: extractCalName(icsText) });
+    db.transaction((tx) => {
+      if (cal.id) tx.update('calendars', cal.id, { cal_name: extractCalName(icsText) });
 
-    for (const [, event] of Object.entries(events)) {
-      if (event.type !== 'VEVENT') continue;
-      const start = event.start ? new Date(event.start) : null;
-      if (!start || start < cutoff || start > horizon) continue;
+      for (const [, event] of Object.entries(events)) {
+        if (event.type !== 'VEVENT') continue;
+        const start = event.start ? new Date(event.start) : null;
+        if (!start || start < cutoff || start > horizon) continue;
 
-      const location = (event.location || '').trim();
-      if (location && !location.toLowerCase().includes('san mateo')) continue;
+        const location = (event.location || '').trim();
+        if (location && !location.toLowerCase().includes('san mateo')) continue;
 
-      const existing = db.findByField('activities', 'calendar_uid', event.uid);
-      const rawTitle = event.summary || '';
-      const { title, away_team, home_team } = parseTitle(rawTitle, cal);
-      const isAdminTeam = (t) => !!t;
+        const existing = tx.findByField('activities', 'calendar_uid', event.uid);
+        const rawTitle = event.summary || '';
+        const { title, away_team, home_team } = parseTitle(rawTitle, cal);
+        const isAdminTeam = (t) => !!t;
 
-      db.upsertByField('activities', 'calendar_uid', event.uid, {
-        calendar_uid: event.uid,
-        calendar_id: cal.id,
-        start_time: start.toISOString(),
-        end_time: event.end ? new Date(event.end).toISOString() : start.toISOString(),
-        raw_title: rawTitle,
-        title: title || '',
-        home_team: (existing && isAdminTeam(existing.home_team)) ? existing.home_team : home_team,
-        away_team: (existing && isAdminTeam(existing.away_team)) ? existing.away_team : away_team,
-        home_locker: existing ? existing.home_locker : '',
-        away_locker: existing ? existing.away_locker : '',
-        lr_auto_assigned: existing ? (existing.lr_auto_assigned || 0) : 0,
-        is_skate: event.summary && event.summary.includes(keyword) ? 1 : 0,
-      });
-      importedUids.add(event.uid);
-      count++;
-    }
+        tx.upsertByField('activities', 'calendar_uid', event.uid, {
+          calendar_uid: event.uid,
+          calendar_id: cal.id,
+          start_time: start.toISOString(),
+          end_time: event.end ? new Date(event.end).toISOString() : start.toISOString(),
+          raw_title: rawTitle,
+          title: title || '',
+          home_team: (existing && isAdminTeam(existing.home_team)) ? existing.home_team : home_team,
+          away_team: (existing && isAdminTeam(existing.away_team)) ? existing.away_team : away_team,
+          home_locker: existing ? existing.home_locker : '',
+          away_locker: existing ? existing.away_locker : '',
+          lr_auto_assigned: existing ? (existing.lr_auto_assigned || 0) : 0,
+          is_skate: event.summary && event.summary.includes(keyword) ? 1 : 0,
+        });
+        importedUids.add(event.uid);
+        count++;
+      }
+    });
   }
 
-  // Remove games from this calendar that are in the import window but were filtered out
   if (cal.id) {
-    const existing = db.findAll('activities').filter((g) => {
-      if (g.calendar_id !== cal.id) return false;
-      if (importedUids.has(g.calendar_uid)) return false;
-      const t = new Date(g.start_time);
-      return t >= cutoff && t <= horizon;
+    db.transaction((tx) => {
+      // Remove games from this calendar that are in the import window but were filtered out
+      const existing = tx.findAll('activities').filter((g) => {
+        if (g.calendar_id !== cal.id) return false;
+        if (importedUids.has(g.calendar_uid)) return false;
+        const t = new Date(g.start_time);
+        return t >= cutoff && t <= horizon;
+      });
+      existing.forEach((g) => tx.remove('activities', g.id));
+      if (existing.length) console.log(`[calendar] "${cal.name}" removed ${existing.length} filtered-out games`);
+
+      tx.update('calendars', cal.id, { last_sync_at: new Date().toISOString(), last_sync_error: null, last_sync_count: count });
+
+      // Auto-extract league + teams from hockey_games calendars
+      if (cal.type === 'hockey_games') {
+        const SKIP = new Set(['open', 'tbd', 'away tbd', 'home tbd', '']);
+        const calGames = tx.findAll('activities').filter((g) => g.calendar_id === cal.id);
+        const teamNames = new Set();
+        for (const g of calGames) {
+          if (g.home_team && !SKIP.has(g.home_team.toLowerCase())) teamNames.add(g.home_team);
+          if (g.away_team && !SKIP.has(g.away_team.toLowerCase())) teamNames.add(g.away_team);
+        }
+
+        if (teamNames.size > 0) {
+          // Find or create league named after this calendar
+          let league = tx.findAll('leagues').find((l) => l.name.toLowerCase() === cal.name.toLowerCase());
+          if (!league) {
+            league = tx.insert('leagues', { name: cal.name, locker_sequence_id: null });
+            console.log(`[calendar] created league "${cal.name}"`);
+          }
+
+          const existingTeams = tx.findAll('teams').filter((t) => t.league_id === league.id);
+          const existingNames = new Set(existingTeams.map((t) => t.name.toLowerCase()));
+
+          for (const name of teamNames) {
+            if (!existingNames.has(name.toLowerCase())) {
+              tx.insert('teams', { name, league_id: league.id, color: '' });
+              console.log(`[calendar] added team "${name}" to league "${cal.name}"`);
+            }
+          }
+        }
+      }
     });
-    existing.forEach((g) => db.remove('activities', g.id));
-    if (existing.length) console.log(`[calendar] "${cal.name}" removed ${existing.length} filtered-out games`);
   }
 
   console.log(`[calendar] "${cal.name}" synced ${count} events`);
-  if (cal.id) db.update('calendars', cal.id, { last_sync_at: new Date().toISOString(), last_sync_error: null, last_sync_count: count });
 
-  // Auto-assign locker rooms for newly-imported unassigned games
+  // Auto-assign locker rooms for newly-imported unassigned games (runs its own
+  // transaction; a league created above starts with no sequence, so running
+  // after extraction doesn't change assignments)
   if (cal.type === 'hockey_games') {
     autoAssign();
-  }
-
-  // Auto-extract league + teams from hockey_games calendars
-  if (cal.type === 'hockey_games' && cal.id) {
-    const SKIP = new Set(['open', 'tbd', 'away tbd', 'home tbd', '']);
-    const calGames = db.findAll('activities').filter((g) => g.calendar_id === cal.id);
-    const teamNames = new Set();
-    for (const g of calGames) {
-      if (g.home_team && !SKIP.has(g.home_team.toLowerCase())) teamNames.add(g.home_team);
-      if (g.away_team && !SKIP.has(g.away_team.toLowerCase())) teamNames.add(g.away_team);
-    }
-
-    if (teamNames.size > 0) {
-      // Find or create league named after this calendar
-      let league = db.findAll('leagues').find((l) => l.name.toLowerCase() === cal.name.toLowerCase());
-      if (!league) {
-        league = db.insert('leagues', { name: cal.name, locker_sequence_id: null });
-        console.log(`[calendar] created league "${cal.name}"`);
-      }
-
-      const existingTeams = db.findAll('teams').filter((t) => t.league_id === league.id);
-      const existingNames = new Set(existingTeams.map((t) => t.name.toLowerCase()));
-
-      for (const name of teamNames) {
-        if (!existingNames.has(name.toLowerCase())) {
-          db.insert('teams', { name, league_id: league.id, color: '' });
-          console.log(`[calendar] added team "${name}" to league "${cal.name}"`);
-        }
-      }
-    }
   }
 }
 

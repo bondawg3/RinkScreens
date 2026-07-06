@@ -2,13 +2,7 @@ import React from 'react';
 import { useApi } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 import ScreensSection from './ScreensSection';
-
-function formatDate(iso) {
-  return new Date(iso).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-}
-function formatTime(iso) {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
+import { fmtTime, fmtShortDate } from '../../utils/date';
 
 export default function SkateTab() {
   const { data: sessions } = useApi('/skate-sessions');
@@ -26,9 +20,9 @@ export default function SkateTab() {
           <tbody>
             {sessions.map((s) => (
               <tr key={s.id}>
-                <td>{formatDate(s.start_time)}</td>
-                <td>{formatTime(s.start_time)}</td>
-                <td>{s.end_time ? formatTime(s.end_time) : '—'}</td>
+                <td>{fmtShortDate(s.start_time)}</td>
+                <td>{fmtTime(s.start_time)}</td>
+                <td>{s.end_time ? fmtTime(s.end_time) : '—'}</td>
                 <td>{s.title || <span className={styles.muted}>—</span>}</td>
               </tr>
             ))}

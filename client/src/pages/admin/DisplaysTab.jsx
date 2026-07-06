@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 import tStyles from './ScreensTab.module.css';
-import sStyles from './ScreensSection.module.css';
+import Thumbnail from './Thumbnail';
 
 const DISPLAY_TYPES = [
   { value: 'games', label: 'Game Board' },
@@ -12,31 +12,6 @@ const DISPLAY_TYPES = [
   { value: 'webpage', label: 'Webpage' },
   { value: 'message', label: 'Custom Message' },
 ];
-
-function Thumbnail({ screenId }) {
-  const wrapRef = useRef(null);
-  const [scale, setScale] = useState(0.2);
-
-  useEffect(() => {
-    if (!wrapRef.current) return;
-    const w = wrapRef.current.offsetWidth;
-    setScale(w / 1920);
-  }, []);
-
-  if (!screenId) {
-    return (
-      <div className={tStyles.thumbWrap} ref={wrapRef} style={{ '--thumb-scale': scale, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', position: 'absolute' }}>No screen assigned</span>
-      </div>
-    );
-  }
-
-  return (
-    <div className={tStyles.thumbWrap} ref={wrapRef} style={{ '--thumb-scale': scale }}>
-      <iframe src={`/tv/${screenId}`} title={`Screen ${screenId}`} scrolling="no" />
-    </div>
-  );
-}
 
 export default function DisplaysTab() {
   const { data: displays, reload } = useApi('/displays');

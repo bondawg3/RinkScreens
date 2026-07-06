@@ -1,7 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import adminStyles from './AdminTab.module.css';
 import s from './ScreensSection.module.css';
+import Thumbnail from './Thumbnail';
+import { useScreenCards, InUseBadge, EyeButton, EyeHint } from './screenCard';
+import { stepDate, todayStr, fmtDateLabel } from '../../utils/date';
 
 const CAL_TYPE_LABELS = {
   hockey_games: 'Hockey',
@@ -9,40 +12,6 @@ const CAL_TYPE_LABELS = {
   rink_events: 'Rink Events',
   figure_skating: 'Figure Skating',
 };
-
-function stepDate(dateStr, delta) {
-  const d = new Date(dateStr + 'T00:00:00');
-  d.setDate(d.getDate() + delta);
-  return d.toISOString().slice(0, 10);
-}
-
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function fmtDateLabel(dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-}
-
-function Thumbnail({ screenId, previewDate }) {
-  const wrapRef = useRef(null);
-  const [scale, setScale] = useState(0.2);
-
-  useEffect(() => {
-    if (!wrapRef.current) return;
-    const w = wrapRef.current.offsetWidth;
-    setScale(w / 1920);
-  }, []);
-
-  const src = `/tv/${screenId}?preview_date=${previewDate}`;
-
-  return (
-    <div className={s.thumbWrap} ref={wrapRef} style={{ '--thumb-scale': scale }}>
-      <iframe key={src} src={src} title={`Screen ${screenId}`} scrolling="no" />
-    </div>
-  );
-}
 
 export default function ScreensSection({ displayType, calendarType }) {
   const { data: allScreens, reload } = useApi('/screens');
@@ -57,7 +26,6 @@ export default function ScreensSection({ displayType, calendarType }) {
     : (allCalendars || []);
 
   const [previewDates, setPreviewDates] = useState({});
-  const [eyeHint, setEyeHint] = useState(null); // screen id showing hint
   const [modal, setModal] = useState(null); // null | 'add' | screen object
   const [form, setForm] = useState({ name: '', all_calendars: false, calendar_ids: [], background_id: '', bg_opacity: 100, two_column: false, overflow_mode: 'none', rotate_interval: 30, days_ahead: 14, show_pricing: false, show_locker_rooms: true });
   const [err, setErr] = useState('');
@@ -163,22 +131,8 @@ export default function ScreensSection({ displayType, calendarType }) {
     } catch (ex) { setErr(ex.message); }
   }
 
-  function assignedDisplayName(screenId) {
-    return (displays || []).find((d) => d.screen_id === screenId)?.name || null;
-  }
-
-  async function toggleVisible(sc) {
-    const inUse = assignedDisplayName(sc.id);
-    if (inUse) { setEyeHint(sc.id); setTimeout(() => setEyeHint(null), 3000); return; }
-    await apiFetch(`/screens/${sc.id}`, { method: 'PATCH', body: JSON.stringify({ visible: !sc.visible }) });
-    reload();
-  }
-
-  async function deleteScreen(id) {
-    if (!confirm('Delete this screen?')) return;
-    await apiFetch(`/screens/${id}`, { method: 'DELETE' });
-    reload();
-  }
+  const { eyeHint, assignedDisplayName, toggleVisible, deleteScreen } =
+    useScreenCards({ displays, reload });
 
   function calNamesForScreen(screen) {
     if (!screen.calendar_ids || !screen.calendar_ids.length) return null;
@@ -221,21 +175,17 @@ export default function ScreensSection({ displayType, calendarType }) {
                     : <span className={s.chipAll}>All calendars</span>}
                 </div>
                 {bg && <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{bg} — {sc.bg_opacity ?? 100}% opacity</div>}
-                {(() => { const d = assignedDisplayName(sc.id); return d ? <div className={s.inUseBadge}>● {d}</div> : null; })()}
+                <InUseBadge name={assignedDisplayName(sc.id)} />
                 <div className={s.cardActions}>
                   <a href={`/tv/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost}>Preview</a>
                   <button className={adminStyles.btnGhost} onClick={() => openEdit(sc)}>Edit</button>
                   {sc.show_pricing && (
                     <button className={s.pricingBtn} title="Choose which prices to show" onClick={() => openPricingModal(sc)}>$</button>
                   )}
-                  <button
-                    className={assignedDisplayName(sc.id) ? s.eyeDisabled : sc.visible !== false ? s.eyeOn : s.eyeOff}
-                    onClick={() => toggleVisible(sc)}
-                    title={assignedDisplayName(sc.id) ? `In use by ${assignedDisplayName(sc.id)} — unassign first` : sc.visible !== false ? 'Visible in Displays tab — click to hide' : 'Hidden from Displays tab — click to show'}
-                  >{sc.visible !== false ? '👁' : '🚫'}</button>
+                  <EyeButton screen={sc} assignedName={assignedDisplayName(sc.id)} onToggle={toggleVisible} />
                   <button className={adminStyles.btnDanger} onClick={() => deleteScreen(sc.id)}>Delete</button>
                 </div>
-                {eyeHint === sc.id && <div className={s.eyeHintText}>In use by {assignedDisplayName(sc.id)} — unassign it first to hide.</div>}
+                <EyeHint show={eyeHint === sc.id} name={assignedDisplayName(sc.id)} />
               </div>
             </div>
           );

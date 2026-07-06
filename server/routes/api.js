@@ -16,6 +16,26 @@ function isAdminRequest(req) {
   try { verifyToken(token); return true; } catch { return false; }
 }
 
+// Activities belonging to calendars of one type, sorted by start time.
+// includeLegacy also returns rows with no calendar (pre-calendar imports).
+function activitiesByCalType(type, { includeLegacy = false } = {}) {
+  const calIds = new Set(
+    db.findAll('calendars')
+      .filter((c) => c.type === type)
+      .map((c) => c.id)
+  );
+  return db.findAll('activities', 'start_time')
+    .filter((g) => calIds.has(g.calendar_id) || (includeLegacy && !g.calendar_id));
+}
+
+// Case-insensitive duplicate-name lookup, optionally ignoring one row
+function findByNameCi(table, name, excludeId = null) {
+  const target = name.toLowerCase();
+  return db.findAll(table).find(
+    (r) => (excludeId === null || r.id !== excludeId) && r.name.toLowerCase() === target
+  ) || null;
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 router.get('/auth/check', (req, res) => {
@@ -205,10 +225,9 @@ router.get('/displays', (req, res) => {
 router.post('/displays', requireAuth, (req, res) => {
   const { name, ip } = req.body;
   if (!name || !ip) return res.status(400).json({ error: 'name and ip required' });
-  const all = db.findAll('displays');
-  const dupName = all.find((d) => d.name.toLowerCase() === name.toLowerCase());
+  const dupName = findByNameCi('displays', name);
   if (dupName) return res.status(400).json({ error: `A display named "${dupName.name}" already exists.` });
-  const dupIp = all.find((d) => d.ip === ip);
+  const dupIp = db.findAll('displays').find((d) => d.ip === ip);
   if (dupIp) return res.status(400).json({ error: `IP ${ip} is already used by "${dupIp.name}".` });
   const row = db.insert('displays', { name, ip });
   res.json({ id: row.id });
@@ -220,10 +239,9 @@ router.patch('/displays/:id', requireAuth, (req, res) => {
   const { name, ip, screen_id } = req.body;
   const newName = name ?? display.name;
   const newIp = ip ?? display.ip;
-  const others = db.findAll('displays').filter((d) => d.id !== display.id);
-  const dupName = others.find((d) => d.name.toLowerCase() === newName.toLowerCase());
+  const dupName = findByNameCi('displays', newName, display.id);
   if (dupName) return res.status(400).json({ error: `A display named "${dupName.name}" already exists.` });
-  const dupIp = others.find((d) => d.ip === newIp);
+  const dupIp = db.findAll('displays').find((d) => d.id !== display.id && d.ip === newIp);
   if (dupIp) return res.status(400).json({ error: `IP ${newIp} is already used by "${dupIp.name}".` });
   const changes = { name: newName, ip: newIp };
   if ('screen_id' in req.body) changes.screen_id = screen_id ? Number(screen_id) : null;
@@ -239,38 +257,20 @@ router.delete('/displays/:id', requireAuth, (req, res) => {
 // ── Rink Events ───────────────────────────────────────────────────────────────
 
 router.get('/rink-events', (req, res) => {
-  const rinkEventCalIds = new Set(
-    db.findAll('calendars')
-      .filter((c) => c.type === 'rink_events')
-      .map((c) => c.id)
-  );
-  const events = db.findAll('activities', 'start_time')
-    .filter((g) => rinkEventCalIds.has(g.calendar_id));
-  res.json(events);
+  res.json(activitiesByCalType('rink_events'));
 });
 
 // ── Figure Skating ────────────────────────────────────────────────────────────
 
 router.get('/figure-skating', (req, res) => {
-  const calIds = new Set(
-    db.findAll('calendars')
-      .filter((c) => c.type === 'figure_skating')
-      .map((c) => c.id)
-  );
-  res.json(db.findAll('activities', 'start_time').filter((g) => calIds.has(g.calendar_id)));
+  res.json(activitiesByCalType('figure_skating'));
 });
 
 // ── Games ─────────────────────────────────────────────────────────────────────
 
 router.get('/games', (req, res) => {
-  const hockeyCalIds = new Set(
-    db.findAll('calendars')
-      .filter((c) => c.type === 'hockey_games')
-      .map((c) => c.id)
-  );
-  const all = db.findAll('activities', 'start_time');
   // Only return games from hockey_games calendars (or legacy unassigned games with no calendar)
-  res.json(all.filter((g) => !g.calendar_id || hockeyCalIds.has(g.calendar_id)));
+  res.json(activitiesByCalType('hockey_games', { includeLegacy: true }));
 });
 
 router.patch('/games/:id', requireAuth, (req, res) => {
@@ -323,26 +323,32 @@ router.post('/games/auto-assign', requireAuth, (req, res) => {
 });
 
 router.post('/games/reparse', requireAuth, (req, res) => {
-  const calendars = db.findAll('calendars');
-  const calMap = Object.fromEntries(calendars.map((c) => [c.id, c]));
-  const games = db.findAll('activities');
-  let updated = 0;
+  const updated = db.transaction((tx) => {
+    const calendars = tx.findAll('calendars');
+    const calMap = Object.fromEntries(calendars.map((c) => [c.id, c]));
+    const games = tx.findAll('activities');
+    let count = 0;
 
-  for (const game of games) {
-    const cal = calMap[game.calendar_id] || {};
-    const { title, away_team, home_team } = parseTitle(game.raw_title || game.title || '', cal);
-    db.update('activities', game.id, { title, away_team, home_team });
-    updated++;
-  }
+    for (const game of games) {
+      const cal = calMap[game.calendar_id] || {};
+      const { title, away_team, home_team } = parseTitle(game.raw_title || game.title || '', cal);
+      tx.update('activities', game.id, { title, away_team, home_team });
+      count++;
+    }
+    return count;
+  });
 
   ws.broadcast({ type: 'refresh_data' });
   res.json({ updated });
 });
 
 router.delete('/games/unassigned', requireAuth, (req, res) => {
-  const toRemove = db.findAll('activities').filter((g) => !g.calendar_id);
-  toRemove.forEach((g) => db.remove('activities', g.id));
-  res.json({ removed: toRemove.length });
+  const removed = db.transaction((tx) => {
+    const toRemove = tx.findAll('activities').filter((g) => !g.calendar_id);
+    toRemove.forEach((g) => tx.remove('activities', g.id));
+    return toRemove.length;
+  });
+  res.json({ removed });
 });
 
 router.get('/games/debug-calendar', requireAuth, async (req, res) => {
@@ -427,11 +433,10 @@ router.post('/calendars', requireAuth, async (req, res) => {
   const { name, url, type, poll_interval_minutes = 5, team_order = 'away_home' } = req.body;
   if (!name || !url || !type) return res.status(400).json({ error: 'name, url, and type are required' });
 
-  const all = db.findAll('calendars');
-  if (all.find((c) => c.name.toLowerCase() === name.toLowerCase())) {
+  if (findByNameCi('calendars', name)) {
     return res.status(400).json({ error: `A calendar named "${name}" already exists. Please use a different name.` });
   }
-  if (all.find((c) => c.url === url)) {
+  if (db.findAll('calendars').find((c) => c.url === url)) {
     return res.status(400).json({ error: 'This iCal URL is already in use by another calendar.' });
   }
 
@@ -449,16 +454,13 @@ router.patch('/calendars/:id', requireAuth, async (req, res) => {
   if (!cal) return res.status(404).json({ error: 'not found' });
 
   const { name, url, poll_interval_minutes, team_order, locker_sequence_id } = req.body;
-  const all = db.findAll('calendars');
 
-  if (name && name.toLowerCase() !== cal.name.toLowerCase()) {
-    if (all.find((c) => c.id !== cal.id && c.name.toLowerCase() === name.toLowerCase())) {
-      return res.status(400).json({ error: `A calendar named "${name}" already exists.` });
-    }
+  if (name && name.toLowerCase() !== cal.name.toLowerCase() && findByNameCi('calendars', name, cal.id)) {
+    return res.status(400).json({ error: `A calendar named "${name}" already exists.` });
   }
 
   if (url && url !== cal.url) {
-    if (all.find((c) => c.id !== cal.id && c.url === url)) {
+    if (db.findAll('calendars').find((c) => c.id !== cal.id && c.url === url)) {
       return res.status(400).json({ error: 'This iCal URL is already in use by another calendar.' });
     }
   }
@@ -487,13 +489,16 @@ router.patch('/calendars/:id', requireAuth, async (req, res) => {
 router.delete('/calendars/:id', requireAuth, (req, res) => {
   const calId = Number(req.params.id);
   cancelCalendar(calId);
-  db.remove('calendars', calId);
-  // Remove this calendar's games so they don't linger invisibly in the store
-  // (or resurface on skate screens via the no-skate-calendars fallback)
-  const orphans = db.findAll('activities').filter((g) => g.calendar_id === calId);
-  orphans.forEach((g) => db.remove('activities', g.id));
+  const removedGames = db.transaction((tx) => {
+    tx.remove('calendars', calId);
+    // Remove this calendar's games so they don't linger invisibly in the store
+    // (or resurface on skate screens via the no-skate-calendars fallback)
+    const orphans = tx.findAll('activities').filter((g) => g.calendar_id === calId);
+    orphans.forEach((g) => tx.remove('activities', g.id));
+    return orphans.length;
+  });
   ws.broadcast({ type: 'refresh_data' });
-  res.json({ ok: true, removed_games: orphans.length });
+  res.json({ ok: true, removed_games: removedGames });
 });
 
 // ── Public Skate Sessions ─────────────────────────────────────────────────────
@@ -555,8 +560,7 @@ router.post('/locker-sequences', requireAuth, (req, res) => {
   const { name, pairs } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
   if (!pairs || !pairs.length) return res.status(400).json({ error: 'At least one pair is required' });
-  const all = db.findAll('locker_sequences');
-  if (all.find((s) => s.name.toLowerCase() === name.trim().toLowerCase())) {
+  if (findByNameCi('locker_sequences', name.trim())) {
     return res.status(400).json({ error: `A sequence named "${name}" already exists.` });
   }
   const row = db.insert('locker_sequences', { name: name.trim(), pairs });
@@ -567,11 +571,8 @@ router.patch('/locker-sequences/:id', requireAuth, (req, res) => {
   const seq = db.findById('locker_sequences', req.params.id);
   if (!seq) return res.status(404).json({ error: 'not found' });
   const { name, pairs } = req.body;
-  if (name && name.trim()) {
-    const all = db.findAll('locker_sequences');
-    if (all.find((s) => s.id !== seq.id && s.name.toLowerCase() === name.trim().toLowerCase())) {
-      return res.status(400).json({ error: `A sequence named "${name}" already exists.` });
-    }
+  if (name && name.trim() && findByNameCi('locker_sequences', name.trim(), seq.id)) {
+    return res.status(400).json({ error: `A sequence named "${name}" already exists.` });
   }
   db.update('locker_sequences', req.params.id, {
     name: name ? name.trim() : seq.name,
@@ -594,8 +595,7 @@ router.get('/locker-rooms', (req, res) => {
 router.post('/locker-rooms', requireAuth, (req, res) => {
   const { name } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
-  const all = db.findAll('locker_rooms');
-  if (all.find((r) => r.name.toLowerCase() === name.trim().toLowerCase())) {
+  if (findByNameCi('locker_rooms', name.trim())) {
     return res.status(400).json({ error: `A locker room named "${name}" already exists.` });
   }
   const row = db.insert('locker_rooms', { name: name.trim() });
@@ -607,8 +607,7 @@ router.patch('/locker-rooms/:id', requireAuth, (req, res) => {
   if (!room) return res.status(404).json({ error: 'not found' });
   const { name } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
-  const all = db.findAll('locker_rooms');
-  if (all.find((r) => r.id !== room.id && r.name.toLowerCase() === name.trim().toLowerCase())) {
+  if (findByNameCi('locker_rooms', name.trim(), room.id)) {
     return res.status(400).json({ error: `A locker room named "${name}" already exists.` });
   }
   db.update('locker_rooms', req.params.id, { name: name.trim() });
@@ -679,8 +678,7 @@ router.get('/leagues', (req, res) => {
 router.post('/leagues', requireAuth, (req, res) => {
   const { name } = req.body;
   if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
-  const all = db.findAll('leagues');
-  if (all.find((l) => l.name.toLowerCase() === name.trim().toLowerCase())) {
+  if (findByNameCi('leagues', name.trim())) {
     return res.status(400).json({ error: `A league named "${name}" already exists.` });
   }
   const row = db.insert('leagues', { name: name.trim(), locker_sequence_id: null });
@@ -691,11 +689,8 @@ router.patch('/leagues/:id', requireAuth, (req, res) => {
   const league = db.findById('leagues', req.params.id);
   if (!league) return res.status(404).json({ error: 'not found' });
   const { name, locker_sequence_id } = req.body;
-  if (name && name.trim()) {
-    const all = db.findAll('leagues');
-    if (all.find((l) => l.id !== league.id && l.name.toLowerCase() === name.trim().toLowerCase())) {
-      return res.status(400).json({ error: `A league named "${name}" already exists.` });
-    }
+  if (name && name.trim() && findByNameCi('leagues', name.trim(), league.id)) {
+    return res.status(400).json({ error: `A league named "${name}" already exists.` });
   }
   const newName = name ? name.trim() : league.name;
   const newLeagueSeqId = locker_sequence_id !== undefined ? (locker_sequence_id || null) : league.locker_sequence_id;
@@ -709,8 +704,10 @@ router.patch('/leagues/:id', requireAuth, (req, res) => {
 });
 
 router.delete('/leagues/:id', requireAuth, (req, res) => {
-  db.remove('leagues', req.params.id);
-  db.findAll('teams').filter((t) => t.league_id === Number(req.params.id)).forEach((t) => db.remove('teams', t.id));
+  db.transaction((tx) => {
+    tx.remove('leagues', req.params.id);
+    tx.findAll('teams').filter((t) => t.league_id === Number(req.params.id)).forEach((t) => tx.remove('teams', t.id));
+  });
   res.json({ ok: true });
 });
 

@@ -14,27 +14,6 @@
   flex-direction: column;
 }
 
-/* ── Thumbnail ── */
-.thumbWrap {
-  position: relative;
-  width: 100%;
-  padding-top: 56.25%; /* 16:9 */
-  overflow: hidden;
-  background: #0a2a42;
-}
-
-.thumbWrap iframe {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 1920px;
-  height: 1080px;
-  transform: scale(var(--thumb-scale, 0.2));
-  transform-origin: top left;
-  border: none;
-  pointer-events: none;
-}
-
 /* ── Card body ── */
 .cardBody {
   padding: 0.75rem 1rem;

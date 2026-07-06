@@ -3,10 +3,8 @@ import { useApi, apiFetch } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 import tabStyles from './GamesTab.module.css';
 import ScreensSection from './ScreensSection';
-
-function fmt(iso) {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
+import WeekNav from './WeekNav';
+import { fmtTime, fmtShortDate, dayLabel, getWeekBounds, localDateStr } from '../../utils/date';
 
 export default function GamesTab() {
   const { data: games, reload } = useApi('/games');
@@ -46,10 +44,7 @@ export default function GamesTab() {
       let msg = `Auto-assigned ${result.assigned} game${result.assigned !== 1 ? 's' : ''}.`;
       const hasConflicts = result.conflicts && result.conflicts.length > 0;
       if (hasConflicts) {
-        const dates = [...new Set(result.conflicts.map((c) => {
-          const d = new Date(c.start_time);
-          return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
-        }))];
+        const dates = [...new Set(result.conflicts.map((c) => fmtShortDate(c.start_time)))];
         msg += ` ⚠ ${result.conflicts.length} locker room conflict${result.conflicts.length !== 1 ? 's' : ''} detected on: ${dates.join(', ')}.`;
       }
       setAutoAssignMsg({ text: msg, isWarning: hasConflicts });
@@ -66,7 +61,7 @@ export default function GamesTab() {
   }
 
   async function deleteGame(game) {
-    if (!confirm(`Delete "${game.title || game.raw_title || 'this game'}" at ${fmt(game.start_time)}?`)) return;
+    if (!confirm(`Delete "${game.title || game.raw_title || 'this game'}" at ${fmtTime(game.start_time)}?`)) return;
     await apiFetch(`/games/${game.id}`, { method: 'DELETE' });
     reload();
   }
@@ -98,33 +93,6 @@ export default function GamesTab() {
   const calMap = Object.fromEntries((calendars || []).map((c) => [c.id, c.name]));
   const gamesList = (games || []).filter((g) => !g.is_skate);
 
-  function getWeekBounds(offset) {
-    const now = new Date();
-    const day = now.getDay(); // 0=Sun
-    const monday = new Date(now);
-    monday.setDate(now.getDate() - ((day + 6) % 7) + offset * 7);
-    monday.setHours(0, 0, 0, 0);
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    sunday.setHours(23, 59, 59, 999);
-    return { monday, sunday };
-  }
-
-  function weekLabel(offset) {
-    const { monday, sunday } = getWeekBounds(offset);
-    const opts = { month: 'short', day: 'numeric' };
-    const monStr = monday.toLocaleDateString([], opts);
-    const sunStr = sunday.toLocaleDateString([], opts);
-    if (offset === 0) return `This Week  (${monStr} – ${sunStr})`;
-    if (offset === 1) return `Next Week  (${monStr} – ${sunStr})`;
-    if (offset === -1) return `Last Week  (${monStr} – ${sunStr})`;
-    return `${monStr} – ${sunStr}`;
-  }
-
-  function dayLabel(iso) {
-    return new Date(iso).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
-  }
-
   function getGroups() {
     if (sortBy === 'datetime') {
       const { monday, sunday } = getWeekBounds(weekOffset);
@@ -145,13 +113,7 @@ export default function GamesTab() {
       return dayOrder.map((dayKey) => {
         const day = byDay[dayKey];
         const firstGame = day.byCal[day.calOrder[0]][0];
-        const d = new Date(firstGame.start_time);
-        const dateStr =
-          d.getFullYear() +
-          '-' +
-          String(d.getMonth() + 1).padStart(2, '0') +
-          '-' +
-          String(d.getDate()).padStart(2, '0');
+        const dateStr = localDateStr(new Date(firstGame.start_time));
         return {
           label: day.label,
           dateStr,
@@ -198,7 +160,7 @@ export default function GamesTab() {
   function renderRow(g) {
     return (
       <tr key={g.id}>
-        <td className={styles.nowrap}>{fmt(g.start_time)}</td>
+        <td className={styles.nowrap}>{fmtTime(g.start_time)}</td>
         {editing === g.id ? (
           <>
             <td>{g.title}</td>
@@ -228,13 +190,7 @@ export default function GamesTab() {
     );
   }
 
-  const weekNav = (
-    <div className={tabStyles.weekNav}>
-      <button className={tabStyles.weekBtn} onClick={() => setWeekOffset(weekOffset - 1)}>&#8592; Prev</button>
-      <span className={tabStyles.weekLabel}>{weekLabel(weekOffset)}</span>
-      <button className={tabStyles.weekBtn} onClick={() => setWeekOffset(weekOffset + 1)}>Next &#8594;</button>
-    </div>
-  );
+  const weekNav = <WeekNav offset={weekOffset} onChange={setWeekOffset} />;
 
   return (
     <div>

@@ -1,25 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 import tStyles from './ScreensTab.module.css';
 import sStyles from './ScreensSection.module.css';
-
-function Thumbnail({ screenId }) {
-  const wrapRef = useRef(null);
-  const [scale, setScale] = useState(0.2);
-
-  useEffect(() => {
-    if (!wrapRef.current) return;
-    const w = wrapRef.current.offsetWidth;
-    setScale(w / 1920);
-  }, []);
-
-  return (
-    <div className={tStyles.thumbWrap} ref={wrapRef} style={{ '--thumb-scale': scale }}>
-      <iframe src={`/tv/${screenId}`} title={`Screen ${screenId}`} scrolling="no" />
-    </div>
-  );
-}
+import Thumbnail from './Thumbnail';
+import { useScreenCards, InUseBadge, EyeButton, EyeHint } from './screenCard';
 
 const EMPTY_FORM = { name: '', webpage_url: '', webpage_width: 100, webpage_zoom: 100 };
 
@@ -37,8 +22,9 @@ function toMinutes(val, unit) {
 export default function WebpageTab() {
   const { data: allScreens, reload } = useApi('/screens');
   const { data: displays } = useApi('/displays');
+  const { eyeHint, assignedDisplayName, toggleVisible, deleteScreen } =
+    useScreenCards({ displays, reload, confirmMessage: 'Delete this webpage screen?' });
   const [modal, setModal] = useState(null); // null | 'add' | screen object
-  const [eyeHint, setEyeHint] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [refreshVal, setRefreshVal] = useState(0);
   const [refreshUnit, setRefreshUnit] = useState('minutes');
@@ -99,23 +85,6 @@ export default function WebpageTab() {
     } catch (ex) { setErr(ex.message); }
   }
 
-  function assignedDisplayName(screenId) {
-    return (displays || []).find((d) => d.screen_id === screenId)?.name || null;
-  }
-
-  async function toggleVisible(sc) {
-    const inUse = assignedDisplayName(sc.id);
-    if (inUse) { setEyeHint(sc.id); setTimeout(() => setEyeHint(null), 3000); return; }
-    await apiFetch(`/screens/${sc.id}`, { method: 'PATCH', body: JSON.stringify({ visible: !sc.visible }) });
-    reload();
-  }
-
-  async function deleteScreen(id) {
-    if (!confirm('Delete this webpage screen?')) return;
-    await apiFetch(`/screens/${id}`, { method: 'DELETE' });
-    reload();
-  }
-
   return (
     <div>
       <div className={styles.rowBetween}>
@@ -132,7 +101,7 @@ export default function WebpageTab() {
               <div className={tStyles.cardMeta} style={{ wordBreak: 'break-all' }}>
                 {sc.webpage_url || <span style={{ opacity: 0.5 }}>No URL set</span>}
               </div>
-              {(() => { const d = assignedDisplayName(sc.id); return d ? <div className={sStyles.inUseBadge}>● {d}</div> : null; })()}
+              <InUseBadge name={assignedDisplayName(sc.id)} />
               <div className={tStyles.cardMeta}>
                 {sc.webpage_width}% width · {sc.webpage_zoom}% zoom
                 {sc.webpage_refresh > 0 && (() => {
@@ -144,14 +113,10 @@ export default function WebpageTab() {
                 <a href={`/tv/${sc.id}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost}>Preview</a>
                 <button className={styles.btnGhost} onClick={() => openEdit(sc)}>Edit</button>
                 <button className={styles.btnGhost} title="Resync page" onClick={() => apiFetch(`/screens/${sc.id}/reload`, { method: 'POST' })}>&#8635;</button>
-                <button
-                  className={assignedDisplayName(sc.id) ? sStyles.eyeDisabled : sc.visible !== false ? sStyles.eyeOn : sStyles.eyeOff}
-                  onClick={() => toggleVisible(sc)}
-                  title={assignedDisplayName(sc.id) ? `In use by ${assignedDisplayName(sc.id)} — unassign first` : sc.visible !== false ? 'Visible in Displays tab — click to hide' : 'Hidden from Displays tab — click to show'}
-                >{sc.visible !== false ? '👁' : '🚫'}</button>
+                <EyeButton screen={sc} assignedName={assignedDisplayName(sc.id)} onToggle={toggleVisible} />
                 <button className={styles.btnDanger} onClick={() => deleteScreen(sc.id)}>Delete</button>
               </div>
-              {eyeHint === sc.id && <div className={sStyles.eyeHintText}>In use by {assignedDisplayName(sc.id)} — unassign it first to hide.</div>}
+              <EyeHint show={eyeHint === sc.id} name={assignedDisplayName(sc.id)} />
             </div>
           </div>
         ))}

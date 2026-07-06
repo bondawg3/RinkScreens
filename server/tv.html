@@ -326,11 +326,15 @@ header {
 
 <script>
 var SCREEN_ID = '{{SCREEN_ID}}';
-var refreshTimer = null;
-var reloadTimer = null;
+var refreshTimer = null;  // figure-skating page rotation
+var reloadTimer = null;   // periodic full reload
+var webpageTimer = null;  // webpage iframe refresh
 var PREVIEW_DATE = (typeof URLSearchParams !== 'undefined')
   ? (new URLSearchParams(location.search).get('preview_date') || null)
   : null;
+
+var DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+var MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 function getNow() {
   return PREVIEW_DATE ? new Date(PREVIEW_DATE + 'T00:00:00') : new Date();
@@ -368,10 +372,26 @@ if (IS_PREVIEW) {
   dateInput.onchange = function() { if (dateInput.value) setPreviewDate(dateInput.value); };
 }
 
+// ── Filters ───────────────────────────────────────────────────────────────────
 function filterByCalIds(items, calIds) {
   if (!calIds || !calIds.length) return items;
   return items.filter(function(x) { return calIds.indexOf(x.calendar_id) !== -1; });
 }
+
+// Items whose start_time falls on the current (or previewed) day
+function filterToday(items) {
+  var now = getNow();
+  var dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var dayEnd = new Date(dayStart.getTime() + 86400000);
+  var out = [];
+  for (var i = 0; i < items.length; i++) {
+    var t = new Date(items[i].start_time);
+    if (t >= dayStart && t < dayEnd) out.push(items[i]);
+  }
+  return out;
+}
+
+function byStartTime(a, b) { return new Date(a.start_time) - new Date(b.start_time); }
 
 // ── Clock ──────────────────────────────────────────────────────────────────
 function updateClock() {
@@ -380,14 +400,12 @@ function updateClock() {
   var ampm = h >= 12 ? 'PM' : 'AM';
   h = h % 12 || 12;
   document.getElementById('clock').innerHTML = h + ':' + (m < 10 ? '0' : '') + m + ' ' + ampm;
-  var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  document.getElementById('date').innerHTML = days[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate();
+  document.getElementById('date').innerHTML = DAY_NAMES[d.getDay()] + ', ' + MONTH_NAMES[d.getMonth()] + ' ' + d.getDate();
 }
 setInterval(updateClock, 1000);
 updateClock();
 
-// ── XHR helper ────────────────────────────────────────────────────────────
+// ── XHR helpers ────────────────────────────────────────────────────────────
 function get(url, cb) {
   var xhr = new XMLHttpRequest();
   xhr.open('GET', url, true);
@@ -398,6 +416,30 @@ function get(url, cb) {
     }
   };
   xhr.send();
+}
+
+// Fetch several URLs in parallel; cb receives an array of results in the same
+// order (null where a request failed)
+function getAll(urls, cb) {
+  var results = new Array(urls.length);
+  var remaining = urls.length;
+  for (var i = 0; i < urls.length; i++) (function(idx) {
+    get(urls[idx], function(err, data) {
+      results[idx] = err ? null : data;
+      remaining--;
+      if (remaining === 0) cb(results);
+    });
+  })(i);
+}
+
+// Prices for a screen with show_pricing, filtered to its selected pricing_ids;
+// null when the screen doesn't show pricing
+function loadPricesFor(screen, cb) {
+  if (!screen.show_pricing) { cb(null); return; }
+  get('/api/skate-prices', function(err, prices) {
+    var selectedIds = screen.pricing_ids || [];
+    cb((prices || []).filter(function(p) { return selectedIds.indexOf(p.id) !== -1; }));
+  });
 }
 
 // ── Format helpers ─────────────────────────────────────────────────────────
@@ -419,12 +461,73 @@ function fmtTime(iso) {
 
 function fmtDate(iso) {
   var d = new Date(iso);
-  var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  return days[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate();
+  return DAY_NAMES[d.getDay()] + ', ' + MONTH_NAMES[d.getMonth()] + ' ' + d.getDate();
 }
 
-// ── Render ─────────────────────────────────────────────────────────────────
+// ── Lookup maps ────────────────────────────────────────────────────────────
+function buildCalMap(calendars) {
+  var map = {};
+  if (calendars) {
+    for (var i = 0; i < calendars.length; i++) {
+      map[String(calendars[i].id)] = calendars[i].name;
+    }
+  }
+  return map;
+}
+
+function buildTeamMap(leagues) {
+  var map = {};
+  if (leagues) {
+    for (var i = 0; i < leagues.length; i++) {
+      var teams = leagues[i].teams || [];
+      for (var j = 0; j < teams.length; j++) {
+        var t = teams[j];
+        map[t.name.toLowerCase()] = {
+          label: t.display_name || t.name,
+          color: t.color || '',
+          textColor: t.text_color || '',
+        };
+      }
+    }
+  }
+  return map;
+}
+
+function teamInfo(teamMap, name) {
+  return name
+    ? (teamMap[name.toLowerCase()] || { label: name, color: '', textColor: '' })
+    : { label: 'TBD', color: '', textColor: '' };
+}
+
+// ── Shared row / block builders ─────────────────────────────────────────────
+function teamStyleAttr(info) {
+  var s = info.color ? 'background:' + info.color + ';' + (info.textColor ? 'color:' + info.textColor + ';' : '') : '';
+  return s ? ' style="' + esc(s) + '"' : '';
+}
+
+// Full game row with team colors and locker room numbers (titleHtml is
+// pre-escaped: the event title on game boards, the calendar name on custom)
+function buildLockerGameRow(timeStr, titleHtml, homeInfo, awayInfo, homeLocker, awayLocker) {
+  return '<tr class="game-row">' +
+    '<td class="td-time">' + timeStr + '</td>' +
+    '<td class="td-title">' + titleHtml + '</td>' +
+    '<td class="td-gap"></td>' +
+    '<td class="td-home"' + teamStyleAttr(homeInfo) + '>' + esc(homeInfo.label) + '</td>' +
+    '<td class="td-locker">' + esc(homeLocker || '') + '</td>' +
+    '<td class="td-gap"></td>' +
+    '<td class="td-away"' + teamStyleAttr(awayInfo) + '>' + esc(awayInfo.label) + '</td>' +
+    '<td class="td-locker">' + esc(awayLocker || '') + '</td>' +
+    '</tr>';
+}
+
+// Simple time + description row (contentHtml is pre-escaped)
+function buildEventRow(timeStr, contentHtml) {
+  return '<tr class="event-row">' +
+    '<td class="td-time">' + timeStr + '</td>' +
+    '<td style="padding:0.4em 0.6em;font-size:1em;">' + contentHtml + '</td>' +
+    '</tr>';
+}
+
 function buildPriceTable(prices) {
   if (!prices || !prices.length) {
     return '<div style="padding:16px;color:rgba(255,255,255,0.7)">Pricing not configured</div>';
@@ -448,6 +551,7 @@ function wrapWithPricing(pageHtml, prices) {
     '</div>';
 }
 
+// ── Render ─────────────────────────────────────────────────────────────────
 function renderGames(games, calMap, teamMap, prices, screenName, showLockerRooms) {
   teamMap = teamMap || {};
   var bannerHtml = (prices && screenName) ? '<div class="skate-banner">' + esc(screenName) + '</div>' : '';
@@ -488,28 +592,14 @@ function renderGames(games, calMap, teamMap, prices, screenName, showLockerRooms
     var grpGames = groups[key];
     for (var j = 0; j < grpGames.length; j++) {
       var g = grpGames[j];
-      var homeInfo = g.home_team ? (teamMap[g.home_team.toLowerCase()] || { label: g.home_team, color: '', textColor: '' }) : { label: 'TBD', color: '', textColor: '' };
-      var awayInfo = g.away_team ? (teamMap[g.away_team.toLowerCase()] || { label: g.away_team, color: '', textColor: '' }) : { label: 'TBD', color: '', textColor: '' };
+      var homeInfo = teamInfo(teamMap, g.home_team);
+      var awayInfo = teamInfo(teamMap, g.away_team);
       if (showLockerRooms) {
-        var homeStyle = homeInfo.color ? 'background:' + homeInfo.color + ';' + (homeInfo.textColor ? 'color:' + homeInfo.textColor + ';' : '') : '';
-        var awayStyle = awayInfo.color ? 'background:' + awayInfo.color + ';' + (awayInfo.textColor ? 'color:' + awayInfo.textColor + ';' : '') : '';
-        tbody += '<tr class="game-row">' +
-          '<td class="td-time">' + fmtTime(g.start_time) + '</td>' +
-          '<td class="td-title">' + esc(g.title || '') + '</td>' +
-          '<td class="td-gap"></td>' +
-          '<td class="td-home"' + (homeStyle ? ' style="' + esc(homeStyle) + '"' : '') + '>' + esc(homeInfo.label) + '</td>' +
-          '<td class="td-locker">' + esc(g.home_locker || '') + '</td>' +
-          '<td class="td-gap"></td>' +
-          '<td class="td-away"' + (awayStyle ? ' style="' + esc(awayStyle) + '"' : '') + '>' + esc(awayInfo.label) + '</td>' +
-          '<td class="td-locker">' + esc(g.away_locker || '') + '</td>' +
-          '</tr>';
+        tbody += buildLockerGameRow(fmtTime(g.start_time), esc(g.title || ''), homeInfo, awayInfo, g.home_locker, g.away_locker);
       } else {
         var matchup = esc(homeInfo.label) + ' vs ' + esc(awayInfo.label);
         var mergedTitle = g.title ? esc(g.title) + ' — ' + matchup : matchup;
-        tbody += '<tr class="event-row">' +
-          '<td class="td-time">' + fmtTime(g.start_time) + '</td>' +
-          '<td style="padding:0.4em 0.6em;font-size:1em;">' + mergedTitle + '</td>' +
-          '</tr>';
+        tbody += buildEventRow(fmtTime(g.start_time), mergedTitle);
       }
     }
     if (gi < groupOrder.length - 1) {
@@ -549,26 +639,21 @@ function renderFigureSkating(screen, events, prices) {
 
   // Filter to today (or from now for flow mode)
   var filtered2 = filterByCalIds(events, screen.calendar_ids);
-  var todayEvents = [];
+  var todayEvents;
   if (oMode === 'flow' && !PREVIEW_DATE) {
     clearInterval(reloadTimer);
     reloadTimer = setInterval(loadScreen, 300000);
     var realNow = new Date();
     var flowDayEnd = new Date(realNow.getFullYear(), realNow.getMonth(), realNow.getDate() + 1);
+    todayEvents = [];
     for (var i = 0; i < filtered2.length; i++) {
       var st = new Date(filtered2[i].start_time);
       if (st >= realNow && st < flowDayEnd) todayEvents.push(filtered2[i]);
     }
   } else {
-    var refNow = getNow();
-    var todayStart = new Date(refNow.getFullYear(), refNow.getMonth(), refNow.getDate());
-    var todayEnd = new Date(todayStart.getTime() + 86400000);
-    for (var i = 0; i < filtered2.length; i++) {
-      var st = new Date(filtered2[i].start_time);
-      if (st >= todayStart && st < todayEnd) todayEvents.push(filtered2[i]);
-    }
+    todayEvents = filterToday(filtered2);
   }
-  todayEvents.sort(function(a, b) { return new Date(a.start_time) - new Date(b.start_time); });
+  todayEvents.sort(byStartTime);
 
   // Consolidate rows: group events sharing the same start minute, show time once
   var rows = [];
@@ -591,10 +676,7 @@ function renderFigureSkating(screen, events, prices) {
     if (!colRows.length) return '';
     var t = '<table class="game-table"><tbody>';
     for (var i = 0; i < colRows.length; i++) {
-      t += '<tr class="event-row">' +
-        '<td class="td-time" style="white-space:nowrap">' + colRows[i].timeStr + '</td>' +
-        '<td style="padding:0.4em 0.6em;font-size:1em;">' + titlesCell(colRows[i].titles) + '</td>' +
-        '</tr>';
+      t += buildEventRow(colRows[i].timeStr, titlesCell(colRows[i].titles));
     }
     t += '</tbody></table>';
     return t;
@@ -604,15 +686,7 @@ function renderFigureSkating(screen, events, prices) {
     var header = '<div class="section-title section-title-gapped">Upcoming Sessions</div>';
     if (!pageRows.length) return header + '<div class="empty"><p>No events scheduled.</p></div>';
     if (!twoCol) {
-      var t = '<table class="game-table"><tbody>';
-      for (var i = 0; i < pageRows.length; i++) {
-        t += '<tr class="event-row">' +
-          '<td class="td-time">' + pageRows[i].timeStr + '</td>' +
-          '<td style="padding:0.4em 0.6em;font-size:1em;">' + titlesCell(pageRows[i].titles) + '</td>' +
-          '</tr>';
-      }
-      t += '</tbody></table>';
-      return header + t;
+      return header + buildColTable(pageRows);
     } else {
       var half = Math.ceil(pageRows.length / 2);
       var col1 = pageRows.slice(0, half);
@@ -622,29 +696,6 @@ function renderFigureSkating(screen, events, prices) {
         '<div style="flex:1;overflow:hidden">' + buildColTable(col2) + '</div>' +
         '</div>';
     }
-  }
-
-  function buildPriceTable() {
-    if (!prices || !prices.length) {
-      return '<div style="padding:16px;color:rgba(255,255,255,0.7)">Pricing not configured</div>';
-    }
-    var html = '';
-    for (var j = 0; j < prices.length; j++) {
-      var labelCell = esc(prices[j].label);
-      if (prices[j].subheading) {
-        labelCell += '<div class="price-subheading">' + esc(prices[j].subheading) + '</div>';
-      }
-      html += '<tr><td class="price-label">' + labelCell + '</td><td class="price-amount">' + esc(prices[j].price) + '</td></tr>';
-    }
-    return '<table class="price-table">' + html + '</table>';
-  }
-
-  function wrapWithPricing(pageHtml) {
-    if (!prices) return pageHtml;
-    return '<div class="skate-wrap">' +
-      '<div class="skate-sessions">' + pageHtml + '</div>' +
-      '<div class="skate-pricing"><div class="section-title">Admission</div>' + buildPriceTable() + '</div>' +
-      '</div>';
   }
 
   var content = document.getElementById('content');
@@ -657,7 +708,7 @@ function renderFigureSkating(screen, events, prices) {
       pages.push(rows.slice(i, i + maxPerPage));
     }
     var pageHtmls = [];
-    for (var i = 0; i < pages.length; i++) pageHtmls.push(wrapWithPricing(buildPage(pages[i])));
+    for (var i = 0; i < pages.length; i++) pageHtmls.push(wrapWithPricing(buildPage(pages[i]), prices));
 
     content.innerHTML = bannerHtml + pageHtmls[0];
     fitTable();
@@ -670,8 +721,8 @@ function renderFigureSkating(screen, events, prices) {
   } else {
     // No rotation — show first maxPerPage rows
     content.innerHTML = bannerHtml + (rows.length
-      ? wrapWithPricing(buildPage(rows.slice(0, maxPerPage)))
-      : wrapWithPricing('<div class="empty"><p>No events scheduled for today.</p></div>'));
+      ? wrapWithPricing(buildPage(rows.slice(0, maxPerPage)), prices)
+      : wrapWithPricing('<div class="empty"><p>No events scheduled for today.</p></div>', prices));
     fitTable();
   }
 }
@@ -700,8 +751,13 @@ function fitTable() {
 
 // ── Load data ──────────────────────────────────────────────────────────────
 function loadScreen() {
+  // Stop timers from the previous render — a screen switched away from
+  // figure-skating rotation or a webpage must not keep its old timer firing
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+  if (webpageTimer) { clearTimeout(webpageTimer); webpageTimer = null; }
   if (reloadTimer) { clearInterval(reloadTimer); }
   reloadTimer = setInterval(loadScreen, 60000);
+
   get('/api/screens', function(err, screens) {
     if (err || !screens) return;
     var screen = null;
@@ -718,55 +774,24 @@ function loadScreen() {
     }
     bgEl.style.opacity = (screen.bg_opacity != null ? screen.bg_opacity : 100) / 100;
 
+    // Undo the announcement layout overrides in case the type changed
+    var contentEl = document.getElementById('content');
+    contentEl.style.padding = '';
+
     var dtype = screen.display_type;
 
     if (dtype === 'games') {
-      get('/api/games', function(err2, games) {
-        if (err2) return;
-        var now = getNow();
-        var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        var todayEnd = new Date(todayStart.getTime() + 86400000);
-        var filtered = [];
-        for (var i = 0; i < games.length; i++) {
-          var s = new Date(games[i].start_time);
-          if (!games[i].is_skate && s >= todayStart && s < todayEnd) filtered.push(games[i]);
-        }
+      getAll(['/api/games', '/api/calendars', '/api/leagues'], function(results) {
+        var games = results[0];
+        if (!games) return;
+        var filtered = filterToday(games.filter(function(g) { return !g.is_skate; }));
         filtered = filterByCalIds(filtered, screen.calendar_ids);
-        get('/api/calendars', function(err3, calendars) {
-          var calMap = {};
-          if (calendars) {
-            for (var i = 0; i < calendars.length; i++) {
-              calMap[String(calendars[i].id)] = calendars[i].name;
-            }
-          }
-          get('/api/leagues', function(err4, leagues) {
-            var teamMap = {};
-            if (leagues) {
-              for (var i = 0; i < leagues.length; i++) {
-                var teams = leagues[i].teams || [];
-                for (var j = 0; j < teams.length; j++) {
-                  var t = teams[j];
-                  teamMap[t.name.toLowerCase()] = {
-                    label: t.display_name || t.name,
-                    color: t.color || '',
-                    textColor: t.text_color || '',
-                  };
-                }
-              }
-            }
-            var showLockerRooms = screen.show_locker_rooms !== false;
-            if (screen.show_pricing) {
-              get('/api/skate-prices', function(err5, prices) {
-                var selectedIds = screen.pricing_ids || [];
-                var filteredPrices = (prices || []).filter(function(p) { return selectedIds.indexOf(p.id) !== -1; });
-                renderGames(filtered, calMap, teamMap, filteredPrices, screen.name, showLockerRooms);
-                fitTable();
-              });
-            } else {
-              renderGames(filtered, calMap, teamMap, null, null, showLockerRooms);
-              fitTable();
-            }
-          });
+        var calMap = buildCalMap(results[1]);
+        var teamMap = buildTeamMap(results[2]);
+        var showLockerRooms = screen.show_locker_rooms !== false;
+        loadPricesFor(screen, function(prices) {
+          renderGames(filtered, calMap, teamMap, prices, prices ? screen.name : null, showLockerRooms);
+          fitTable();
         });
       });
 
@@ -776,7 +801,7 @@ function loadScreen() {
       // date bar working and keeps in-progress sessions visible until they end.
       var skateNow = getNow();
       get('/api/skate-sessions?from=' + encodeURIComponent(skateNow.toISOString()), function(err2, sessions) {
-        function finishSkate(prices) {
+        loadPricesFor(screen, function(prices) {
           var daysAhead = screen.days_ahead != null ? screen.days_ahead : 14;
           var cutoff = new Date(skateNow.getTime() + daysAhead * 86400000);
           var list = [];
@@ -788,16 +813,7 @@ function loadScreen() {
           }
           list = filterByCalIds(list, screen.calendar_ids);
           renderSkate(list, prices, screen.name);
-        }
-        if (screen.show_pricing) {
-          get('/api/skate-prices', function(err3, prices) {
-            var selectedIds = screen.pricing_ids || [];
-            var filteredPrices = (prices || []).filter(function(p) { return selectedIds.indexOf(p.id) !== -1; });
-            finishSkate(filteredPrices);
-          });
-        } else {
-          finishSkate(null);
-        }
+        });
       });
 
     } else if (dtype === 'webpage') {
@@ -811,10 +827,10 @@ function loadScreen() {
           '<iframe id="' + iframeId + '" src="' + esc(screen.webpage_url) + '" style="width:' + wpWidth + '%;height:' + Math.round(100 / wpZoom) + '%;border:none;flex-shrink:0;transform:scale(' + wpZoom + ');transform-origin:top center;" allowfullscreen></iframe>' +
           '</div>';
         if (wpRefresh > 0) {
-          setTimeout(function reloadFrame() {
+          webpageTimer = setTimeout(function reloadFrame() {
             var f = document.getElementById(iframeId);
             if (f) f.src = f.src;
-            setTimeout(reloadFrame, wpRefresh * 60000);
+            webpageTimer = setTimeout(reloadFrame, wpRefresh * 60000);
           }, wpRefresh * 60000);
         }
       } else {
@@ -825,227 +841,119 @@ function loadScreen() {
     } else if (dtype === 'rink_events') {
       get('/api/rink-events', function(err2, events) {
         if (err2 || !events) return;
-        var now = getNow();
-        var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        var todayEnd = new Date(todayStart.getTime() + 86400000);
-        var filtered2 = filterByCalIds(events, screen.calendar_ids);
-        var todayEvents = [];
-        for (var i = 0; i < filtered2.length; i++) {
-          var s = new Date(filtered2[i].start_time);
-          if (s >= todayStart && s < todayEnd) todayEvents.push(filtered2[i]);
-        }
-        todayEvents.sort(function(a, b) { return new Date(a.start_time) - new Date(b.start_time); });
-        function buildHtml(withPricing) {
-          var scheduleHeader = '<div class="section-title section-title-gapped">Schedule</div>';
+        var todayEvents = filterToday(filterByCalIds(events, screen.calendar_ids));
+        todayEvents.sort(byStartTime);
+        loadPricesFor(screen, function(prices) {
+          var scheduleHeader = prices ? '<div class="section-title section-title-gapped">Schedule</div>' : '';
+          var html;
           if (todayEvents.length === 0) {
-            return (withPricing ? scheduleHeader : '') +
-              '<div class="empty"><p>No events scheduled for today.</p></div>';
+            html = scheduleHeader + '<div class="empty"><p>No events scheduled for today.</p></div>';
+          } else {
+            var tbody = '';
+            if (!prices) {
+              tbody += '<tr class="col-header-row"><td class="col-cal-name" colspan="2">Rink Events</td></tr>';
+            }
+            for (var i = 0; i < todayEvents.length; i++) {
+              var ev = todayEvents[i];
+              tbody += buildEventRow(fmtTime(ev.start_time), esc(ev.raw_title || ev.title || ''));
+            }
+            html = scheduleHeader + '<table class="game-table"><tbody>' + tbody + '</tbody></table>';
           }
-          var html = '<table class="game-table"><tbody>';
-          if (!withPricing) {
-            html += '<tr class="col-header-row"><td class="col-cal-name" colspan="2">Rink Events</td></tr>';
-          }
-          for (var i = 0; i < todayEvents.length; i++) {
-            var ev = todayEvents[i];
-            var timeStr = fmtTime(ev.start_time);
-            var title = ev.raw_title || ev.title || '';
-            html += '<tr class="event-row">' +
-              '<td class="td-time">' + timeStr + '</td>' +
-              '<td style="padding:0.4em 0.6em;font-size:1em;">' + esc(title) + '</td>' +
-              '</tr>';
-          }
-          html += '</tbody></table>';
-          return (withPricing ? scheduleHeader : '') + html;
-        }
-        function finishRinkEvents(prices) {
           var bannerHtml = (prices && screen.name) ? '<div class="skate-banner">' + esc(screen.name) + '</div>' : '';
-          document.getElementById('content').innerHTML = bannerHtml + wrapWithPricing(buildHtml(!!prices), prices);
+          document.getElementById('content').innerHTML = bannerHtml + wrapWithPricing(html, prices);
           fitTable();
-        }
-        if (screen.show_pricing) {
-          get('/api/skate-prices', function(err3, prices) {
-            var selectedIds = screen.pricing_ids || [];
-            var filteredPrices = (prices || []).filter(function(p) { return selectedIds.indexOf(p.id) !== -1; });
-            finishRinkEvents(filteredPrices);
-          });
-        } else {
-          finishRinkEvents(null);
-        }
+        });
       });
 
     } else if (dtype === 'figure_skating') {
       get('/api/figure-skating', function(err2, events) {
         if (err2 || !events) return;
-        if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
-
-        if (screen.show_pricing) {
-          get('/api/skate-prices', function(err3, prices) {
-            var selectedIds = screen.pricing_ids || [];
-            var filtered = (prices || []).filter(function(p) { return selectedIds.indexOf(p.id) !== -1; });
-            renderFigureSkating(screen, events, filtered);
-          });
-        } else {
-          renderFigureSkating(screen, events, null);
-        }
+        loadPricesFor(screen, function(prices) {
+          renderFigureSkating(screen, events, prices);
+        });
       });
 
     } else if (dtype === 'custom') {
       var customNow = getNow();
-      get('/api/games', function(err2, games) {
-        get('/api/rink-events', function(err3, rinkEvents) {
-          get('/api/figure-skating', function(err4, figEvents) {
-            get('/api/skate-sessions?from=' + encodeURIComponent(new Date(customNow.getFullYear(), customNow.getMonth(), customNow.getDate()).toISOString()), function(err8, skateSessions) {
-            get('/api/calendars', function(err5, calendars) {
-              get('/api/leagues', function(err6, leagues) {
-                var now = getNow();
-                var todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-                var todayEnd = new Date(todayStart.getTime() + 86400000);
+      var dayStartIso = new Date(customNow.getFullYear(), customNow.getMonth(), customNow.getDate()).toISOString();
+      getAll([
+        '/api/games',
+        '/api/rink-events',
+        '/api/figure-skating',
+        '/api/skate-sessions?from=' + encodeURIComponent(dayStartIso),
+        '/api/calendars',
+        '/api/leagues',
+      ], function(results) {
+        var games = results[0], rinkEvents = results[1], figEvents = results[2], skateSessions = results[3];
+        var calMap = buildCalMap(results[4]);
+        var teamMap = buildTeamMap(results[5]);
 
-                var calMap = {};
-                if (calendars) {
-                  for (var i = 0; i < calendars.length; i++) {
-                    calMap[String(calendars[i].id)] = calendars[i].name;
-                  }
-                }
+        function todayScoped(list) {
+          return list ? filterToday(filterByCalIds(list, screen.calendar_ids)) : [];
+        }
 
-                var teamMap = {};
-                if (leagues) {
-                  for (var i = 0; i < leagues.length; i++) {
-                    var teams = leagues[i].teams || [];
-                    for (var j = 0; j < teams.length; j++) {
-                      var t = teams[j];
-                      teamMap[t.name.toLowerCase()] = {
-                        label: t.display_name || t.name,
-                        color: t.color || '',
-                        textColor: t.text_color || '',
-                      };
-                    }
-                  }
-                }
+        var items = [];
+        var i, ev;
+        var fg = todayScoped(games);
+        for (i = 0; i < fg.length; i++) {
+          var g = fg[i];
+          items.push({ start_time: g.start_time, kind: g.is_skate ? 'skate' : 'game',
+            title: g.is_skate ? ('Public Skate: ' + fmtTime(g.start_time) + ' – ' + fmtTime(g.end_time)) : (g.title || ''),
+            calendar_id: g.calendar_id,
+            home_team: g.home_team, away_team: g.away_team,
+            home_locker: g.home_locker, away_locker: g.away_locker });
+        }
+        var fr = todayScoped(rinkEvents);
+        for (i = 0; i < fr.length; i++) {
+          ev = fr[i];
+          items.push({ start_time: ev.start_time, kind: 'event',
+            title: ev.raw_title || ev.title || '', calendar_id: ev.calendar_id });
+        }
+        var ff = todayScoped(figEvents);
+        for (i = 0; i < ff.length; i++) {
+          ev = ff[i];
+          items.push({ start_time: ev.start_time, kind: 'figure',
+            title: ev.raw_title || ev.title || '', calendar_id: ev.calendar_id });
+        }
+        var fs = todayScoped(skateSessions);
+        for (i = 0; i < fs.length; i++) {
+          ev = fs[i];
+          items.push({ start_time: ev.start_time, kind: 'event',
+            title: 'Public Skate: ' + fmtTime(ev.start_time) + ' – ' + fmtTime(ev.end_time), calendar_id: ev.calendar_id });
+        }
 
-                var items = [];
+        items.sort(byStartTime);
 
-                if (games) {
-                  var fg = filterByCalIds(games, screen.calendar_ids);
-                  for (var i = 0; i < fg.length; i++) {
-                    var g = fg[i];
-                    var st = new Date(g.start_time);
-                    if (st >= todayStart && st < todayEnd) {
-                      items.push({ start_time: g.start_time, kind: g.is_skate ? 'skate' : 'game',
-                        title: g.is_skate ? ('Public Skate: ' + fmtTime(g.start_time) + ' – ' + fmtTime(g.end_time)) : (g.title || ''),
-                        calendar_id: g.calendar_id,
-                        home_team: g.home_team, away_team: g.away_team,
-                        home_locker: g.home_locker, away_locker: g.away_locker });
-                    }
-                  }
-                }
-                if (rinkEvents) {
-                  var fr = filterByCalIds(rinkEvents, screen.calendar_ids);
-                  for (var i = 0; i < fr.length; i++) {
-                    var ev = fr[i];
-                    var st = new Date(ev.start_time);
-                    if (st >= todayStart && st < todayEnd) {
-                      items.push({ start_time: ev.start_time, kind: 'event',
-                        title: ev.raw_title || ev.title || '', calendar_id: ev.calendar_id });
-                    }
-                  }
-                }
-                if (figEvents) {
-                  var ff = filterByCalIds(figEvents, screen.calendar_ids);
-                  for (var i = 0; i < ff.length; i++) {
-                    var ev = ff[i];
-                    var st = new Date(ev.start_time);
-                    if (st >= todayStart && st < todayEnd) {
-                      items.push({ start_time: ev.start_time, kind: 'figure',
-                        title: ev.raw_title || ev.title || '', calendar_id: ev.calendar_id });
-                    }
-                  }
-                }
-                if (skateSessions) {
-                  var fs = filterByCalIds(skateSessions, screen.calendar_ids);
-                  for (var i = 0; i < fs.length; i++) {
-                    var ev = fs[i];
-                    var st = new Date(ev.start_time);
-                    if (st >= todayStart && st < todayEnd) {
-                      items.push({ start_time: ev.start_time, kind: 'event',
-                        title: 'Public Skate: ' + fmtTime(ev.start_time) + ' – ' + fmtTime(ev.end_time), calendar_id: ev.calendar_id });
-                    }
-                  }
-                }
+        loadPricesFor(screen, function(prices) {
+          var bannerHtml = screen.name ? '<div class="skate-banner">' + esc(screen.name) + '</div>' : '';
+          var header = '<div class="section-title section-title-gapped">Events</div>';
 
-                items.sort(function(a, b) { return new Date(a.start_time) - new Date(b.start_time); });
+          var customHtml;
+          if (items.length === 0) {
+            customHtml = '<div class="empty"><div class="empty-icon">&#128197;</div><p>No events scheduled for today</p></div>';
+          } else {
+            var showLockerRooms = screen.show_locker_rooms !== false;
+            var tbody = '';
+            for (var k = 0; k < items.length; k++) {
+              var it = items[k];
+              var timeStr = fmtTime(it.start_time);
+              if (it.kind === 'game' && showLockerRooms) {
+                var calName = calMap[String(it.calendar_id)] || '';
+                tbody += buildLockerGameRow(timeStr, esc(calName),
+                  teamInfo(teamMap, it.home_team), teamInfo(teamMap, it.away_team),
+                  it.home_locker, it.away_locker);
+              } else if (it.kind === 'game') {
+                var matchup = esc(teamInfo(teamMap, it.home_team).label) + ' vs ' + esc(teamInfo(teamMap, it.away_team).label);
+                tbody += buildEventRow(timeStr, matchup);
+              } else {
+                tbody += buildEventRow(timeStr, esc(it.title));
+              }
+            }
+            customHtml = '<table class="game-table"><tbody>' + tbody + '</tbody></table>';
+          }
 
-                function finishCustom(customHtml, prices) {
-                  var bannerHtml = screen.name ? '<div class="skate-banner">' + esc(screen.name) + '</div>' : '';
-                  var header = '<div class="section-title section-title-gapped">Events</div>';
-                  document.getElementById('content').innerHTML = bannerHtml + wrapWithPricing(header + customHtml, prices);
-                  fitTable();
-                }
-
-                if (items.length === 0) {
-                  var emptyHtml = '<div class="empty"><div class="empty-icon">&#128197;</div><p>No events scheduled for today</p></div>';
-                  if (screen.show_pricing) {
-                    get('/api/skate-prices', function(err7, prices) {
-                      var selectedIds = screen.pricing_ids || [];
-                      var filteredPrices = (prices || []).filter(function(p) { return selectedIds.indexOf(p.id) !== -1; });
-                      finishCustom(emptyHtml, filteredPrices);
-                    });
-                  } else {
-                    finishCustom(emptyHtml, null);
-                  }
-                  return;
-                }
-
-                var showLockerRooms = screen.show_locker_rooms !== false;
-                var tbody = '';
-                for (var i = 0; i < items.length; i++) {
-                  var it = items[i];
-                  var calName = calMap[String(it.calendar_id)] || '';
-                  var timeStr = fmtTime(it.start_time);
-                  if (it.kind === 'game' && showLockerRooms) {
-                    var homeInfo = it.home_team ? (teamMap[it.home_team.toLowerCase()] || { label: it.home_team, color: '', textColor: '' }) : { label: 'TBD', color: '', textColor: '' };
-                    var awayInfo = it.away_team ? (teamMap[it.away_team.toLowerCase()] || { label: it.away_team, color: '', textColor: '' }) : { label: 'TBD', color: '', textColor: '' };
-                    var homeStyle = homeInfo.color ? 'background:' + homeInfo.color + ';' + (homeInfo.textColor ? 'color:' + homeInfo.textColor + ';' : '') : '';
-                    var awayStyle = awayInfo.color ? 'background:' + awayInfo.color + ';' + (awayInfo.textColor ? 'color:' + awayInfo.textColor + ';' : '') : '';
-                    tbody += '<tr class="game-row">' +
-                      '<td class="td-time">' + timeStr + '</td>' +
-                      '<td class="td-title">' + esc(calName) + '</td>' +
-                      '<td class="td-gap"></td>' +
-                      '<td class="td-home"' + (homeStyle ? ' style="' + esc(homeStyle) + '"' : '') + '>' + esc(homeInfo.label) + '</td>' +
-                      '<td class="td-locker">' + esc(it.home_locker || '') + '</td>' +
-                      '<td class="td-gap"></td>' +
-                      '<td class="td-away"' + (awayStyle ? ' style="' + esc(awayStyle) + '"' : '') + '>' + esc(awayInfo.label) + '</td>' +
-                      '<td class="td-locker">' + esc(it.away_locker || '') + '</td>' +
-                      '</tr>';
-                  } else if (it.kind === 'game') {
-                    var homeInfo = it.home_team ? (teamMap[it.home_team.toLowerCase()] || { label: it.home_team }) : { label: 'TBD' };
-                    var awayInfo = it.away_team ? (teamMap[it.away_team.toLowerCase()] || { label: it.away_team }) : { label: 'TBD' };
-                    var matchup = esc(homeInfo.label) + ' vs ' + esc(awayInfo.label);
-                    tbody += '<tr class="event-row">' +
-                      '<td class="td-time">' + timeStr + '</td>' +
-                      '<td style="padding:0.4em 0.6em;font-size:1em;">' + matchup + '</td>' +
-                      '</tr>';
-                  } else {
-                    tbody += '<tr class="event-row">' +
-                      '<td class="td-time">' + timeStr + '</td>' +
-                      '<td style="padding:0.4em 0.6em;font-size:1em;">' + esc(it.title) + '</td>' +
-                      '</tr>';
-                  }
-                }
-                var customHtml = '<table class="game-table"><tbody>' + tbody + '</tbody></table>';
-                if (screen.show_pricing) {
-                  get('/api/skate-prices', function(err7, prices) {
-                    var selectedIds = screen.pricing_ids || [];
-                    var filteredPrices = (prices || []).filter(function(p) { return selectedIds.indexOf(p.id) !== -1; });
-                    finishCustom(customHtml, filteredPrices);
-                  });
-                } else {
-                  finishCustom(customHtml, null);
-                }
-              });
-            });
-            });
-          });
+          document.getElementById('content').innerHTML = bannerHtml + wrapWithPricing(header + customHtml, prices);
+          fitTable();
         });
       });
 

@@ -3,7 +3,8 @@ import { useApi, apiFetch } from '../../hooks/useApi';
 import adminStyles from './AdminTab.module.css';
 import tStyles from './ScreensTab.module.css';
 import s from './AnnouncementTab.module.css';
-import sStyles from './ScreensSection.module.css';
+import Thumbnail from './Thumbnail';
+import { useScreenCards, InUseBadge, EyeButton, EyeHint } from './screenCard';
 
 const FONTS = [
   'Arial', 'Verdana', 'Trebuchet MS', 'Georgia',
@@ -20,21 +21,6 @@ function defaultElements() {
     { id: makeId(), type: 'text', text: 'Body text goes here', color: '#ffffff', font: 'Arial', size: 54, bold: false, align: 'center', x: 50, y: 50 },
     { id: makeId(), type: 'text', text: 'Footer', color: '#dddddd', font: 'Arial', size: 36, bold: false, align: 'center', x: 50, y: 82 },
   ];
-}
-
-// ── Thumbnail ──────────────────────────────────────────────────────────────
-function Thumbnail({ screenId }) {
-  const wrapRef = useRef(null);
-  const [scale, setScale] = useState(0.2);
-  useEffect(() => {
-    if (!wrapRef.current) return;
-    setScale(wrapRef.current.offsetWidth / 1920);
-  }, []);
-  return (
-    <div className={tStyles.thumbWrap} ref={wrapRef} style={{ '--thumb-scale': scale }}>
-      <iframe src={`/tv/${screenId}`} title={`Screen ${screenId}`} scrolling="no" />
-    </div>
-  );
 }
 
 // ── Canvas Editor ──────────────────────────────────────────────────────────
@@ -471,26 +457,10 @@ export default function AnnouncementTab() {
   const { data: backgrounds } = useApi('/backgrounds');
   const { data: displays } = useApi('/displays');
   const [editingScreen, setEditingScreen] = useState(null);
-  const [eyeHint, setEyeHint] = useState(null); // null | {} (new) | screen object
+  const { eyeHint, assignedDisplayName, toggleVisible, deleteScreen } =
+    useScreenCards({ displays, reload, confirmMessage: 'Delete this announcement screen?' });
 
   const screens = (allScreens || []).filter(sc => sc.display_type === 'announcement');
-
-  function assignedDisplayName(screenId) {
-    return (displays || []).find((d) => d.screen_id === screenId)?.name || null;
-  }
-
-  async function toggleVisible(sc) {
-    const inUse = assignedDisplayName(sc.id);
-    if (inUse) { setEyeHint(sc.id); setTimeout(() => setEyeHint(null), 3000); return; }
-    await apiFetch(`/screens/${sc.id}`, { method: 'PATCH', body: JSON.stringify({ visible: !sc.visible }) });
-    reload();
-  }
-
-  async function deleteScreen(id) {
-    if (!confirm('Delete this announcement screen?')) return;
-    await apiFetch(`/screens/${id}`, { method: 'DELETE' });
-    reload();
-  }
 
   if (editingScreen !== null) {
     return (
@@ -520,18 +490,14 @@ export default function AnnouncementTab() {
                 {sc.announcement_data?.elements?.length || 0} element{sc.announcement_data?.elements?.length !== 1 ? 's' : ''}
                 {sc.bg_filename && ` · ${sc.bg_label || 'background'} @ ${sc.bg_opacity ?? 100}%`}
               </div>
-              {(() => { const d = assignedDisplayName(sc.id); return d ? <div className={sStyles.inUseBadge}>● {d}</div> : null; })()}
+              <InUseBadge name={assignedDisplayName(sc.id)} />
               <div className={tStyles.cardActions}>
                 <a href={`/tv/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost}>Preview</a>
                 <button className={adminStyles.btnGhost} onClick={() => setEditingScreen(sc)}>Edit</button>
-                <button
-                  className={assignedDisplayName(sc.id) ? sStyles.eyeDisabled : sc.visible !== false ? sStyles.eyeOn : sStyles.eyeOff}
-                  onClick={() => toggleVisible(sc)}
-                  title={assignedDisplayName(sc.id) ? `In use by ${assignedDisplayName(sc.id)} — unassign first` : sc.visible !== false ? 'Visible in Displays tab — click to hide' : 'Hidden from Displays tab — click to show'}
-                >{sc.visible !== false ? '👁' : '🚫'}</button>
+                <EyeButton screen={sc} assignedName={assignedDisplayName(sc.id)} onToggle={toggleVisible} />
                 <button className={adminStyles.btnDanger} onClick={() => deleteScreen(sc.id)}>Delete</button>
               </div>
-              {eyeHint === sc.id && <div className={sStyles.eyeHintText}>In use by {assignedDisplayName(sc.id)} — unassign it first to hide.</div>}
+              <EyeHint show={eyeHint === sc.id} name={assignedDisplayName(sc.id)} />
             </div>
           </div>
         ))}

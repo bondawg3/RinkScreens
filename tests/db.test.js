@@ -91,6 +91,70 @@ describe('JSON store', () => {
   });
 });
 
+describe('transaction', () => {
+  it('batches many operations into a single save', () => {
+    db.insert('screens', { name: 'Before' }); // establishes db.json
+    db.transaction((tx) => {
+      tx.insert('screens', { name: 'A' });
+      tx.insert('screens', { name: 'B' });
+      tx.update('screens', 1, { name: 'Before2' });
+    });
+    // One save → the .bak holds the exact pre-transaction state
+    const bak = JSON.parse(fs.readFileSync(`${dbFilePath()}.bak`, 'utf8'));
+    expect(bak.screens).toHaveLength(1);
+    expect(bak.screens[0].name).toBe('Before');
+    expect(db.findAll('screens')).toHaveLength(3);
+    expect(db.findById('screens', 1)).toMatchObject({ name: 'Before2' });
+  });
+
+  it('reads inside a transaction see earlier writes from the same transaction', () => {
+    const result = db.transaction((tx) => {
+      tx.upsertByField('activities', 'calendar_uid', 'u1', { calendar_uid: 'u1', title: 'first' });
+      const existing = tx.findByField('activities', 'calendar_uid', 'u1');
+      tx.upsertByField('activities', 'calendar_uid', 'u1', { calendar_uid: 'u1', title: `${existing.title}+second` });
+      return tx.findAll('activities').length;
+    });
+    expect(result).toBe(1);
+    expect(db.findAll('activities')[0].title).toBe('first+second');
+  });
+
+  it('persists nothing when the callback throws', () => {
+    db.insert('screens', { name: 'Kept' });
+    expect(() =>
+      db.transaction((tx) => {
+        tx.insert('screens', { name: 'Lost' });
+        throw new Error('boom');
+      })
+    ).toThrow('boom');
+    const rows = db.findAll('screens');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe('Kept');
+  });
+});
+
+describe('cache invalidation', () => {
+  it('picks up external writes to db.json', () => {
+    db.insert('screens', { name: 'A' }); // populates the in-memory cache
+    const onDisk = JSON.parse(fs.readFileSync(dbFilePath(), 'utf8'));
+    onDisk.screens.push({ id: 99, name: 'External' });
+    fs.writeFileSync(dbFilePath(), JSON.stringify(onDisk, null, 2), 'utf8');
+
+    const rows = db.findAll('screens');
+    expect(rows).toHaveLength(2);
+    expect(rows[1].name).toBe('External');
+  });
+
+  it('returned rows are copies — mutating them does not corrupt the store', () => {
+    db.insert('screens', { name: 'A' });
+    const row = db.findAll('screens')[0];
+    row.name = 'Mutated';
+    expect(db.findAll('screens')[0].name).toBe('A');
+    const byId = db.findById('screens', 1);
+    byId.name = 'Mutated';
+    expect(db.findById('screens', 1).name).toBe('A');
+  });
+});
+
 describe('games -> activities migration', () => {
   // Older db.json files (pre-rename) store hockey games, rink events, figure
   // skating events, and public skate sessions under a "games" key. Existing

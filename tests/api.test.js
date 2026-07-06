@@ -379,3 +379,56 @@ describe('skate prices', () => {
     expect(list.body.map((p) => p.label)).toEqual(['Child', 'Adult']);
   });
 });
+
+describe('custom screen data sources', () => {
+  // The Custom screen's TV renderer (server/tv.html) builds its combined agenda by
+  // fetching /api/games, /api/rink-events, /api/figure-skating, and /api/skate-sessions,
+  // then filtering each by the screen's selected calendar_ids. A prior bug showed no
+  // Public Skate sessions on Custom screens because /api/games silently excludes
+  // non-hockey calendars — the sessions never reached the client at all. This pins
+  // down the per-endpoint calendar scoping the renderer depends on.
+  it('excludes public-skate sessions from /api/games but includes them via /api/skate-sessions', async () => {
+    const skateCal = db.insert('calendars', { name: 'Public Skate', type: 'public_skates', url: 'http://s' });
+    const future = new Date(Date.now() + 3600000).toISOString();
+    const end = new Date(Date.now() + 5400000).toISOString();
+    db.insert('games', { is_skate: 1, calendar_id: skateCal.id, start_time: future, end_time: end });
+
+    const games = await request(app).get('/api/games');
+    expect(games.body).toHaveLength(0);
+
+    const sessions = await request(app).get('/api/skate-sessions');
+    expect(sessions.body).toHaveLength(1);
+    expect(sessions.body[0].calendar_id).toBe(skateCal.id);
+  });
+
+  it('scopes each of the four Custom-screen data sources to their own calendar_ids', async () => {
+    const hockeyCal = db.insert('calendars', { name: 'Hockey', type: 'hockey_games', url: 'http://h' });
+    const otherHockeyCal = db.insert('calendars', { name: 'Hockey 2', type: 'hockey_games', url: 'http://h2' });
+    const skateCal = db.insert('calendars', { name: 'Skate', type: 'public_skates', url: 'http://s' });
+    const rinkCal = db.insert('calendars', { name: 'Rink', type: 'rink_events', url: 'http://r' });
+    const figureCal = db.insert('calendars', { name: 'Figure', type: 'figure_skating', url: 'http://f' });
+    const future = new Date(Date.now() + 3600000).toISOString();
+
+    db.insert('games', { calendar_id: hockeyCal.id, start_time: future, title: 'included-game' });
+    db.insert('games', { calendar_id: otherHockeyCal.id, start_time: future, title: 'excluded-game' });
+    db.insert('games', { is_skate: 1, calendar_id: skateCal.id, start_time: future, end_time: future });
+    db.insert('games', { calendar_id: rinkCal.id, start_time: future, title: 'rink-event' });
+    db.insert('games', { calendar_id: figureCal.id, start_time: future, title: 'figure-event' });
+
+    // A Custom screen configured with calendar_ids limited to one of each source it can
+    // pull from, deliberately leaving out otherHockeyCal.
+    const selected = [hockeyCal.id, skateCal.id, rinkCal.id, figureCal.id];
+    const filterByCalIds = (items, calIds) =>
+      (!calIds || !calIds.length) ? items : items.filter((x) => calIds.includes(x.calendar_id));
+
+    const games = await request(app).get('/api/games');
+    const rinkEvents = await request(app).get('/api/rink-events');
+    const figureEvents = await request(app).get('/api/figure-skating');
+    const sessions = await request(app).get('/api/skate-sessions');
+
+    expect(filterByCalIds(games.body, selected).map((g) => g.title)).toEqual(['included-game']);
+    expect(filterByCalIds(sessions.body, selected)).toHaveLength(1);
+    expect(filterByCalIds(rinkEvents.body, selected).map((e) => e.title)).toEqual(['rink-event']);
+    expect(filterByCalIds(figureEvents.body, selected).map((e) => e.title)).toEqual(['figure-event']);
+  });
+});

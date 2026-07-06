@@ -87,6 +87,14 @@
   text-align: right;
 }
 
+.priceTable tr:last-child .priceLabel {
+  border-bottom-left-radius: 6px;
+}
+
+.priceTable tr:last-child .priceAmount {
+  border-bottom-right-radius: 6px;
+}
+
 .none {
   color: rgba(255,255,255,0.7);
   font-size: 1.2rem;

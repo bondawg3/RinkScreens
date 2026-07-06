@@ -2,6 +2,17 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.16.0] — 2026-07-05
+
+### Added
+- **Standardized pricing layout** — Game Board, Rink Events, and Custom screens now show the same ice-blue screen-name banner and aligned section-title header as Figure Skating/Public Skate whenever "Show Pricing" is enabled, instead of an unlabeled table sitting next to the Admission panel
+- **Two-column layout disables pricing** — Figure Skating's "Show Pricing" checkbox is now disabled (and unchecked) while the two-column layout is selected, since there isn't room for both; the label grays out with an italic explanation
+- **Custom screens now include Public Skate sessions** — the Custom screen builder was missing a call to `/api/skate-sessions`, so Public Skate sessions (which live in the `games` table under `public_skates` calendars, excluded from `/api/games`) never appeared even when their calendar was selected
+- **Regression tests for Custom screen data sources** — pin down that `/api/games` intentionally excludes non-hockey calendars, and that each of the four endpoints the Custom screen aggregates (`games`, `rink-events`, `figure-skating`, `skate-sessions`) is correctly scoped by the screen's selected calendars
+
+### Fixed
+- **Public Skate admission table rounded corners** — `border-collapse: collapse` on the client-facing Public Skate page prevented the parent's `overflow: hidden` from clipping the last row's corners; added explicit `border-bottom-*-radius` to the last row's cells
+
 ## [1.15.0] — 2026-07-05
 
 ### Added

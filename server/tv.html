@@ -170,7 +170,7 @@ header {
 
 /* ── Public Skate ── */
 .skate-banner {
-  background: rgba(6,72,120,0.85);
+  background: #62B0D0;
   color: #fff;
   text-align: left;
   font-size: 2.2em;
@@ -450,11 +450,13 @@ function wrapWithPricing(pageHtml, prices) {
     '</div>';
 }
 
-function renderGames(games, calMap, teamMap, prices) {
+function renderGames(games, calMap, teamMap, prices, screenName) {
   teamMap = teamMap || {};
+  var bannerHtml = (prices && screenName) ? '<div class="skate-banner">' + esc(screenName) + '</div>' : '';
+  var header = prices ? '<div class="section-title section-title-gapped">Today\'s Games</div>' : '';
   if (!games || games.length === 0) {
-    document.getElementById('content').innerHTML =
-      wrapWithPricing('<div class="empty"><div class="empty-icon">&#127944;</div><p>No games scheduled for today</p></div>', prices);
+    document.getElementById('content').innerHTML = bannerHtml +
+      wrapWithPricing(header + '<div class="empty"><div class="empty-icon">&#127944;</div><p>No games scheduled for today</p></div>', prices);
     return;
   }
 
@@ -504,8 +506,8 @@ function renderGames(games, calMap, teamMap, prices) {
     }
   }
 
-  document.getElementById('content').innerHTML =
-    wrapWithPricing('<table class="game-table"><tbody>' + tbody + '</tbody></table>', prices);
+  document.getElementById('content').innerHTML = bannerHtml +
+    wrapWithPricing(header + '<table class="game-table"><tbody>' + tbody + '</tbody></table>', prices);
 }
 
 function renderSkate(sessions, prices, heading) {
@@ -635,7 +637,7 @@ function renderFigureSkating(screen, events, prices) {
   }
 
   var content = document.getElementById('content');
-  var bannerHtml = screen.name ? '<div class="skate-banner" style="background:#62B0D0">' + esc(screen.name) + '</div>' : '';
+  var bannerHtml = screen.name ? '<div class="skate-banner">' + esc(screen.name) + '</div>' : '';
 
   if (oMode === 'rotate' && rows.length > maxPerPage) {
     // Split into pages, rotate on interval
@@ -745,7 +747,7 @@ function loadScreen() {
               get('/api/skate-prices', function(err5, prices) {
                 var selectedIds = screen.pricing_ids || [];
                 var filteredPrices = (prices || []).filter(function(p) { return selectedIds.indexOf(p.id) !== -1; });
-                renderGames(filtered, calMap, teamMap, filteredPrices);
+                renderGames(filtered, calMap, teamMap, filteredPrices, screen.name);
                 fitTable();
               });
             } else {
@@ -821,12 +823,15 @@ function loadScreen() {
           if (s >= todayStart && s < todayEnd) todayEvents.push(filtered2[i]);
         }
         todayEvents.sort(function(a, b) { return new Date(a.start_time) - new Date(b.start_time); });
-        var html = '';
-        if (todayEvents.length === 0) {
-          html = '<div class="empty"><p>No events scheduled for today.</p></div>';
-        } else {
-          html = '<table class="game-table"><tbody>';
-          html += '<tr class="col-header-row"><td class="col-cal-name" colspan="2">Rink Events</td></tr>';
+        function buildHtml(withPricing) {
+          if (todayEvents.length === 0) {
+            return (withPricing ? '<div class="section-title section-title-gapped">Rink Events</div>' : '') +
+              '<div class="empty"><p>No events scheduled for today.</p></div>';
+          }
+          var html = '<table class="game-table"><tbody>';
+          if (!withPricing) {
+            html += '<tr class="col-header-row"><td class="col-cal-name" colspan="2">Rink Events</td></tr>';
+          }
           for (var i = 0; i < todayEvents.length; i++) {
             var ev = todayEvents[i];
             var timeStr = fmtTime(ev.start_time);
@@ -837,9 +842,11 @@ function loadScreen() {
               '</tr>';
           }
           html += '</tbody></table>';
+          return (withPricing ? '<div class="section-title section-title-gapped">Rink Events</div>' : '') + html;
         }
         function finishRinkEvents(prices) {
-          document.getElementById('content').innerHTML = wrapWithPricing(html, prices);
+          var bannerHtml = (prices && screen.name) ? '<div class="skate-banner">' + esc(screen.name) + '</div>' : '';
+          document.getElementById('content').innerHTML = bannerHtml + wrapWithPricing(buildHtml(!!prices), prices);
           fitTable();
         }
         if (screen.show_pricing) {
@@ -870,9 +877,11 @@ function loadScreen() {
       });
 
     } else if (dtype === 'custom') {
+      var customNow = getNow();
       get('/api/games', function(err2, games) {
         get('/api/rink-events', function(err3, rinkEvents) {
           get('/api/figure-skating', function(err4, figEvents) {
+            get('/api/skate-sessions?from=' + encodeURIComponent(new Date(customNow.getFullYear(), customNow.getMonth(), customNow.getDate()).toISOString()), function(err8, skateSessions) {
             get('/api/calendars', function(err5, calendars) {
               get('/api/leagues', function(err6, leagues) {
                 var now = getNow();
@@ -910,7 +919,8 @@ function loadScreen() {
                     var st = new Date(g.start_time);
                     if (st >= todayStart && st < todayEnd) {
                       items.push({ start_time: g.start_time, kind: g.is_skate ? 'skate' : 'game',
-                        title: g.title || '', calendar_id: g.calendar_id,
+                        title: g.is_skate ? ('Public Skate: ' + fmtTime(g.start_time) + ' – ' + fmtTime(g.end_time)) : (g.title || ''),
+                        calendar_id: g.calendar_id,
                         home_team: g.home_team, away_team: g.away_team,
                         home_locker: g.home_locker, away_locker: g.away_locker });
                     }
@@ -938,11 +948,24 @@ function loadScreen() {
                     }
                   }
                 }
+                if (skateSessions) {
+                  var fs = filterByCalIds(skateSessions, screen.calendar_ids);
+                  for (var i = 0; i < fs.length; i++) {
+                    var ev = fs[i];
+                    var st = new Date(ev.start_time);
+                    if (st >= todayStart && st < todayEnd) {
+                      items.push({ start_time: ev.start_time, kind: 'event',
+                        title: 'Public Skate: ' + fmtTime(ev.start_time) + ' – ' + fmtTime(ev.end_time), calendar_id: ev.calendar_id });
+                    }
+                  }
+                }
 
                 items.sort(function(a, b) { return new Date(a.start_time) - new Date(b.start_time); });
 
                 function finishCustom(customHtml, prices) {
-                  document.getElementById('content').innerHTML = wrapWithPricing(customHtml, prices);
+                  var bannerHtml = (prices && screen.name) ? '<div class="skate-banner">' + esc(screen.name) + '</div>' : '';
+                  var header = prices ? '<div class="section-title section-title-gapped">Today\'s Schedule</div>' : '';
+                  document.getElementById('content').innerHTML = bannerHtml + wrapWithPricing(header + customHtml, prices);
                   fitTable();
                 }
 
@@ -1001,6 +1024,7 @@ function loadScreen() {
                   finishCustom(customHtml, null);
                 }
               });
+            });
             });
           });
         });

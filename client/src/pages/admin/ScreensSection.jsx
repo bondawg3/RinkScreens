@@ -306,7 +306,7 @@ export default function ScreensSection({ displayType, calendarType }) {
                   onClick={() => setForm({ ...form, two_column: false })}>Single column</button>
                 <button type="button"
                   className={form.two_column ? s.toggleActive : s.toggleBtn}
-                  onClick={() => setForm({ ...form, two_column: true })}>Two columns <span style={{ opacity: 0.6, fontWeight: 400 }}>(max 12 rows each)</span></button>
+                  onClick={() => setForm({ ...form, two_column: true, show_pricing: false })}>Two columns <span style={{ opacity: 0.6, fontWeight: 400 }}>(max 12 rows each)</span></button>
               </div>
 
               <label className={adminStyles.label}>Overflow</label>
@@ -337,13 +337,21 @@ export default function ScreensSection({ displayType, calendarType }) {
               )}
             </>)}
 
-            <label className={s.calCheckItem} style={{ marginTop: '0.25rem' }}>
+            <label className={s.calCheckItem} style={{ marginTop: '0.25rem', flexWrap: 'wrap' }}>
               <input
                 type="checkbox"
-                checked={form.show_pricing}
+                checked={form.show_pricing && !(displayType === 'figure_skating' && form.two_column)}
+                disabled={displayType === 'figure_skating' && form.two_column}
                 onChange={(e) => setForm({ ...form, show_pricing: e.target.checked })}
               />
-              Show Pricing on this screen
+              <span style={{ color: displayType === 'figure_skating' && form.two_column ? 'var(--text-light)' : undefined }}>
+                Show Pricing on this screen
+              </span>
+              {displayType === 'figure_skating' && form.two_column && (
+                <span style={{ flexBasis: '100%', fontSize: '0.78rem', fontStyle: 'italic', color: 'var(--text-light)' }}>
+                  Unavailable with two-column layout
+                </span>
+              )}
             </label>
 
             {err && <span className={adminStyles.error}>{err}</span>}

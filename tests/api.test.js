@@ -152,6 +152,16 @@ describe('screens', () => {
     const res = await auth(request(app).patch('/api/screens/999')).send({ name: 'X' });
     expect(res.status).toBe(404);
   });
+
+  it('defaults show_locker_rooms to true and allows turning it off', async () => {
+    const created = await auth(request(app).post('/api/screens')).send({ name: 'Game Board' });
+    const list = await request(app).get('/api/screens');
+    expect(list.body.find((s) => s.id === created.body.id).show_locker_rooms).toBe(true);
+
+    await auth(request(app).patch(`/api/screens/${created.body.id}`)).send({ show_locker_rooms: false });
+    const after = await request(app).get('/api/screens');
+    expect(after.body.find((s) => s.id === created.body.id).show_locker_rooms).toBe(false);
+  });
 });
 
 describe('displays', () => {

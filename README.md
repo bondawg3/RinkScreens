@@ -1,4 +1,4 @@
-# RinkScreens — v1.17.0
+# RinkScreens — v1.18.0
 
 Digital signage system for ice rinks. Pulls games from Google Calendar (iCal) and displays them on smart TVs around the facility. An admin panel on any local browser lets staff control what each screen shows and manage locker room assignments, pricing, and backgrounds.
 
@@ -147,11 +147,11 @@ All display pages live at `/tv/:screenId` — plain HTML/CSS/JS with no React or
 
 | Display type | What it shows |
 |---|---|
-| Game Board | Today's games with time, away vs. home team, locker rooms — optional admission pricing panel |
+| Game Board | Today's games with time, away vs. home team, locker rooms (toggleable) — optional admission pricing panel |
 | Public Skate | Heading banner (screen name), upcoming public skate sessions — optional admission pricing panel |
-| Rink Events | Today's rink events in table format — optional admission pricing panel |
+| Rink Events | Today's rink events in table format, "Schedule" subheading — optional admission pricing panel |
 | Figure Skating | Today's figure skating events in table format — optional admission pricing panel |
-| Custom | Combined games/rink events/figure skating for today in one table — optional admission pricing panel |
+| Custom | Combined games/rink events/figure skating/public skate for today in one table, locker rooms toggleable for hockey rows, always shows the screen-name heading and "Events" subheading — optional admission pricing panel |
 | Custom Message | Static text message configured per screen |
 
 Pricing is opt-in per screen via the **Show Pricing** checkbox in each type's Screens section; the selected tiers render in a side panel next to the schedule.

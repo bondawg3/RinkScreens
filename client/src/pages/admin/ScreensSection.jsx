@@ -3,6 +3,13 @@ import { useApi, apiFetch } from '../../hooks/useApi';
 import adminStyles from './AdminTab.module.css';
 import s from './ScreensSection.module.css';
 
+const CAL_TYPE_LABELS = {
+  hockey_games: 'Hockey',
+  public_skates: 'Public Skate',
+  rink_events: 'Rink Events',
+  figure_skating: 'Figure Skating',
+};
+
 function stepDate(dateStr, delta) {
   const d = new Date(dateStr + 'T00:00:00');
   d.setDate(d.getDate() + delta);
@@ -52,7 +59,7 @@ export default function ScreensSection({ displayType, calendarType }) {
   const [previewDates, setPreviewDates] = useState({});
   const [eyeHint, setEyeHint] = useState(null); // screen id showing hint
   const [modal, setModal] = useState(null); // null | 'add' | screen object
-  const [form, setForm] = useState({ name: '', all_calendars: false, calendar_ids: [], background_id: '', bg_opacity: 100, two_column: false, overflow_mode: 'none', rotate_interval: 30, days_ahead: 14, show_pricing: false });
+  const [form, setForm] = useState({ name: '', all_calendars: false, calendar_ids: [], background_id: '', bg_opacity: 100, two_column: false, overflow_mode: 'none', rotate_interval: 30, days_ahead: 14, show_pricing: false, show_locker_rooms: true });
   const [err, setErr] = useState('');
   const [pricingModal, setPricingModal] = useState(null); // screen object being edited for pricing
   const [pricingSelection, setPricingSelection] = useState([]);
@@ -69,7 +76,7 @@ export default function ScreensSection({ displayType, calendarType }) {
   }
 
   function openAdd() {
-    setForm({ name: '', all_calendars: false, calendar_ids: [], background_id: '', bg_opacity: 100, two_column: false, overflow_mode: 'none', rotate_interval: 30, days_ahead: 14, show_pricing: false });
+    setForm({ name: '', all_calendars: false, calendar_ids: [], background_id: '', bg_opacity: 100, two_column: false, overflow_mode: 'none', rotate_interval: 30, days_ahead: 14, show_pricing: false, show_locker_rooms: true });
     setErr('');
     setModal('add');
   }
@@ -87,6 +94,7 @@ export default function ScreensSection({ displayType, calendarType }) {
       rotate_interval: screen.rotate_interval ?? 30,
       days_ahead: screen.days_ahead ?? 14,
       show_pricing: screen.show_pricing || false,
+      show_locker_rooms: screen.show_locker_rooms !== false,
     });
     setErr('');
     setModal(screen);
@@ -132,6 +140,9 @@ export default function ScreensSection({ displayType, calendarType }) {
       background_id: form.background_id || null,
       bg_opacity: form.bg_opacity,
       show_pricing: form.show_pricing,
+      ...((displayType === 'games' || displayType === 'custom') && {
+        show_locker_rooms: form.show_locker_rooms,
+      }),
       ...(displayType === 'figure_skating' && {
         two_column: form.two_column,
         overflow_mode: form.overflow_mode,
@@ -266,6 +277,11 @@ export default function ScreensSection({ displayType, calendarType }) {
                     onChange={() => toggleCal(c.id)}
                   />
                   {c.name}
+                  {!calendarType && (
+                    <span style={{ marginLeft: '0.4em', fontSize: '0.75rem', color: 'var(--text-light)' }}>
+                      ({CAL_TYPE_LABELS[c.type] || c.type})
+                    </span>
+                  )}
                 </label>
               ))}
             </div>
@@ -336,6 +352,32 @@ export default function ScreensSection({ displayType, calendarType }) {
                 </div>
               )}
             </>)}
+
+            {(displayType === 'games' || displayType === 'custom') && (() => {
+              const hasHockeyCalendar = displayType !== 'custom' ? true : (
+                form.all_calendars
+                  ? (allCalendars || []).some((c) => c.type === 'hockey_games')
+                  : form.calendar_ids.some((id) => (allCalendars || []).find((c) => c.id === id)?.type === 'hockey_games')
+              );
+              return (
+                <label className={s.calCheckItem} style={{ marginTop: '0.25rem', flexWrap: 'wrap' }}>
+                  <input
+                    type="checkbox"
+                    checked={form.show_locker_rooms && hasHockeyCalendar}
+                    disabled={!hasHockeyCalendar}
+                    onChange={(e) => setForm({ ...form, show_locker_rooms: e.target.checked })}
+                  />
+                  <span style={{ color: !hasHockeyCalendar ? 'var(--text-light)' : undefined }}>
+                    Show Locker Room Numbers
+                  </span>
+                  {!hasHockeyCalendar && (
+                    <span style={{ flexBasis: '100%', fontSize: '0.78rem', fontStyle: 'italic', color: 'var(--text-light)' }}>
+                      Requires a Hockey calendar to be selected
+                    </span>
+                  )}
+                </label>
+              );
+            })()}
 
             <label className={s.calCheckItem} style={{ marginTop: '0.25rem', flexWrap: 'wrap' }}>
               <input

@@ -136,6 +136,7 @@ router.get('/screens', (req, res) => {
     rotate_interval: s.rotate_interval ?? 30,
     days_ahead: s.days_ahead ?? 14,
     show_pricing: !!s.show_pricing,
+    show_locker_rooms: s.show_locker_rooms !== false,
     pricing_ids: parseCalendarIds(s.pricing_ids) || [],
     bg_filename: s.background_id ? bgMap[s.background_id]?.filename : null,
     bg_label: s.background_id ? bgMap[s.background_id]?.label : null,
@@ -145,18 +146,18 @@ router.get('/screens', (req, res) => {
 });
 
 router.post('/screens', requireAuth, (req, res) => {
-  const { name, ip = '', display_type = 'games', webpage_url = '', webpage_width = 100, webpage_zoom = 100, webpage_refresh = 0, calendar_ids, bg_opacity = 100, background_id, announcement_data, bg_color = '', show_pricing = false, pricing_ids } = req.body;
+  const { name, ip = '', display_type = 'games', webpage_url = '', webpage_width = 100, webpage_zoom = 100, webpage_refresh = 0, calendar_ids, bg_opacity = 100, background_id, announcement_data, bg_color = '', show_pricing = false, show_locker_rooms = true, pricing_ids } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   const calIds = parseCalendarIds(calendar_ids);
   const priceIds = parseCalendarIds(pricing_ids);
-  const row = db.insert('screens', { name, ip, display_type, background_id: background_id || null, webpage_url, webpage_width: Number(webpage_width), webpage_zoom: Number(webpage_zoom), webpage_refresh: Number(webpage_refresh), calendar_ids: calIds ? JSON.stringify(calIds) : null, bg_opacity: Number(bg_opacity), announcement_data: announcement_data ? JSON.stringify(announcement_data) : null, bg_color: bg_color || '', show_pricing: !!show_pricing, pricing_ids: priceIds ? JSON.stringify(priceIds) : null });
+  const row = db.insert('screens', { name, ip, display_type, background_id: background_id || null, webpage_url, webpage_width: Number(webpage_width), webpage_zoom: Number(webpage_zoom), webpage_refresh: Number(webpage_refresh), calendar_ids: calIds ? JSON.stringify(calIds) : null, bg_opacity: Number(bg_opacity), announcement_data: announcement_data ? JSON.stringify(announcement_data) : null, bg_color: bg_color || '', show_pricing: !!show_pricing, show_locker_rooms: !!show_locker_rooms, pricing_ids: priceIds ? JSON.stringify(priceIds) : null });
   res.json({ id: row.id });
 });
 
 router.patch('/screens/:id', requireAuth, (req, res) => {
   const screen = db.findById('screens', req.params.id);
   if (!screen) return res.status(404).json({ error: 'not found' });
-  const { name, ip, display_type, background_id, webpage_url, webpage_width, webpage_zoom, webpage_refresh, calendar_ids, bg_opacity, announcement_data, bg_color, visible, show_pricing, pricing_ids } = req.body;
+  const { name, ip, display_type, background_id, webpage_url, webpage_width, webpage_zoom, webpage_refresh, calendar_ids, bg_opacity, announcement_data, bg_color, visible, show_pricing, show_locker_rooms, pricing_ids } = req.body;
   const calIds = calendar_ids !== undefined ? parseCalendarIds(calendar_ids) : parseCalendarIds(screen.calendar_ids);
   const priceIds = pricing_ids !== undefined ? parseCalendarIds(pricing_ids) : parseCalendarIds(screen.pricing_ids);
   db.update('screens', req.params.id, {
@@ -178,6 +179,7 @@ router.patch('/screens/:id', requireAuth, (req, res) => {
     rotate_interval: req.body.rotate_interval !== undefined ? Number(req.body.rotate_interval) : (screen.rotate_interval ?? 30),
     days_ahead: req.body.days_ahead !== undefined ? Number(req.body.days_ahead) : (screen.days_ahead ?? 14),
     show_pricing: show_pricing !== undefined ? !!show_pricing : !!screen.show_pricing,
+    show_locker_rooms: show_locker_rooms !== undefined ? !!show_locker_rooms : (screen.show_locker_rooms !== false),
     pricing_ids: priceIds ? JSON.stringify(priceIds) : null,
   });
   ws.push(String(req.params.id), { type: 'reload' });

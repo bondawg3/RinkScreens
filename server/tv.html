@@ -176,7 +176,6 @@ header {
   font-size: 2.2em;
   font-weight: bold;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   padding: 14px 24px;
   border-radius: 8px;
   margin-bottom: 20px;
@@ -203,7 +202,6 @@ header {
   font-size: 1.1em;
   font-weight: bold;
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   margin-bottom: 0;
   border-radius: 6px 6px 0 0;
 }
@@ -450,7 +448,7 @@ function wrapWithPricing(pageHtml, prices) {
     '</div>';
 }
 
-function renderGames(games, calMap, teamMap, prices, screenName) {
+function renderGames(games, calMap, teamMap, prices, screenName, showLockerRooms) {
   teamMap = teamMap || {};
   var bannerHtml = (prices && screenName) ? '<div class="skate-banner">' + esc(screenName) + '</div>' : '';
   var header = prices ? '<div class="section-title section-title-gapped">Today\'s Games</div>' : '';
@@ -473,33 +471,46 @@ function renderGames(games, calMap, teamMap, prices, screenName) {
   for (var gi = 0; gi < groupOrder.length; gi++) {
     var key = groupOrder[gi];
     var calName = calMap && calMap[key] ? calMap[key] : '';
-    tbody +=
-      '<tr class="col-header-row">' +
-        '<td class="col-cal-name" colspan="2">' + esc(calName) + '</td>' +
-        '<td class="col-transparent td-gap"></td>' +
-        '<td style="white-space:nowrap">Home</td>' +
-        '<td style="width:70px;min-width:70px;text-align:center">LR#</td>' +
-        '<td class="col-transparent td-gap"></td>' +
-        '<td style="white-space:nowrap">Away</td>' +
-        '<td style="width:70px;min-width:70px;text-align:center">LR#</td>' +
-      '</tr>';
+    if (showLockerRooms) {
+      tbody +=
+        '<tr class="col-header-row">' +
+          '<td class="col-cal-name" colspan="2">' + esc(calName) + '</td>' +
+          '<td class="col-transparent td-gap"></td>' +
+          '<td style="white-space:nowrap">Home</td>' +
+          '<td style="width:70px;min-width:70px;text-align:center">LR#</td>' +
+          '<td class="col-transparent td-gap"></td>' +
+          '<td style="white-space:nowrap">Away</td>' +
+          '<td style="width:70px;min-width:70px;text-align:center">LR#</td>' +
+        '</tr>';
+    } else {
+      tbody += '<tr class="col-header-row"><td class="col-cal-name" colspan="2">' + esc(calName) + '</td></tr>';
+    }
     var grpGames = groups[key];
     for (var j = 0; j < grpGames.length; j++) {
       var g = grpGames[j];
       var homeInfo = g.home_team ? (teamMap[g.home_team.toLowerCase()] || { label: g.home_team, color: '', textColor: '' }) : { label: 'TBD', color: '', textColor: '' };
       var awayInfo = g.away_team ? (teamMap[g.away_team.toLowerCase()] || { label: g.away_team, color: '', textColor: '' }) : { label: 'TBD', color: '', textColor: '' };
-      var homeStyle = homeInfo.color ? 'background:' + homeInfo.color + ';' + (homeInfo.textColor ? 'color:' + homeInfo.textColor + ';' : '') : '';
-      var awayStyle = awayInfo.color ? 'background:' + awayInfo.color + ';' + (awayInfo.textColor ? 'color:' + awayInfo.textColor + ';' : '') : '';
-      tbody += '<tr class="game-row">' +
-        '<td class="td-time">' + fmtTime(g.start_time) + '</td>' +
-        '<td class="td-title">' + esc(g.title || '') + '</td>' +
-        '<td class="td-gap"></td>' +
-        '<td class="td-home"' + (homeStyle ? ' style="' + esc(homeStyle) + '"' : '') + '>' + esc(homeInfo.label) + '</td>' +
-        '<td class="td-locker">' + esc(g.home_locker || '') + '</td>' +
-        '<td class="td-gap"></td>' +
-        '<td class="td-away"' + (awayStyle ? ' style="' + esc(awayStyle) + '"' : '') + '>' + esc(awayInfo.label) + '</td>' +
-        '<td class="td-locker">' + esc(g.away_locker || '') + '</td>' +
-        '</tr>';
+      if (showLockerRooms) {
+        var homeStyle = homeInfo.color ? 'background:' + homeInfo.color + ';' + (homeInfo.textColor ? 'color:' + homeInfo.textColor + ';' : '') : '';
+        var awayStyle = awayInfo.color ? 'background:' + awayInfo.color + ';' + (awayInfo.textColor ? 'color:' + awayInfo.textColor + ';' : '') : '';
+        tbody += '<tr class="game-row">' +
+          '<td class="td-time">' + fmtTime(g.start_time) + '</td>' +
+          '<td class="td-title">' + esc(g.title || '') + '</td>' +
+          '<td class="td-gap"></td>' +
+          '<td class="td-home"' + (homeStyle ? ' style="' + esc(homeStyle) + '"' : '') + '>' + esc(homeInfo.label) + '</td>' +
+          '<td class="td-locker">' + esc(g.home_locker || '') + '</td>' +
+          '<td class="td-gap"></td>' +
+          '<td class="td-away"' + (awayStyle ? ' style="' + esc(awayStyle) + '"' : '') + '>' + esc(awayInfo.label) + '</td>' +
+          '<td class="td-locker">' + esc(g.away_locker || '') + '</td>' +
+          '</tr>';
+      } else {
+        var matchup = esc(homeInfo.label) + ' vs ' + esc(awayInfo.label);
+        var mergedTitle = g.title ? esc(g.title) + ' — ' + matchup : matchup;
+        tbody += '<tr class="event-row">' +
+          '<td class="td-time">' + fmtTime(g.start_time) + '</td>' +
+          '<td style="padding:0.4em 0.6em;font-size:1em;">' + mergedTitle + '</td>' +
+          '</tr>';
+      }
     }
     if (gi < groupOrder.length - 1) {
       tbody += '<tr style="height:0.6em"><td colspan="8" style="padding:0;border:none;background:transparent"></td></tr>';
@@ -743,15 +754,16 @@ function loadScreen() {
                 }
               }
             }
+            var showLockerRooms = screen.show_locker_rooms !== false;
             if (screen.show_pricing) {
               get('/api/skate-prices', function(err5, prices) {
                 var selectedIds = screen.pricing_ids || [];
                 var filteredPrices = (prices || []).filter(function(p) { return selectedIds.indexOf(p.id) !== -1; });
-                renderGames(filtered, calMap, teamMap, filteredPrices, screen.name);
+                renderGames(filtered, calMap, teamMap, filteredPrices, screen.name, showLockerRooms);
                 fitTable();
               });
             } else {
-              renderGames(filtered, calMap, teamMap);
+              renderGames(filtered, calMap, teamMap, null, null, showLockerRooms);
               fitTable();
             }
           });
@@ -824,8 +836,9 @@ function loadScreen() {
         }
         todayEvents.sort(function(a, b) { return new Date(a.start_time) - new Date(b.start_time); });
         function buildHtml(withPricing) {
+          var scheduleHeader = '<div class="section-title section-title-gapped">Schedule</div>';
           if (todayEvents.length === 0) {
-            return (withPricing ? '<div class="section-title section-title-gapped">Rink Events</div>' : '') +
+            return (withPricing ? scheduleHeader : '') +
               '<div class="empty"><p>No events scheduled for today.</p></div>';
           }
           var html = '<table class="game-table"><tbody>';
@@ -842,7 +855,7 @@ function loadScreen() {
               '</tr>';
           }
           html += '</tbody></table>';
-          return (withPricing ? '<div class="section-title section-title-gapped">Rink Events</div>' : '') + html;
+          return (withPricing ? scheduleHeader : '') + html;
         }
         function finishRinkEvents(prices) {
           var bannerHtml = (prices && screen.name) ? '<div class="skate-banner">' + esc(screen.name) + '</div>' : '';
@@ -963,8 +976,8 @@ function loadScreen() {
                 items.sort(function(a, b) { return new Date(a.start_time) - new Date(b.start_time); });
 
                 function finishCustom(customHtml, prices) {
-                  var bannerHtml = (prices && screen.name) ? '<div class="skate-banner">' + esc(screen.name) + '</div>' : '';
-                  var header = prices ? '<div class="section-title section-title-gapped">Today\'s Schedule</div>' : '';
+                  var bannerHtml = screen.name ? '<div class="skate-banner">' + esc(screen.name) + '</div>' : '';
+                  var header = '<div class="section-title section-title-gapped">Events</div>';
                   document.getElementById('content').innerHTML = bannerHtml + wrapWithPricing(header + customHtml, prices);
                   fitTable();
                 }
@@ -983,12 +996,13 @@ function loadScreen() {
                   return;
                 }
 
+                var showLockerRooms = screen.show_locker_rooms !== false;
                 var tbody = '';
                 for (var i = 0; i < items.length; i++) {
                   var it = items[i];
                   var calName = calMap[String(it.calendar_id)] || '';
                   var timeStr = fmtTime(it.start_time);
-                  if (it.kind === 'game') {
+                  if (it.kind === 'game' && showLockerRooms) {
                     var homeInfo = it.home_team ? (teamMap[it.home_team.toLowerCase()] || { label: it.home_team, color: '', textColor: '' }) : { label: 'TBD', color: '', textColor: '' };
                     var awayInfo = it.away_team ? (teamMap[it.away_team.toLowerCase()] || { label: it.away_team, color: '', textColor: '' }) : { label: 'TBD', color: '', textColor: '' };
                     var homeStyle = homeInfo.color ? 'background:' + homeInfo.color + ';' + (homeInfo.textColor ? 'color:' + homeInfo.textColor + ';' : '') : '';
@@ -1003,13 +1017,18 @@ function loadScreen() {
                       '<td class="td-away"' + (awayStyle ? ' style="' + esc(awayStyle) + '"' : '') + '>' + esc(awayInfo.label) + '</td>' +
                       '<td class="td-locker">' + esc(it.away_locker || '') + '</td>' +
                       '</tr>';
+                  } else if (it.kind === 'game') {
+                    var homeInfo = it.home_team ? (teamMap[it.home_team.toLowerCase()] || { label: it.home_team }) : { label: 'TBD' };
+                    var awayInfo = it.away_team ? (teamMap[it.away_team.toLowerCase()] || { label: it.away_team }) : { label: 'TBD' };
+                    var matchup = esc(homeInfo.label) + ' vs ' + esc(awayInfo.label);
+                    tbody += '<tr class="event-row">' +
+                      '<td class="td-time">' + timeStr + '</td>' +
+                      '<td style="padding:0.4em 0.6em;font-size:1em;">' + matchup + '</td>' +
+                      '</tr>';
                   } else {
                     tbody += '<tr class="event-row">' +
                       '<td class="td-time">' + timeStr + '</td>' +
-                      '<td style="padding:0.4em 0.6em;font-size:1em;">' +
-                        (calName ? '<span style="opacity:0.6;margin-right:0.5em">' + esc(calName) + '</span>' : '') +
-                        esc(it.title) +
-                      '</td>' +
+                      '<td style="padding:0.4em 0.6em;font-size:1em;">' + esc(it.title) + '</td>' +
                       '</tr>';
                   }
                 }

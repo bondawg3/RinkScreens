@@ -2,6 +2,18 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.18.0] — 2026-07-06
+
+### Added
+- **Show Locker Room Numbers toggle** — Hockey (Game Board) and Custom screens now have a "Show Locker Room Numbers" checkbox in the screen edit form, on by default. When turned off, hockey game rows merge the title and matchup into a single field instead of showing separate Home/Away/LR# columns. On the Custom tab the checkbox is disabled until a Hockey calendar is selected.
+- **Calendar group labels on Custom tab** — the Custom screen's calendar picker now shows each calendar's type (Hockey, Public Skate, Rink Events, Figure Skating) next to its name, since that tab mixes calendars from every type.
+
+### Changed
+- **Custom screen always shows its heading and subheading** — the screen-name banner and "Events" subheading now render regardless of whether pricing is enabled, instead of only appearing when pricing was on.
+- **Custom screen rows no longer prefix the calendar name** — merged/general event rows show just the time and title, without the calendar name tag.
+- **Rink Events subheading renamed** — the aligned subheading now reads "Schedule" instead of "Rink Events".
+- **Uniform banner/subheading casing across all screens** — removed the forced uppercase styling from the shared banner and subheading elements, so Public Skate, Figure Skating, Game Board, Custom, and Rink Events screens all render titles in normal case.
+
 ## [1.17.0] — 2026-07-06
 
 ### Changed

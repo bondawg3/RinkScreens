@@ -23,20 +23,38 @@ const DEFAULTS = {
   screens: [],
   displays: [],
   backgrounds: [],
-  games: [],
+  activities: [],
   skate_prices: [],
   calendars: [],
   locker_rooms: [],
   locker_sequences: [],
   leagues: [],
   teams: [],
-  _seq: { screens: 1, displays: 1, backgrounds: 1, games: 1, skate_prices: 1, calendars: 1, locker_rooms: 1, locker_sequences: 1, leagues: 1, teams: 1 },
+  _seq: { screens: 1, displays: 1, backgrounds: 1, activities: 1, skate_prices: 1, calendars: 1, locker_rooms: 1, locker_sequences: 1, leagues: 1, teams: 1 },
 };
+
+// Renamed from "games" once the table grew to hold hockey games, rink events,
+// figure skating events, and public skate sessions alike. Existing db.json
+// files still have the old key on disk — fold it into "activities" in memory
+// so the next save() persists it under the new name.
+function migrateGamesTable(data) {
+  if (data.games && !data.activities) {
+    data.activities = data.games;
+    delete data.games;
+  } else if (data.games) {
+    delete data.games;
+  }
+  if (data._seq && data._seq.games != null) {
+    if (data._seq.activities == null) data._seq.activities = data._seq.games;
+    delete data._seq.games;
+  }
+  return data;
+}
 
 function load() {
   if (fs.existsSync(DB_FILE)) {
     try {
-      return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+      return migrateGamesTable(JSON.parse(fs.readFileSync(DB_FILE, 'utf8')));
     } catch (err) {
       try { fs.copyFileSync(DB_FILE, `${DB_FILE}.corrupt`); } catch (_) {}
       console.error(`[db] db.json is corrupt: ${err.message} (copy saved as db.json.corrupt)`);
@@ -46,7 +64,7 @@ function load() {
     return JSON.parse(JSON.stringify(DEFAULTS)); // fresh install
   }
   try {
-    const data = JSON.parse(fs.readFileSync(BAK_FILE, 'utf8'));
+    const data = migrateGamesTable(JSON.parse(fs.readFileSync(BAK_FILE, 'utf8')));
     console.warn('[db] recovered previous state from db.json.bak');
     return data;
   } catch (_) {

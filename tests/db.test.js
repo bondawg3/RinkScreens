@@ -41,16 +41,16 @@ describe('JSON store', () => {
   });
 
   it('findAll sorts by the given field', () => {
-    db.insert('games', { start_time: '2026-07-02T10:00:00Z' });
-    db.insert('games', { start_time: '2026-07-01T10:00:00Z' });
-    const rows = db.findAll('games', 'start_time');
+    db.insert('activities', { start_time: '2026-07-02T10:00:00Z' });
+    db.insert('activities', { start_time: '2026-07-01T10:00:00Z' });
+    const rows = db.findAll('activities', 'start_time');
     expect(rows[0].start_time).toBe('2026-07-01T10:00:00Z');
   });
 
   it('upsertByField inserts then updates in place', () => {
-    db.upsertByField('games', 'calendar_uid', 'u1', { calendar_uid: 'u1', title: 'first' });
-    db.upsertByField('games', 'calendar_uid', 'u1', { calendar_uid: 'u1', title: 'second' });
-    const rows = db.findAll('games');
+    db.upsertByField('activities', 'calendar_uid', 'u1', { calendar_uid: 'u1', title: 'first' });
+    db.upsertByField('activities', 'calendar_uid', 'u1', { calendar_uid: 'u1', title: 'second' });
+    const rows = db.findAll('activities');
     expect(rows).toHaveLength(1);
     expect(rows[0].title).toBe('second');
   });
@@ -88,5 +88,38 @@ describe('JSON store', () => {
     db.insert('screens', { name: 'A' }); // first save — no .bak yet
     fs.writeFileSync(dbFilePath(), '{ not json', 'utf8');
     expect(() => db.findAll('screens')).toThrow(/Refusing to reset/);
+  });
+});
+
+describe('games -> activities migration', () => {
+  // Older db.json files (pre-rename) store hockey games, rink events, figure
+  // skating events, and public skate sessions under a "games" key. Existing
+  // installs must not lose that data or its id sequence on upgrade.
+  it('folds an old "games" key into "activities" and drops the old key on next save', () => {
+    fs.writeFileSync(dbFilePath(), JSON.stringify({
+      screens: [],
+      games: [{ id: 7, title: 'Legacy Game', start_time: '2026-07-01T00:00:00Z' }],
+      _seq: { screens: 1, games: 8 },
+    }), 'utf8');
+
+    const rows = db.findAll('activities');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: 7, title: 'Legacy Game' });
+
+    // Continues the old sequence rather than restarting at 1
+    const inserted = db.insert('activities', { title: 'New Activity' });
+    expect(inserted.id).toBe(8);
+
+    const onDisk = JSON.parse(fs.readFileSync(dbFilePath(), 'utf8'));
+    expect(onDisk.games).toBeUndefined();
+    expect(onDisk.activities).toHaveLength(2);
+    expect(onDisk._seq.games).toBeUndefined();
+  });
+
+  it('is a no-op when the db.json is already on the new schema', () => {
+    db.insert('activities', { title: 'Already Migrated' });
+    const rows = db.findAll('activities');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].title).toBe('Already Migrated');
   });
 });

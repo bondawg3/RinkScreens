@@ -242,7 +242,7 @@ router.get('/rink-events', (req, res) => {
       .filter((c) => c.type === 'rink_events')
       .map((c) => c.id)
   );
-  const events = db.findAll('games', 'start_time')
+  const events = db.findAll('activities', 'start_time')
     .filter((g) => rinkEventCalIds.has(g.calendar_id));
   res.json(events);
 });
@@ -255,7 +255,7 @@ router.get('/figure-skating', (req, res) => {
       .filter((c) => c.type === 'figure_skating')
       .map((c) => c.id)
   );
-  res.json(db.findAll('games', 'start_time').filter((g) => calIds.has(g.calendar_id)));
+  res.json(db.findAll('activities', 'start_time').filter((g) => calIds.has(g.calendar_id)));
 });
 
 // ── Games ─────────────────────────────────────────────────────────────────────
@@ -266,17 +266,17 @@ router.get('/games', (req, res) => {
       .filter((c) => c.type === 'hockey_games')
       .map((c) => c.id)
   );
-  const all = db.findAll('games', 'start_time');
+  const all = db.findAll('activities', 'start_time');
   // Only return games from hockey_games calendars (or legacy unassigned games with no calendar)
   res.json(all.filter((g) => !g.calendar_id || hockeyCalIds.has(g.calendar_id)));
 });
 
 router.patch('/games/:id', requireAuth, (req, res) => {
-  const game = db.findById('games', req.params.id);
+  const game = db.findById('activities', req.params.id);
   if (!game) return res.status(404).json({ error: 'not found' });
   const { home_team, away_team, home_locker, away_locker } = req.body;
   const lockerChanged = home_locker !== undefined || away_locker !== undefined;
-  db.update('games', req.params.id, {
+  db.update('activities', req.params.id, {
     home_team: home_team ?? game.home_team,
     away_team: away_team ?? game.away_team,
     home_locker: home_locker ?? game.home_locker,
@@ -288,9 +288,9 @@ router.patch('/games/:id', requireAuth, (req, res) => {
 });
 
 router.delete('/games/:id', requireAuth, (req, res) => {
-  const game = db.findById('games', req.params.id);
+  const game = db.findById('activities', req.params.id);
   if (!game) return res.status(404).json({ error: 'not found' });
-  db.remove('games', req.params.id);
+  db.remove('activities', req.params.id);
   ws.broadcast({ type: 'refresh_data' });
   res.json({ ok: true });
 });
@@ -323,13 +323,13 @@ router.post('/games/auto-assign', requireAuth, (req, res) => {
 router.post('/games/reparse', requireAuth, (req, res) => {
   const calendars = db.findAll('calendars');
   const calMap = Object.fromEntries(calendars.map((c) => [c.id, c]));
-  const games = db.findAll('games');
+  const games = db.findAll('activities');
   let updated = 0;
 
   for (const game of games) {
     const cal = calMap[game.calendar_id] || {};
     const { title, away_team, home_team } = parseTitle(game.raw_title || game.title || '', cal);
-    db.update('games', game.id, { title, away_team, home_team });
+    db.update('activities', game.id, { title, away_team, home_team });
     updated++;
   }
 
@@ -338,8 +338,8 @@ router.post('/games/reparse', requireAuth, (req, res) => {
 });
 
 router.delete('/games/unassigned', requireAuth, (req, res) => {
-  const toRemove = db.findAll('games').filter((g) => !g.calendar_id);
-  toRemove.forEach((g) => db.remove('games', g.id));
+  const toRemove = db.findAll('activities').filter((g) => !g.calendar_id);
+  toRemove.forEach((g) => db.remove('activities', g.id));
   res.json({ removed: toRemove.length });
 });
 
@@ -488,8 +488,8 @@ router.delete('/calendars/:id', requireAuth, (req, res) => {
   db.remove('calendars', calId);
   // Remove this calendar's games so they don't linger invisibly in the store
   // (or resurface on skate screens via the no-skate-calendars fallback)
-  const orphans = db.findAll('games').filter((g) => g.calendar_id === calId);
-  orphans.forEach((g) => db.remove('games', g.id));
+  const orphans = db.findAll('activities').filter((g) => g.calendar_id === calId);
+  orphans.forEach((g) => db.remove('activities', g.id));
   ws.broadcast({ type: 'refresh_data' });
   res.json({ ok: true, removed_games: orphans.length });
 });
@@ -506,7 +506,7 @@ router.get('/skate-sessions', (req, res) => {
   }
   const fromIso = from.toISOString();
   // Keep in-progress sessions visible until they end
-  const sessions = db.findAll('games', 'start_time')
+  const sessions = db.findAll('activities', 'start_time')
     .filter((g) => g.is_skate && (g.end_time || g.start_time) >= fromIso && (skateCals.length === 0 || skateCals.includes(g.calendar_id)));
   res.json(sessions);
 });

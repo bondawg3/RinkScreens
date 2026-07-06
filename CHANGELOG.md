@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.17.0] — 2026-07-06
+
+### Changed
+- **Renamed the `games` data table to `activities`** — the table has held hockey games, rink events, figure skating events, and public skate sessions for a while, and the "games" name was a leftover from before it grew into a shared store. `display_type: 'games'` (the Game Board screen type) is unrelated and unchanged. Existing `data/db.json` files are migrated automatically on first load — the old `games` key (and its id sequence) is folded into `activities` in memory and the old key disappears from disk on the next write, with no data or id loss.
+
 ## [1.16.0] — 2026-07-05
 
 ### Added

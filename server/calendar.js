@@ -129,8 +129,8 @@ async function syncCalendar(cal) {
       const rawTitle = item.summary || '';
 
       importedUids.add(uid);
-      const existing = db.findByField('games', 'calendar_uid', uid);
-      db.upsertByField('games', 'calendar_uid', uid, {
+      const existing = db.findByField('activities', 'calendar_uid', uid);
+      db.upsertByField('activities', 'calendar_uid', uid, {
         calendar_uid: uid,
         calendar_id: cal.id,
         start_time: start.toISOString(),
@@ -186,12 +186,12 @@ async function syncCalendar(cal) {
       const location = (event.location || '').trim();
       if (location && !location.toLowerCase().includes('san mateo')) continue;
 
-      const existing = db.findByField('games', 'calendar_uid', event.uid);
+      const existing = db.findByField('activities', 'calendar_uid', event.uid);
       const rawTitle = event.summary || '';
       const { title, away_team, home_team } = parseTitle(rawTitle, cal);
       const isAdminTeam = (t) => !!t;
 
-      db.upsertByField('games', 'calendar_uid', event.uid, {
+      db.upsertByField('activities', 'calendar_uid', event.uid, {
         calendar_uid: event.uid,
         calendar_id: cal.id,
         start_time: start.toISOString(),
@@ -212,13 +212,13 @@ async function syncCalendar(cal) {
 
   // Remove games from this calendar that are in the import window but were filtered out
   if (cal.id) {
-    const existing = db.findAll('games').filter((g) => {
+    const existing = db.findAll('activities').filter((g) => {
       if (g.calendar_id !== cal.id) return false;
       if (importedUids.has(g.calendar_uid)) return false;
       const t = new Date(g.start_time);
       return t >= cutoff && t <= horizon;
     });
-    existing.forEach((g) => db.remove('games', g.id));
+    existing.forEach((g) => db.remove('activities', g.id));
     if (existing.length) console.log(`[calendar] "${cal.name}" removed ${existing.length} filtered-out games`);
   }
 
@@ -233,7 +233,7 @@ async function syncCalendar(cal) {
   // Auto-extract league + teams from hockey_games calendars
   if (cal.type === 'hockey_games' && cal.id) {
     const SKIP = new Set(['open', 'tbd', 'away tbd', 'home tbd', '']);
-    const calGames = db.findAll('games').filter((g) => g.calendar_id === cal.id);
+    const calGames = db.findAll('activities').filter((g) => g.calendar_id === cal.id);
     const teamNames = new Set();
     for (const g of calGames) {
       if (g.home_team && !SKIP.has(g.home_team.toLowerCase())) teamNames.add(g.home_team);

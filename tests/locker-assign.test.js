@@ -17,7 +17,7 @@ function seedBase({ pairs = [{ home: '1', away: '2' }, { home: '3', away: '4' }]
 }
 
 function addGame(overrides = {}) {
-  return db.insert('games', {
+  return db.insert('activities', {
     calendar_id: calId,
     start_time: t('10:00'),
     end_time: t('11:00'),
@@ -43,10 +43,10 @@ describe('autoAssign', () => {
     const result = autoAssign();
     expect(result.assigned).toBe(3);
 
-    expect(db.findById('games', g1.id)).toMatchObject({ home_locker: '1', away_locker: '2', lr_auto_assigned: 1 });
-    expect(db.findById('games', g2.id)).toMatchObject({ home_locker: '3', away_locker: '4' });
+    expect(db.findById('activities', g1.id)).toMatchObject({ home_locker: '1', away_locker: '2', lr_auto_assigned: 1 });
+    expect(db.findById('activities', g2.id)).toMatchObject({ home_locker: '3', away_locker: '4' });
     // Cycles back to the first pair
-    expect(db.findById('games', g3.id)).toMatchObject({ home_locker: '1', away_locker: '2' });
+    expect(db.findById('activities', g3.id)).toMatchObject({ home_locker: '1', away_locker: '2' });
   });
 
   it('reports a conflict when consecutive games in a block share a locker', () => {
@@ -78,9 +78,9 @@ describe('autoAssign', () => {
 
     const result = autoAssign();
     expect(result.assigned).toBe(1);
-    expect(db.findById('games', g1.id)).toMatchObject({ home_locker: '7', away_locker: '8', lr_auto_assigned: 0 });
+    expect(db.findById('activities', g1.id)).toMatchObject({ home_locker: '7', away_locker: '8', lr_auto_assigned: 0 });
     // Manual game consumed pair index 0, so the next game gets pair 2
-    expect(db.findById('games', g2.id)).toMatchObject({ home_locker: '3', away_locker: '4' });
+    expect(db.findById('activities', g2.id)).toMatchObject({ home_locker: '3', away_locker: '4' });
   });
 
   it('skips skate sessions and games from non-hockey calendars', () => {
@@ -90,8 +90,8 @@ describe('autoAssign', () => {
 
     const result = autoAssign();
     expect(result.assigned).toBe(0);
-    expect(db.findById('games', skate.id).home_locker).toBe('');
-    expect(db.findById('games', figure.id).home_locker).toBe('');
+    expect(db.findById('activities', skate.id).home_locker).toBe('');
+    expect(db.findById('activities', figure.id).home_locker).toBe('');
   });
 
   it('scopes to a single date when dateStr is given', () => {
@@ -99,8 +99,8 @@ describe('autoAssign', () => {
     const other = addGame({ start_time: '2026-07-15T10:00:00.000Z', end_time: '2026-07-15T11:00:00.000Z' });
 
     autoAssign({ dateStr: DAY });
-    expect(db.findById('games', g1.id).home_locker).toBe('1');
-    expect(db.findById('games', other.id).home_locker).toBe('');
+    expect(db.findById('activities', g1.id).home_locker).toBe('1');
+    expect(db.findById('activities', other.id).home_locker).toBe('');
   });
 
   it('resetExisting clears manual assignments and reassigns from the sequence', () => {
@@ -108,7 +108,7 @@ describe('autoAssign', () => {
 
     const result = autoAssign({ resetExisting: true });
     expect(result.assigned).toBe(1);
-    expect(db.findById('games', g1.id)).toMatchObject({ home_locker: '1', away_locker: '2', lr_auto_assigned: 1 });
+    expect(db.findById('activities', g1.id)).toMatchObject({ home_locker: '1', away_locker: '2', lr_auto_assigned: 1 });
   });
 
   it('prefers a calendar-level sequence over the default', () => {
@@ -117,7 +117,7 @@ describe('autoAssign', () => {
     const g1 = addGame();
 
     autoAssign();
-    expect(db.findById('games', g1.id)).toMatchObject({ home_locker: '5', away_locker: '6' });
+    expect(db.findById('activities', g1.id)).toMatchObject({ home_locker: '5', away_locker: '6' });
   });
 
   it('does nothing when no sequence exists at all', () => {
@@ -128,6 +128,6 @@ describe('autoAssign', () => {
 
     const result = autoAssign();
     expect(result.assigned).toBe(0);
-    expect(db.findById('games', g1.id).home_locker).toBe('');
+    expect(db.findById('activities', g1.id).home_locker).toBe('');
   });
 });

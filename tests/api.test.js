@@ -215,13 +215,13 @@ describe('calendars', () => {
   it('deleting a calendar also deletes its games', async () => {
     const cal = db.insert('calendars', { name: 'League', url: 'http://a', type: 'hockey_games' });
     const keep = db.insert('calendars', { name: 'Other', url: 'http://b', type: 'hockey_games' });
-    db.insert('games', { calendar_id: cal.id, start_time: '2026-07-10T18:00:00.000Z' });
-    db.insert('games', { calendar_id: keep.id, start_time: '2026-07-10T18:00:00.000Z' });
+    db.insert('activities', { calendar_id: cal.id, start_time: '2026-07-10T18:00:00.000Z' });
+    db.insert('activities', { calendar_id: keep.id, start_time: '2026-07-10T18:00:00.000Z' });
 
     const res = await auth(request(app).delete(`/api/calendars/${cal.id}`));
     expect(res.body.removed_games).toBe(1);
 
-    const games = db.findAll('games');
+    const games = db.findAll('activities');
     expect(games).toHaveLength(1);
     expect(games[0].calendar_id).toBe(keep.id);
   });
@@ -255,12 +255,12 @@ describe('token invalidation on password change', () => {
 describe('skate sessions', () => {
   it('keeps in-progress sessions visible until they end', async () => {
     const now = Date.now();
-    db.insert('games', {
+    db.insert('activities', {
       is_skate: 1, calendar_id: null,
       start_time: new Date(now - 30 * 60000).toISOString(), // started 30 min ago
       end_time: new Date(now + 60 * 60000).toISOString(),   // ends in an hour
     });
-    db.insert('games', {
+    db.insert('activities', {
       is_skate: 1, calendar_id: null,
       start_time: new Date(now - 3 * 3600000).toISOString(), // fully in the past
       end_time: new Date(now - 2 * 3600000).toISOString(),
@@ -272,7 +272,7 @@ describe('skate sessions', () => {
   });
 
   it('?from= returns sessions relative to that date (for the TV preview bar)', async () => {
-    db.insert('games', {
+    db.insert('activities', {
       is_skate: 1, calendar_id: null,
       start_time: '2026-06-01T18:00:00.000Z',
       end_time: '2026-06-01T20:00:00.000Z',
@@ -293,8 +293,8 @@ describe('skate sessions', () => {
     const skateCal = db.insert('calendars', { name: 'Skates', type: 'public_skates', url: 'http://s' });
     const hockeyCal = db.insert('calendars', { name: 'Hockey', type: 'hockey_games', url: 'http://h' });
     const future = new Date(Date.now() + 3600000).toISOString();
-    db.insert('games', { is_skate: 1, calendar_id: skateCal.id, start_time: future, title: 'skate-cal' });
-    db.insert('games', { is_skate: 1, calendar_id: hockeyCal.id, start_time: future, title: 'keyword' });
+    db.insert('activities', { is_skate: 1, calendar_id: skateCal.id, start_time: future, title: 'skate-cal' });
+    db.insert('activities', { is_skate: 1, calendar_id: hockeyCal.id, start_time: future, title: 'keyword' });
 
     const res = await request(app).get('/api/skate-sessions');
     expect(res.body).toHaveLength(1);
@@ -308,7 +308,7 @@ describe('games', () => {
   const auth = (req) => req.set('Authorization', `Bearer ${token}`);
 
   it('a manual locker change clears the auto-assigned flag', async () => {
-    const game = db.insert('games', {
+    const game = db.insert('activities', {
       start_time: '2026-07-10T18:00:00.000Z',
       home_team: 'A', away_team: 'B',
       home_locker: '1', away_locker: '2',
@@ -316,11 +316,11 @@ describe('games', () => {
     });
 
     await auth(request(app).patch(`/api/games/${game.id}`)).send({ home_locker: '5' });
-    expect(db.findById('games', game.id)).toMatchObject({ home_locker: '5', lr_auto_assigned: 0 });
+    expect(db.findById('activities', game.id)).toMatchObject({ home_locker: '5', lr_auto_assigned: 0 });
   });
 
   it('a team-only edit preserves the auto-assigned flag', async () => {
-    const game = db.insert('games', {
+    const game = db.insert('activities', {
       start_time: '2026-07-10T18:00:00.000Z',
       home_team: 'A', away_team: 'B',
       home_locker: '1', away_locker: '2',
@@ -328,15 +328,15 @@ describe('games', () => {
     });
 
     await auth(request(app).patch(`/api/games/${game.id}`)).send({ home_team: 'C' });
-    expect(db.findById('games', game.id)).toMatchObject({ home_team: 'C', lr_auto_assigned: 1 });
+    expect(db.findById('activities', game.id)).toMatchObject({ home_team: 'C', lr_auto_assigned: 1 });
   });
 
   it('GET /games only returns hockey-calendar or legacy games', async () => {
     const hockey = db.insert('calendars', { name: 'H', type: 'hockey_games', url: 'http://h' });
     const figure = db.insert('calendars', { name: 'F', type: 'figure_skating', url: 'http://f' });
-    db.insert('games', { calendar_id: hockey.id, start_time: '2026-07-10T18:00:00.000Z', title: 'hockey' });
-    db.insert('games', { calendar_id: figure.id, start_time: '2026-07-10T18:00:00.000Z', title: 'figure' });
-    db.insert('games', { calendar_id: null, start_time: '2026-07-10T18:00:00.000Z', title: 'legacy' });
+    db.insert('activities', { calendar_id: hockey.id, start_time: '2026-07-10T18:00:00.000Z', title: 'hockey' });
+    db.insert('activities', { calendar_id: figure.id, start_time: '2026-07-10T18:00:00.000Z', title: 'figure' });
+    db.insert('activities', { calendar_id: null, start_time: '2026-07-10T18:00:00.000Z', title: 'legacy' });
 
     const res = await request(app).get('/api/games');
     const titles = res.body.map((g) => g.title);
@@ -391,7 +391,7 @@ describe('custom screen data sources', () => {
     const skateCal = db.insert('calendars', { name: 'Public Skate', type: 'public_skates', url: 'http://s' });
     const future = new Date(Date.now() + 3600000).toISOString();
     const end = new Date(Date.now() + 5400000).toISOString();
-    db.insert('games', { is_skate: 1, calendar_id: skateCal.id, start_time: future, end_time: end });
+    db.insert('activities', { is_skate: 1, calendar_id: skateCal.id, start_time: future, end_time: end });
 
     const games = await request(app).get('/api/games');
     expect(games.body).toHaveLength(0);
@@ -409,11 +409,11 @@ describe('custom screen data sources', () => {
     const figureCal = db.insert('calendars', { name: 'Figure', type: 'figure_skating', url: 'http://f' });
     const future = new Date(Date.now() + 3600000).toISOString();
 
-    db.insert('games', { calendar_id: hockeyCal.id, start_time: future, title: 'included-game' });
-    db.insert('games', { calendar_id: otherHockeyCal.id, start_time: future, title: 'excluded-game' });
-    db.insert('games', { is_skate: 1, calendar_id: skateCal.id, start_time: future, end_time: future });
-    db.insert('games', { calendar_id: rinkCal.id, start_time: future, title: 'rink-event' });
-    db.insert('games', { calendar_id: figureCal.id, start_time: future, title: 'figure-event' });
+    db.insert('activities', { calendar_id: hockeyCal.id, start_time: future, title: 'included-game' });
+    db.insert('activities', { calendar_id: otherHockeyCal.id, start_time: future, title: 'excluded-game' });
+    db.insert('activities', { is_skate: 1, calendar_id: skateCal.id, start_time: future, end_time: future });
+    db.insert('activities', { calendar_id: rinkCal.id, start_time: future, title: 'rink-event' });
+    db.insert('activities', { calendar_id: figureCal.id, start_time: future, title: 'figure-event' });
 
     // A Custom screen configured with calendar_ids limited to one of each source it can
     // pull from, deliberately leaving out otherHockeyCal.

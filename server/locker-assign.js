@@ -111,7 +111,7 @@ function autoAssign({ dateStr, resetExisting } = {}) {
   // Step 1: Reset games if requested — clears ALL locker assignments for the scope
   // (not just lr_auto_assigned ones, since older records may predate that flag)
   if (resetExisting) {
-    const toReset = db.findAll('games').filter((g) => {
+    const toReset = db.findAll('activities').filter((g) => {
       if (!g.is_skate && (g.home_locker || g.away_locker)) {
         if (dateStr) return localDateStr(g.start_time) === dateStr;
         return true;
@@ -119,7 +119,7 @@ function autoAssign({ dateStr, resetExisting } = {}) {
       return false;
     });
     for (const g of toReset) {
-      db.update('games', g.id, { home_locker: '', away_locker: '', lr_auto_assigned: 0 });
+      db.update('activities', g.id, { home_locker: '', away_locker: '', lr_auto_assigned: 0 });
     }
   }
 
@@ -127,7 +127,7 @@ function autoAssign({ dateStr, resetExisting } = {}) {
   const hockeyCalIds = new Set(
     db.findAll('calendars').filter((c) => c.type === 'hockey_games').map((c) => c.id)
   );
-  const allGames = db.findAll('games', 'start_time').filter(
+  const allGames = db.findAll('activities', 'start_time').filter(
     (g) => !g.is_skate && hockeyCalIds.has(g.calendar_id)
   );
 
@@ -174,7 +174,7 @@ function autoAssign({ dateStr, resetExisting } = {}) {
     const { updates, conflicts } = processDay(sorted, calLeagueMap, seqMap, standardSeq);
 
     for (const u of updates) {
-      db.update('games', u.id, {
+      db.update('activities', u.id, {
         home_locker: u.home_locker,
         away_locker: u.away_locker,
         lr_auto_assigned: 1,

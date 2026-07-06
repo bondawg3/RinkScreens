@@ -32,8 +32,14 @@ const server = http.createServer(app);
 app.use(cors());
 app.use(express.json());
 
-// Serve uploaded backgrounds
-app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
+// Serve uploaded backgrounds. The CSP header neutralizes scripts in SVG files
+// opened directly as a document (harmless when embedded via <img>).
+app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads'), {
+  setHeaders: (res) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'");
+  },
+}));
 
 // API routes
 app.use('/api', apiRouter);

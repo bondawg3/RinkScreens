@@ -119,9 +119,50 @@
 
 .urlCell {
   max-width: 320px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
+  word-break: break-all;
+  white-space: normal;
   font-size: 0.82rem;
   color: #555;
 }
+
+.calNameSub {
+  display: block;
+  font-style: italic;
+  color: #888;
+  font-size: 0.82rem;
+  margin-top: 0.1rem;
+}
+
+.disabledInput {
+  background: var(--ice-light) !important;
+  color: #888 !important;
+  cursor: not-allowed;
+}
+
+.iconBtn {
+  background: transparent;
+  border: 1.5px solid var(--ice-blue);
+  color: var(--ice-blue);
+  border-radius: 5px;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+.iconBtn:hover { background: var(--ice-light); }
+.iconBtn:disabled { opacity: 0.6; cursor: default; }
+
+.iconBtnDanger {
+  composes: iconBtn;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+.iconBtnDanger:hover { background: #fdf0f0; }

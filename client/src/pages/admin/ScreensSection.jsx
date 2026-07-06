@@ -42,6 +42,7 @@ export default function ScreensSection({ displayType, calendarType }) {
   const { data: allCalendars } = useApi('/calendars');
   const { data: backgrounds } = useApi('/backgrounds');
   const { data: displays } = useApi('/displays');
+  const { data: skatePrices } = useApi('/skate-prices');
 
   const screens = (allScreens || []).filter((sc) => sc.display_type === displayType);
   const calendars = calendarType
@@ -51,8 +52,10 @@ export default function ScreensSection({ displayType, calendarType }) {
   const [previewDates, setPreviewDates] = useState({});
   const [eyeHint, setEyeHint] = useState(null); // screen id showing hint
   const [modal, setModal] = useState(null); // null | 'add' | screen object
-  const [form, setForm] = useState({ name: '', calendar_ids: [], background_id: '', bg_opacity: 100, two_column: false, overflow_mode: 'none', rotate_interval: 30, days_ahead: 14 });
+  const [form, setForm] = useState({ name: '', all_calendars: false, calendar_ids: [], background_id: '', bg_opacity: 100, two_column: false, overflow_mode: 'none', rotate_interval: 30, days_ahead: 14, show_pricing: false });
   const [err, setErr] = useState('');
+  const [pricingModal, setPricingModal] = useState(null); // screen object being edited for pricing
+  const [pricingSelection, setPricingSelection] = useState([]);
 
   function getPreviewDate(id) {
     return previewDates[id] || todayStr();
@@ -66,14 +69,16 @@ export default function ScreensSection({ displayType, calendarType }) {
   }
 
   function openAdd() {
-    setForm({ name: '', calendar_ids: [], background_id: '', bg_opacity: 100, two_column: false, overflow_mode: 'none', rotate_interval: 30, days_ahead: 14 });
+    setForm({ name: '', all_calendars: false, calendar_ids: [], background_id: '', bg_opacity: 100, two_column: false, overflow_mode: 'none', rotate_interval: 30, days_ahead: 14, show_pricing: false });
     setErr('');
     setModal('add');
   }
 
   function openEdit(screen) {
+    const hasSpecific = screen.calendar_ids && screen.calendar_ids.length > 0;
     setForm({
       name: screen.name || '',
+      all_calendars: !hasSpecific,
       calendar_ids: screen.calendar_ids || [],
       background_id: screen.background_id ?? '',
       bg_opacity: screen.bg_opacity ?? 100,
@@ -81,9 +86,27 @@ export default function ScreensSection({ displayType, calendarType }) {
       overflow_mode: screen.overflow_mode || 'none',
       rotate_interval: screen.rotate_interval ?? 30,
       days_ahead: screen.days_ahead ?? 14,
+      show_pricing: screen.show_pricing || false,
     });
     setErr('');
     setModal(screen);
+  }
+
+  function openPricingModal(screen) {
+    setPricingSelection(screen.pricing_ids || []);
+    setPricingModal(screen);
+  }
+
+  function togglePricingId(id) {
+    setPricingSelection((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
+  async function savePricingSelection() {
+    await apiFetch(`/screens/${pricingModal.id}`, { method: 'PATCH', body: JSON.stringify({ pricing_ids: pricingSelection }) });
+    setPricingModal(null);
+    reload();
   }
 
   function toggleCal(id) {
@@ -91,18 +114,24 @@ export default function ScreensSection({ displayType, calendarType }) {
       const ids = prev.calendar_ids.includes(id)
         ? prev.calendar_ids.filter((x) => x !== id)
         : [...prev.calendar_ids, id];
-      return { ...prev, calendar_ids: ids };
+      return { ...prev, all_calendars: false, calendar_ids: ids };
     });
+  }
+
+  function toggleAllCalendars() {
+    setForm((prev) => ({ ...prev, all_calendars: !prev.all_calendars, calendar_ids: [] }));
   }
 
   async function save() {
     if (!form.name.trim()) { setErr('Name is required.'); return; }
+    if (!form.all_calendars && form.calendar_ids.length === 0) { setErr('Select "All Calendars" or at least one calendar.'); return; }
     const body = {
       name: form.name.trim(),
       display_type: displayType,
-      calendar_ids: form.calendar_ids,
+      calendar_ids: form.all_calendars ? [] : form.calendar_ids,
       background_id: form.background_id || null,
       bg_opacity: form.bg_opacity,
+      show_pricing: form.show_pricing,
       ...(displayType === 'figure_skating' && {
         two_column: form.two_column,
         overflow_mode: form.overflow_mode,
@@ -185,6 +214,9 @@ export default function ScreensSection({ displayType, calendarType }) {
                 <div className={s.cardActions}>
                   <a href={`/tv/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost}>Preview</a>
                   <button className={adminStyles.btnGhost} onClick={() => openEdit(sc)}>Edit</button>
+                  {sc.show_pricing && (
+                    <button className={s.pricingBtn} title="Choose which prices to show" onClick={() => openPricingModal(sc)}>$</button>
+                  )}
                   <button
                     className={assignedDisplayName(sc.id) ? s.eyeDisabled : sc.visible !== false ? s.eyeOn : s.eyeOff}
                     onClick={() => toggleVisible(sc)}
@@ -216,20 +248,26 @@ export default function ScreensSection({ displayType, calendarType }) {
 
             <label className={adminStyles.label}>Calendars</label>
             <div className={s.calCheckList}>
+              <label className={s.calCheckItem} style={{ fontWeight: 600 }}>
+                <input
+                  type="checkbox"
+                  checked={form.all_calendars}
+                  onChange={toggleAllCalendars}
+                />
+                All Calendars
+              </label>
               {calendars.length === 0 && <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>No calendars of this type</span>}
               {calendars.map((c) => (
-                <label key={c.id} className={s.calCheckItem}>
+                <label key={c.id} className={s.calCheckItem} style={form.all_calendars ? { opacity: 0.5 } : undefined}>
                   <input
                     type="checkbox"
-                    checked={form.calendar_ids.includes(c.id)}
+                    checked={!form.all_calendars && form.calendar_ids.includes(c.id)}
+                    disabled={form.all_calendars}
                     onChange={() => toggleCal(c.id)}
                   />
                   {c.name}
                 </label>
               ))}
-            </div>
-            <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: '-0.25rem' }}>
-              Leave all unchecked to show all calendars.
             </div>
 
             <label className={adminStyles.label}>Background</label>
@@ -299,10 +337,50 @@ export default function ScreensSection({ displayType, calendarType }) {
               )}
             </>)}
 
+            <label className={s.calCheckItem} style={{ marginTop: '0.25rem' }}>
+              <input
+                type="checkbox"
+                checked={form.show_pricing}
+                onChange={(e) => setForm({ ...form, show_pricing: e.target.checked })}
+              />
+              Show Pricing on this screen
+            </label>
+
             {err && <span className={adminStyles.error}>{err}</span>}
             <div className={s.modalActions}>
               <button className={adminStyles.btnGhost} onClick={() => setModal(null)}>Cancel</button>
-              <button className={adminStyles.btnPrimary} onClick={save}>Save</button>
+              <button
+                className={adminStyles.btnPrimary}
+                onClick={save}
+                disabled={!form.all_calendars && form.calendar_ids.length === 0}
+              >Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pricingModal && (
+        <div className={s.modalBackdrop} onClick={() => setPricingModal(null)}>
+          <div className={s.modal} onClick={(e) => e.stopPropagation()}>
+            <div className={s.modalTitle}>Pricing — {pricingModal.name}</div>
+            <div className={s.calCheckList}>
+              {(skatePrices || []).length === 0 && (
+                <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>No pricing options configured yet. Add some in Settings.</span>
+              )}
+              {(skatePrices || []).map((p) => (
+                <label key={p.id} className={s.calCheckItem}>
+                  <input
+                    type="checkbox"
+                    checked={pricingSelection.includes(p.id)}
+                    onChange={() => togglePricingId(p.id)}
+                  />
+                  {p.label}{p.subheading ? ` (${p.subheading})` : ''} — {p.price}
+                </label>
+              ))}
+            </div>
+            <div className={s.modalActions}>
+              <button className={adminStyles.btnGhost} onClick={() => setPricingModal(null)}>Cancel</button>
+              <button className={adminStyles.btnPrimary} onClick={savePricingSelection}>Save</button>
             </div>
           </div>
         </div>

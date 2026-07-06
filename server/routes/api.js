@@ -2,10 +2,19 @@ const express = require('express');
 const router = express.Router();
 const db = require('../db');
 const ws = require('../ws');
-const { triggerRefresh, triggerCalendarRefresh, parseTitle } = require('../calendar');
+const { triggerRefresh, triggerCalendarRefresh, parseTitle, syncCalendar, scheduleCalendar, cancelCalendar } = require('../calendar');
 const { autoAssign } = require('../locker-assign');
-const { requireAuth, signToken, verifyToken } = require('../auth');
+const { requireAuth, rotateJwtSecret, signToken, verifyToken } = require('../auth');
 const bcrypt = require('bcryptjs');
+
+// True when the request carries a valid admin token (for endpoints that serve
+// both TVs and the admin panel with different visibility)
+function isAdminRequest(req) {
+  const header = req.headers['authorization'] || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (!token) return false;
+  try { verifyToken(token); return true; } catch { return false; }
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -39,6 +48,7 @@ router.post('/auth/setup', async (req, res) => {
   if (!password || password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
   const hash = await bcrypt.hash(password, 12);
   db.setSetting('admin_password_hash', hash);
+  rotateJwtSecret(); // invalidate any tokens issued before a password reset
   res.json({ token: signToken() });
 });
 
@@ -50,17 +60,32 @@ router.post('/auth/change-password', requireAuth, async (req, res) => {
   if (!newPassword || newPassword.length < 8) return res.status(400).json({ error: 'New password must be at least 8 characters.' });
   const hash = await bcrypt.hash(newPassword, 12);
   db.setSetting('admin_password_hash', hash);
+  rotateJwtSecret(); // log out all existing sessions; the response token is signed with the new secret
   res.json({ token: signToken() });
 });
 
 // ── Settings ──────────────────────────────────────────────────────────────────
 
+// Unauthenticated TV displays only need these; everything else requires a token
+const PUBLIC_SETTINGS = ['rink_name', 'logo_filename'];
+// Never returned or writable through the API
+const SECRET_SETTINGS = ['jwt_secret', 'admin_password_hash'];
+
 router.get('/settings', (req, res) => {
-  res.json(db.getSettings());
+  const settings = db.getSettings();
+  if (!isAdminRequest(req)) {
+    const pub = {};
+    for (const k of PUBLIC_SETTINGS) if (settings[k] !== undefined) pub[k] = settings[k];
+    return res.json(pub);
+  }
+  const full = { ...settings };
+  for (const k of SECRET_SETTINGS) delete full[k];
+  res.json(full);
 });
 
 router.patch('/settings', requireAuth, async (req, res) => {
   const incoming = req.body;
+  for (const k of SECRET_SETTINGS) delete incoming[k];
 
   if (incoming.ical_url) {
     const current = db.getSettings();
@@ -110,6 +135,8 @@ router.get('/screens', (req, res) => {
     overflow_mode: s.overflow_mode || 'none',
     rotate_interval: s.rotate_interval ?? 30,
     days_ahead: s.days_ahead ?? 14,
+    show_pricing: !!s.show_pricing,
+    pricing_ids: parseCalendarIds(s.pricing_ids) || [],
     bg_filename: s.background_id ? bgMap[s.background_id]?.filename : null,
     bg_label: s.background_id ? bgMap[s.background_id]?.label : null,
     online: connected.includes(String(s.id)),
@@ -118,18 +145,20 @@ router.get('/screens', (req, res) => {
 });
 
 router.post('/screens', requireAuth, (req, res) => {
-  const { name, ip = '', display_type = 'games', webpage_url = '', webpage_width = 100, webpage_zoom = 100, webpage_refresh = 0, calendar_ids, bg_opacity = 100, background_id, announcement_data, bg_color = '' } = req.body;
+  const { name, ip = '', display_type = 'games', webpage_url = '', webpage_width = 100, webpage_zoom = 100, webpage_refresh = 0, calendar_ids, bg_opacity = 100, background_id, announcement_data, bg_color = '', show_pricing = false, pricing_ids } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   const calIds = parseCalendarIds(calendar_ids);
-  const row = db.insert('screens', { name, ip, display_type, background_id: background_id || null, webpage_url, webpage_width: Number(webpage_width), webpage_zoom: Number(webpage_zoom), webpage_refresh: Number(webpage_refresh), calendar_ids: calIds ? JSON.stringify(calIds) : null, bg_opacity: Number(bg_opacity), announcement_data: announcement_data ? JSON.stringify(announcement_data) : null, bg_color: bg_color || '' });
+  const priceIds = parseCalendarIds(pricing_ids);
+  const row = db.insert('screens', { name, ip, display_type, background_id: background_id || null, webpage_url, webpage_width: Number(webpage_width), webpage_zoom: Number(webpage_zoom), webpage_refresh: Number(webpage_refresh), calendar_ids: calIds ? JSON.stringify(calIds) : null, bg_opacity: Number(bg_opacity), announcement_data: announcement_data ? JSON.stringify(announcement_data) : null, bg_color: bg_color || '', show_pricing: !!show_pricing, pricing_ids: priceIds ? JSON.stringify(priceIds) : null });
   res.json({ id: row.id });
 });
 
 router.patch('/screens/:id', requireAuth, (req, res) => {
   const screen = db.findById('screens', req.params.id);
   if (!screen) return res.status(404).json({ error: 'not found' });
-  const { name, ip, display_type, background_id, webpage_url, webpage_width, webpage_zoom, webpage_refresh, calendar_ids, bg_opacity, announcement_data, bg_color, visible } = req.body;
+  const { name, ip, display_type, background_id, webpage_url, webpage_width, webpage_zoom, webpage_refresh, calendar_ids, bg_opacity, announcement_data, bg_color, visible, show_pricing, pricing_ids } = req.body;
   const calIds = calendar_ids !== undefined ? parseCalendarIds(calendar_ids) : parseCalendarIds(screen.calendar_ids);
+  const priceIds = pricing_ids !== undefined ? parseCalendarIds(pricing_ids) : parseCalendarIds(screen.pricing_ids);
   db.update('screens', req.params.id, {
     name: name ?? screen.name,
     ip: ip ?? screen.ip,
@@ -148,6 +177,8 @@ router.patch('/screens/:id', requireAuth, (req, res) => {
     overflow_mode: req.body.overflow_mode ?? screen.overflow_mode ?? 'none',
     rotate_interval: req.body.rotate_interval !== undefined ? Number(req.body.rotate_interval) : (screen.rotate_interval ?? 30),
     days_ahead: req.body.days_ahead !== undefined ? Number(req.body.days_ahead) : (screen.days_ahead ?? 14),
+    show_pricing: show_pricing !== undefined ? !!show_pricing : !!screen.show_pricing,
+    pricing_ids: priceIds ? JSON.stringify(priceIds) : null,
   });
   ws.push(String(req.params.id), { type: 'reload' });
   res.json({ ok: true });
@@ -307,14 +338,12 @@ router.post('/games/reparse', requireAuth, (req, res) => {
 });
 
 router.delete('/games/unassigned', requireAuth, (req, res) => {
-  const data = require('../db');
-  const all = data.findAll('games');
-  const toRemove = all.filter((g) => !g.calendar_id);
-  toRemove.forEach((g) => data.remove('games', g.id));
+  const toRemove = db.findAll('games').filter((g) => !g.calendar_id);
+  toRemove.forEach((g) => db.remove('games', g.id));
   res.json({ removed: toRemove.length });
 });
 
-router.get('/games/debug-calendar', async (req, res) => {
+router.get('/games/debug-calendar', requireAuth, async (req, res) => {
   const ical = require('node-ical');
 
   let url, calName;
@@ -369,6 +398,15 @@ router.get('/games/debug-calendar', async (req, res) => {
 // ── Calendars ─────────────────────────────────────────────────────────────────
 
 router.get('/calendars', (req, res) => {
+  // TVs only need id/name/type for grouping; the iCal URL is a secret
+  // (Google "secret address" links grant read access to the whole calendar)
+  if (!isAdminRequest(req)) {
+    return res.json(db.findAll('calendars', 'created_at').map((cal) => ({
+      id: cal.id,
+      name: cal.name,
+      type: cal.type,
+    })));
+  }
   const leagues = db.findAll('leagues');
   const calendars = db.findAll('calendars', 'created_at').map((cal) => {
     const league = leagues.find((l) => l.name.toLowerCase() === cal.name.toLowerCase());
@@ -397,6 +435,10 @@ router.post('/calendars', requireAuth, async (req, res) => {
 
   const { locker_sequence_id } = req.body;
   const row = db.insert('calendars', { name, url, type, poll_interval_minutes: Number(poll_interval_minutes), team_order, locker_sequence_id: locker_sequence_id || null });
+  // Sync immediately in the background and start the poll cycle (previously
+  // new calendars were never polled until a server restart)
+  syncCalendar(row).then(() => ws.broadcast({ type: 'refresh_data' })).catch(() => {});
+  scheduleCalendar(row);
   res.json({ id: row.id });
 });
 
@@ -433,21 +475,39 @@ router.patch('/calendars/:id', requireAuth, async (req, res) => {
     const league = db.findAll('leagues').find((l) => l.name.toLowerCase() === calName.toLowerCase());
     if (league) db.update('leagues', league.id, { locker_sequence_id: newSeqId });
   }
+  // Apply a new poll interval or URL immediately instead of after the next fire
+  if (poll_interval_minutes !== undefined || (url && url !== cal.url)) {
+    scheduleCalendar(db.findById('calendars', req.params.id));
+  }
   res.json({ ok: true });
 });
 
 router.delete('/calendars/:id', requireAuth, (req, res) => {
-  db.remove('calendars', req.params.id);
-  res.json({ ok: true });
+  const calId = Number(req.params.id);
+  cancelCalendar(calId);
+  db.remove('calendars', calId);
+  // Remove this calendar's games so they don't linger invisibly in the store
+  // (or resurface on skate screens via the no-skate-calendars fallback)
+  const orphans = db.findAll('games').filter((g) => g.calendar_id === calId);
+  orphans.forEach((g) => db.remove('games', g.id));
+  ws.broadcast({ type: 'refresh_data' });
+  res.json({ ok: true, removed_games: orphans.length });
 });
 
 // ── Public Skate Sessions ─────────────────────────────────────────────────────
 
 router.get('/skate-sessions', (req, res) => {
   const skateCals = db.findAll('calendars').filter((c) => c.type === 'public_skates').map((c) => c.id);
-  const now = new Date().toISOString();
+  // Optional ?from= lets the TV preview bar show other dates; defaults to now
+  let from = new Date();
+  if (req.query.from) {
+    const d = new Date(req.query.from);
+    if (!isNaN(d.getTime())) from = d;
+  }
+  const fromIso = from.toISOString();
+  // Keep in-progress sessions visible until they end
   const sessions = db.findAll('games', 'start_time')
-    .filter((g) => g.is_skate && g.start_time >= now && (skateCals.length === 0 || skateCals.includes(g.calendar_id)));
+    .filter((g) => g.is_skate && (g.end_time || g.start_time) >= fromIso && (skateCals.length === 0 || skateCals.includes(g.calendar_id)));
   res.json(sessions);
 });
 

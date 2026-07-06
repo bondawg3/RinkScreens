@@ -6,21 +6,43 @@ const { autoAssign } = require('./locker-assign');
 
 const pollTimers = new Map();
 
+// Extracts the calendar's own title (X-WR-CALNAME), a non-standard but widely
+// supported property (Google/Outlook exports) set at the VCALENDAR level —
+// distinct from the admin-chosen display name — so admins can tell which
+// upstream calendar a URL actually points to.
+function extractCalName(icsText) {
+  if (!icsText) return null;
+  const unfolded = icsText.replace(/\r?\n[ \t]/g, '');
+  const match = unfolded.match(/^X-WR-CALNAME:(.*)$/im);
+  return match ? match[1].trim() || null : null;
+}
+
 // Shared title parsing logic used by both sync and reparse
 function parseTitle(rawTitle, cal) {
   const isNcwhl = cal && cal.name && cal.name.toUpperCase().includes('NCWHL');
   const isPickup = /league\s+pickup|scrimmage|practice|stick\s*&\s*shoot/i.test(rawTitle);
 
-  let title = /stick\s*&\s*shoot/i.test(rawTitle)
-    ? rawTitle.replace(/stick\s*&\s*shoot/i, 'Stick & Shoot')
-    : rawTitle;
+  // Pickup-style events keep the full raw title (no colon/NCWHL splitting)
+  if (isPickup) {
+    const title = /stick\s*&\s*shoot/i.test(rawTitle)
+      ? rawTitle.replace(/stick\s*&\s*shoot/i, 'Stick & Shoot')
+      : rawTitle;
+    return { title, away_team: 'Open', home_team: 'Open' };
+  }
+
+  let title = rawTitle;
   let matchup = rawTitle;
+  let firstIsHome = null; // NCWHL (Home)/(Away) tags override team_order when present
 
   if (isNcwhl) {
     const gameMatch = rawTitle.match(/^(.*?\bGame\b)\s*(.*)/i);
     if (gameMatch) {
       title = gameMatch[1].trim();
-      matchup = gameMatch[2].replace(/\s*\(Home\)/gi, '').replace(/\s*\(Away\)/gi, '').trim();
+      const rawMatchup = gameMatch[2];
+      const beforeVs = rawMatchup.split(/\s+vs\.?\s+/i)[0] || '';
+      if (/\(home\)/i.test(beforeVs)) firstIsHome = true;
+      else if (/\(away\)/i.test(beforeVs)) firstIsHome = false;
+      matchup = rawMatchup.replace(/\s*\(Home\)/gi, '').replace(/\s*\(Away\)/gi, '').trim();
     }
   } else if (rawTitle.includes(':')) {
     const colonIdx = rawTitle.indexOf(':');
@@ -28,27 +50,23 @@ function parseTitle(rawTitle, cal) {
     matchup = rawTitle.slice(colonIdx + 1).trim();
   }
 
-  let away_team = isPickup ? 'Open' : '';
-  let home_team = isPickup ? 'Open' : '';
+  let away_team = '';
+  let home_team = '';
 
-  if (!isPickup) {
-    const vsMatch = matchup.match(/^(.+?)\s+vs\.?\s+(.+)$/i);
-    if (vsMatch) {
-      const first = vsMatch[1].trim();
-      const second = vsMatch[2].trim();
-      if (cal && cal.team_order === 'home_away') {
-        home_team = first;
-        away_team = second;
-      } else {
-        away_team = first;
-        home_team = second;
-      }
-      // No colon means the full title was just the matchup — clear it since teams say it all
-      if (title === rawTitle) title = '';
+  const vsMatch = matchup.match(/^(.+?)\s+vs\.?\s+(.+)$/i);
+  if (vsMatch) {
+    const first = vsMatch[1].trim();
+    const second = vsMatch[2].trim();
+    const firstHome = firstIsHome !== null ? firstIsHome : !!(cal && cal.team_order === 'home_away');
+    if (firstHome) {
+      home_team = first;
+      away_team = second;
     } else {
-      away_team = '';
-      home_team = '';
+      away_team = first;
+      home_team = second;
     }
+    // No colon means the full title was just the matchup — clear it since teams say it all
+    if (title === rawTitle) title = '';
   }
 
   return { title, away_team, home_team };
@@ -86,6 +104,9 @@ async function syncCalendar(cal) {
       return;
     }
 
+    // Calendar may have been deleted while the fetch was in flight
+    if (cal.id && !db.findById('calendars', cal.id)) return;
+
     let expander;
     try {
       expander = new IcalExpander({ ics: text, maxIterations: 2000 });
@@ -94,6 +115,8 @@ async function syncCalendar(cal) {
       if (cal.id) db.update('calendars', cal.id, { last_sync_at: new Date().toISOString(), last_sync_error: `Parse failed: ${err.message}` });
       return;
     }
+
+    if (cal.id) db.update('calendars', cal.id, { cal_name: extractCalName(text) });
 
     const result = expander.between(cutoff, horizon);
 
@@ -133,13 +156,27 @@ async function syncCalendar(cal) {
   } else {
     // hockey_games: use node-ical (preserves existing uid-based records)
     let events;
+    let icsText;
     try {
-      events = await ical.async.fromURL(cal.url);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      try {
+        const resp = await fetch(cal.url, { signal: controller.signal });
+        icsText = await resp.text();
+      } finally {
+        clearTimeout(timeout);
+      }
+      events = ical.sync.parseICS(icsText);
     } catch (err) {
       console.error(`[calendar] fetch failed for "${cal.name}":`, err.message);
       if (cal.id) db.update('calendars', cal.id, { last_sync_at: new Date().toISOString(), last_sync_error: `Fetch failed: ${err.message}` });
       return;
     }
+
+    // Calendar may have been deleted while the fetch was in flight
+    if (cal.id && !db.findById('calendars', cal.id)) return;
+
+    if (cal.id) db.update('calendars', cal.id, { cal_name: extractCalName(icsText) });
 
     for (const [, event] of Object.entries(events)) {
       if (event.type !== 'VEVENT') continue;
@@ -232,7 +269,16 @@ function scheduleCalendar(cal) {
     const fresh = db.findById('calendars', cal.id);
     if (fresh) scheduleCalendar(fresh);
   }, ms);
+  timer.unref();
   pollTimers.set(cal.id, timer);
+}
+
+function cancelCalendar(calId) {
+  const id = Number(calId);
+  if (pollTimers.has(id)) {
+    clearTimeout(pollTimers.get(id));
+    pollTimers.delete(id);
+  }
 }
 
 async function fetchAndSync() {
@@ -262,6 +308,7 @@ function startPolling() {
     const settings = db.getSettings();
     const ms = parseInt(settings.poll_interval_minutes || '5', 10) * 60_000;
     const timer = setTimeout(() => { fetchAndSync(); startPolling(); }, ms);
+    timer.unref();
     pollTimers.set('legacy', timer);
   }
 }
@@ -279,4 +326,4 @@ async function triggerCalendarRefresh(calId) {
   ws.broadcast({ type: 'refresh_data' });
 }
 
-module.exports = { startPolling, triggerRefresh, triggerCalendarRefresh, parseTitle };
+module.exports = { startPolling, triggerRefresh, triggerCalendarRefresh, parseTitle, syncCalendar, scheduleCalendar, cancelCalendar };

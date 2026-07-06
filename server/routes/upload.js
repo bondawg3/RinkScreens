@@ -17,14 +17,27 @@ const storage = multer.diskStorage({
   },
 });
 
+// Extension must match the declared MIME type (defense against renamed files)
+const IMAGE_MIMES = {
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
+  '.svg': 'image/svg+xml',
+};
+
+function imageFilter(allowedExts) {
+  return (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, allowedExts.includes(ext) && file.mimetype === IMAGE_MIMES[ext]);
+  };
+}
+
 const upload = multer({
   storage,
   limits: { fileSize: 20 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, allowed.includes(ext));
-  },
+  fileFilter: imageFilter(['.jpg', '.jpeg', '.png', '.gif', '.webp']),
 });
 
 router.post('/backgrounds', requireAuth, upload.single('file'), (req, res) => {
@@ -46,11 +59,7 @@ const logoStorage = multer.diskStorage({
 const logoUpload = multer({
   storage: logoStorage,
   limits: { fileSize: 5 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg'];
-    const ext = path.extname(file.originalname).toLowerCase();
-    cb(null, allowed.includes(ext));
-  },
+  fileFilter: imageFilter(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg']),
 });
 
 router.post('/logo', requireAuth, logoUpload.single('file'), (req, res) => {

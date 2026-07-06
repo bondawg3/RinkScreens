@@ -10,6 +10,13 @@ function getJwtSecret() {
   return secret;
 }
 
+// Invalidates all previously issued tokens (called when the password changes)
+function rotateJwtSecret() {
+  const secret = crypto.randomBytes(32).toString('hex');
+  db.setSetting('jwt_secret', secret);
+  return secret;
+}
+
 function signToken() {
   return jwt.sign({ sub: 'admin' }, getJwtSecret(), { expiresIn: '30d' });
 }
@@ -30,4 +37,4 @@ function requireAuth(req, res, next) {
   }
 }
 
-module.exports = { getJwtSecret, signToken, verifyToken, requireAuth };
+module.exports = { getJwtSecret, rotateJwtSecret, signToken, verifyToken, requireAuth };

@@ -190,6 +190,22 @@
 
 .eyeDisabled { border-color: var(--border, #e5e7eb); opacity: 0.3; cursor: not-allowed; }
 
+/* ── Pricing toggle button ── */
+.pricingBtn {
+  background: #16a34a;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  padding: 0.28rem 0.6rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.pricingBtn:hover { background: #15803d; }
+
 .inUseBadge {
   font-size: 0.75rem;
   font-weight: 600;

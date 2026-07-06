@@ -8,9 +8,19 @@ const clients = new Map();
 function init(server) {
   wss = new WebSocketServer({ server });
 
+  wss.on('error', (err) => {
+    console.error('[ws] server error:', err.message);
+  });
+
   wss.on('connection', (ws, req) => {
     const { query } = parse(req.url, true);
     const screenId = query.screenId || 'unknown';
+
+    // Without an error listener, a socket error (e.g. ECONNRESET from a TV
+    // dropping off Wi-Fi) is an unhandled 'error' event and kills the process
+    ws.on('error', (err) => {
+      console.error(`[ws] client error (screen ${screenId}):`, err.message);
+    });
 
     if (!clients.has(screenId)) clients.set(screenId, new Set());
     clients.get(screenId).add(ws);
@@ -38,7 +48,7 @@ function init(server) {
       for (const ws of set) {
         if (!ws.isAlive) { ws.terminate(); continue; }
         ws.isAlive = false;
-        ws.send(JSON.stringify({ type: 'ping' }));
+        if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'ping' }));
       }
     }
   }, 30_000);

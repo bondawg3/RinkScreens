@@ -5,10 +5,13 @@
 const fs = require('fs');
 const path = require('path');
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
+// RINKSCREENS_DATA_DIR lets tests point the store at a temp directory
+const DATA_DIR = process.env.RINKSCREENS_DATA_DIR || path.join(__dirname, '..', 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const DB_FILE = path.join(DATA_DIR, 'db.json');
+const BAK_FILE = `${DB_FILE}.bak`;
+const TMP_FILE = `${DB_FILE}.tmp`;
 
 const DEFAULTS = {
   settings: {
@@ -31,16 +34,37 @@ const DEFAULTS = {
 };
 
 function load() {
-  if (!fs.existsSync(DB_FILE)) return JSON.parse(JSON.stringify(DEFAULTS));
+  if (fs.existsSync(DB_FILE)) {
+    try {
+      return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+    } catch (err) {
+      try { fs.copyFileSync(DB_FILE, `${DB_FILE}.corrupt`); } catch (_) {}
+      console.error(`[db] db.json is corrupt: ${err.message} (copy saved as db.json.corrupt)`);
+      // fall through to backup recovery
+    }
+  } else if (!fs.existsSync(BAK_FILE)) {
+    return JSON.parse(JSON.stringify(DEFAULTS)); // fresh install
+  }
   try {
-    return JSON.parse(fs.readFileSync(DB_FILE, 'utf8'));
+    const data = JSON.parse(fs.readFileSync(BAK_FILE, 'utf8'));
+    console.warn('[db] recovered previous state from db.json.bak');
+    return data;
   } catch (_) {
-    return JSON.parse(JSON.stringify(DEFAULTS));
+    throw new Error(
+      'db.json is unreadable and no valid db.json.bak exists. ' +
+      'Refusing to reset to defaults — inspect data/db.json.corrupt to recover.'
+    );
   }
 }
 
+// Write-to-temp + rename so a crash mid-write can never leave a truncated
+// db.json; the previous state is kept as db.json.bak for recovery.
 function save(data) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
+  fs.writeFileSync(TMP_FILE, JSON.stringify(data, null, 2), 'utf8');
+  if (fs.existsSync(DB_FILE)) {
+    try { fs.renameSync(DB_FILE, BAK_FILE); } catch (_) {}
+  }
+  fs.renameSync(TMP_FILE, DB_FILE);
 }
 
 function nextId(data, table) {
@@ -75,7 +99,7 @@ function setSettings(kvPairs) {
 function findAll(table, sortBy) {
   const data = load();
   const rows = [...(data[table] || [])];
-  if (sortBy) rows.sort((a, b) => (a[sortBy] > b[sortBy] ? 1 : -1));
+  if (sortBy) rows.sort((a, b) => (a[sortBy] > b[sortBy] ? 1 : a[sortBy] < b[sortBy] ? -1 : 0));
   return rows;
 }
 

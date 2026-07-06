@@ -2,6 +2,117 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.15.0] — 2026-07-05
+
+### Added
+- **Pricing on all screen types** — the "Show Pricing" checkbox and per-screen tier picker, previously only available on Figure Skating screens, now works on Public Skate, Game Board (hockey), Rink Events, and Custom screens. Public Skate's pricing panel is now opt-in and tier-selectable instead of always showing every configured price.
+
+## [1.14.11] — 2026-07-05
+
+### Fixed
+- **Admission price table rounding, for real this time** — the row background was painted by the `<tr>` element, which has no border-radius and ignored the rounding set on the cells; moved the background onto the `.price-label`/`.price-amount` cells themselves so the last row's rounded corners actually clip the visible background
+
+## [1.14.10] — 2026-07-05
+
+### Fixed
+- **Admission price table rounding actually rendering** — browsers ignore `border-radius` on table cells when `border-collapse: collapse` is set, which silently defeated the previous corner-rounding fix; switched the price table to `border-collapse: separate` with zero spacing so the rounded bottom corners actually render
+
+## [1.14.9] — 2026-07-05
+
+### Fixed
+- **Admission price table bottom corners** — the last row now explicitly rounds its bottom corners instead of relying only on the parent container's clipping
+
+## [1.14.8] — 2026-07-05
+
+### Fixed
+- **Figure skating "Upcoming Sessions" header corners** — the header sits above a gapped (spaced-out) sessions table rather than a flush list, so its bottom corners were left square against the background; it now rounds on all four corners
+
+## [1.14.7] — 2026-07-05
+
+### Changed
+- **Figure skating screen colors** — swapped the title banner to light blue and the "Upcoming Sessions" header to dark blue, and switched the sessions header to the shared section-title style so it lines up with the Admission price table header
+
+## [1.14.6] — 2026-07-05
+
+### Changed
+- **Figure skating screen** — added a full-width title banner (like the public skate screen) and renamed the events list heading to "Upcoming Sessions"
+
+## [1.14.5] — 2026-07-05
+
+### Added
+- **Favicon** — added the Nazareth Ice Oasis icon as the browser favicon on both the admin/React app and the TV display page
+
+## [1.14.4] — 2026-07-05
+
+### Changed
+- **Hockey tab heading** — the page heading in the Hockey admin tab now reads "Hockey" instead of "Games", matching the nav rename
+
+## [1.14.3] — 2026-07-05
+
+### Changed
+- **"Games" renamed to "Hockey"** — the admin nav tab and the Calendars section label ("Hockey Games" → "Hockey") now better reflect that the section covers all hockey-related calendar entries (games, practices, training), not just games
+
+## [1.14.2] — 2026-07-05
+
+### Changed
+- **Calendars list simplified** — removed the Calendar Name and iCal URL columns from the calendars list (Calendar Name is still visible in the edit modal); the list was getting visually cluttered
+
+## [1.14.1] — 2026-07-05
+
+### Changed
+- **Calendars list polish** — Calendar Name now shows in italic gray under the Display Name instead of its own column; the read-only Calendar Name field in the edit modal is now visibly greyed out; the iCal URL now wraps to show the full link instead of truncating; Sync/Edit/Remove are compact icon-only buttons on one line (↻ / ✎ / 🗑)
+
+## [1.14.0] — 2026-07-05
+
+### Added
+- **Calendar Name field** — when editing a calendar, the admin panel now shows a read-only "Calendar Name" pulled from the iCal file's own title (`X-WR-CALNAME`), separate from the admin-chosen "Display Name". Makes it possible to tell which upstream calendar a URL actually points to, since the link itself gives no clue
+
+## [1.13.1] — 2026-07-05
+
+### Added
+- **Custom color swatch preview** — in Leagues & Teams, entering a custom hex color shows a live swatch of that color to the right of the hex box (hidden for preset colors, which already highlight in the palette)
+
+## [1.13.0] — 2026-07-05
+
+### Added
+- **Public Skate heading banner** — skate TV screens show a full-width banner across the top of the content area with the screen's name (e.g. "Public Skates"), left-aligned and styled to match the section headers
+
+## [1.12.1] — 2026-07-05
+
+### Fixed
+- **Public Skate TV screens now show sessions from Public Skates calendars** — the TV skate view was still wired to the hockey-games data source (legacy keyword matching), so sessions imported from a Public Skates calendar never appeared on the TV. It now pulls from the skate-sessions endpoint and respects the screen's selected calendar(s) and "days to show" setting. `/api/skate-sessions` accepts an optional `from` date parameter so the preview date bar keeps working
+
+## [1.12.0] — 2026-07-05
+
+### Fixed
+- **New calendars sync immediately** — adding a calendar now triggers a first sync in the background and starts its poll cycle; previously new calendars were never polled until a server restart or a global Refresh Calendar
+- **Poll interval changes apply immediately** — editing a calendar's poll interval or URL reschedules its polling right away instead of after the next scheduled fire
+- **Deleting a calendar fully cleans up** — its games are removed (so they can't linger invisibly or resurface on skate screens), its poll timer is cancelled, and an in-flight sync for a just-deleted calendar aborts instead of re-importing games
+- **In-progress public skate sessions stay on screen** — sessions are now shown until they end instead of disappearing the moment they start (both the API and the TV page)
+- **Password change logs out old sessions** — the JWT signing secret is rotated on password change (and on first-run setup after a reset), so previously issued admin tokens stop working immediately
+- **Pickup events keep their full title** — "Practice"/"Scrimmage"/"League Pickup"/"Stick & Shoot" events with a colon in the title (e.g. "CON: Practice") no longer get colon-split, matching the documented rule
+
+### Changed
+- **NCWHL (Home)/(Away) tags now decide home vs. away** — previously the tags were stripped and ignored, with the calendar's team order setting deciding; the tags now override team order when present (use **Reparse Titles** in the Games tab to apply to existing games)
+- **iCal URLs hidden from TVs** — unauthenticated `GET /api/calendars` now returns only id, name, and type; the URL (a Google "secret address" credential) and sync details require an admin token. The calendar debug endpoint now requires auth
+- **TV page escapes all displayed text** — event titles, team names, prices, announcements, and the rink name are HTML-escaped before rendering, so a stray `<` in a calendar event title can no longer blank or script a TV
+- **Upload hardening** — uploaded images must have a MIME type matching their extension, and `/uploads` is served with `nosniff` and a CSP header that neutralizes scripts in SVG files opened directly
+
+## [1.11.1] — 2026-07-04
+
+### Fixed
+- **Settings endpoint no longer leaks secrets** — unauthenticated `GET /api/settings` (used by TV displays) now returns only `rink_name` and `logo_filename`; previously it exposed the JWT signing secret and admin password hash to anyone on the network. Authenticated admin requests get all settings except those two secrets, and `PATCH /api/settings` refuses to overwrite them
+- **Database writes are now atomic with automatic backup** — `db.json` is written via temp-file-and-rename so a crash or power loss mid-write can never truncate it; the previous state is kept as `db.json.bak`. If `db.json` is ever corrupt, the server recovers from the backup (preserving the bad file as `db.json.corrupt`) instead of silently resetting all data to defaults
+- **WebSocket errors no longer crash the server** — socket errors (e.g. a TV dropping off Wi-Fi mid-frame) were unhandled `'error'` events that killed the Node process; they are now caught and logged, and heartbeat pings are only sent to open sockets
+
+## [1.11.0] — 2026-07-04
+
+### Added
+- **Automated test suite** — Vitest + Supertest; 53 tests covering calendar title parsing (colon/vs/pickup/NCWHL rules), locker room auto-assignment (sequence cycling, blocks, conflicts, manual preservation, reset), the JSON store, and the REST API (auth setup/login/token checks, screens, displays, calendars, games, locker rooms, pricing). Run with `npm test` (or `npm run test:watch` during development)
+
+### Changed
+- **Data directory override** — the JSON store honors a `RINKSCREENS_DATA_DIR` environment variable so tests run against a temp directory and never touch the real `data/db.json`; production behavior is unchanged
+
 ## [1.10.0] — 2026-07-04
 
 ### Added

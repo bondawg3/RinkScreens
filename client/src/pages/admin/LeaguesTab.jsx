@@ -9,6 +9,8 @@ const SWATCHES = [
   '#d4a017','#8B0000',
 ];
 
+const SWATCH_SET = new Set(SWATCHES.map((c) => c.toLowerCase()));
+
 function ColorPicker({ value, onChange }) {
   const [hex, setHex] = useState(value || '');
 
@@ -24,7 +26,9 @@ function ColorPicker({ value, onChange }) {
     if (/^#[0-9a-fA-F]{6}$/.test(val)) onChange(val);
   }
 
-  const isInvalid = hex && !/^#[0-9a-fA-F]{6}$/.test(hex);
+  const isValid = /^#[0-9a-fA-F]{6}$/.test(hex);
+  const isInvalid = hex && !isValid;
+  const isCustom = isValid && !SWATCH_SET.has(hex.toLowerCase());
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -40,13 +44,21 @@ function ColorPicker({ value, onChange }) {
           style={{ width: 18, height: 18, borderRadius: 3, background: '#fff', cursor: 'pointer', border: '1px solid #ccc', fontSize: 10, padding: 0, color: '#999', lineHeight: 1 }}>✕</button>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <input
-          className={styles.input}
-          value={hex}
-          onChange={handleHex}
-          placeholder="#rrggbb"
-          style={{ width: 90, flex: 'none', minWidth: 0, padding: '0.25rem 0.5rem', fontSize: '0.85rem', borderColor: isInvalid ? '#c0392b' : undefined }}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <input
+            className={styles.input}
+            value={hex}
+            onChange={handleHex}
+            placeholder="#rrggbb"
+            style={{ width: 90, flex: 'none', minWidth: 0, padding: '0.25rem 0.5rem', fontSize: '0.85rem', borderColor: isInvalid ? '#c0392b' : undefined }}
+          />
+          {isCustom && (
+            <span
+              title={hex}
+              style={{ width: 22, height: 22, borderRadius: 4, background: hex, border: '1px solid #ccc', flexShrink: 0, display: 'inline-block' }}
+            />
+          )}
+        </div>
         {isInvalid && <span style={{ fontSize: '0.75rem', color: '#c0392b' }}>Invalid hex</span>}
       </div>
     </div>

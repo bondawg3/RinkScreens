@@ -33,7 +33,6 @@ function processDay(dayGames, calLeagueMap, seqMap, standardSeq) {
   let prevAssignedHome = null;
   let prevAssignedAway = null;
   let blockSeq = null; // sequence carried forward within a block
-  let prevCalId = null; // last calendar seen — used to detect calendar change within a block
 
   for (const game of dayGames) {
     const startMs = new Date(game.start_time).getTime();
@@ -48,7 +47,6 @@ function processDay(dayGames, calLeagueMap, seqMap, standardSeq) {
       blockSeq = null;
       prevAssignedHome = null;
       prevAssignedAway = null;
-      prevCalId = null;
     }
 
     // Sequence priority: calendar-level → league-level → carry-over within block → default
@@ -104,7 +102,6 @@ function processDay(dayGames, calLeagueMap, seqMap, standardSeq) {
     }
 
     if (endMs > (prevEndMs || 0)) prevEndMs = endMs;
-    prevCalId = game.calendar_id;
   }
 
   return { updates, conflicts };

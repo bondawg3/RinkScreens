@@ -240,7 +240,7 @@ export default function GamesTab() {
     <div>
       <ScreensSection displayType="games" calendarType="hockey_games" />
       <div className={styles.rowBetween}>
-        <h2 className={styles.heading}>Games</h2>
+        <h2 className={styles.heading}>Hockey</h2>
         <div className={tabStyles.controls}>
           <div className={tabStyles.sortToggle}>
             <button

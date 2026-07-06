@@ -4,7 +4,7 @@ import styles from './AdminTab.module.css';
 import calStyles from './CalendarModal.module.css';
 
 const CALENDAR_TYPES = [
-  { value: 'hockey_games', label: 'Hockey Games' },
+  { value: 'hockey_games', label: 'Hockey' },
   { value: 'public_skates', label: 'Public Skates' },
   { value: 'rink_events', label: 'Rink Events' },
   { value: 'figure_skating', label: 'Figure Skating' },
@@ -102,7 +102,7 @@ function CalendarModal({ type, existing, onClose, onSaved }) {
         </div>
         <form onSubmit={submit} className={calStyles.modalBody}>
           <div className={styles.field}>
-            <label className={styles.label}>Calendar Name</label>
+            <label className={styles.label}>Display Name</label>
             <input
               className={styles.input}
               value={name}
@@ -111,6 +111,15 @@ function CalendarModal({ type, existing, onClose, onSaved }) {
               required
             />
           </div>
+          {isEdit && (
+            <div className={styles.field}>
+              <label className={styles.label}>Calendar Name</label>
+              <input className={`${styles.input} ${calStyles.disabledInput}`} value={existing?.cal_name || '—'} disabled />
+              <span className={styles.hint} style={{ fontSize: '0.8rem' }}>
+                Read from the iCal file's own title (X-WR-CALNAME), if present — helps identify which upstream calendar this link points to.
+              </span>
+            </div>
+          )}
           <div className={styles.field}>
             <label className={styles.label}>iCal Link</label>
             <input
@@ -266,8 +275,7 @@ export default function CalendarsTab() {
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th>Name</th>
-                  <th>iCal URL</th>
+                  <th>Display Name</th>
                   <th>Poll Interval</th>
                   {value === 'hockey_games' && <th>Team Order</th>}
                   <th>Last Sync</th>
@@ -278,9 +286,6 @@ export default function CalendarsTab() {
                 {byType(value).map((cal) => (
                   <tr key={cal.id}>
                     <td>{cal.name}</td>
-                    <td className={`${styles.mono} ${calStyles.urlCell}`} title={cal.url}>
-                      {cal.url.length > 60 ? cal.url.slice(0, 60) + '…' : cal.url}
-                    </td>
                     <td>{cal.poll_interval_minutes % (24 * 60) === 0 ? `${cal.poll_interval_minutes / (24 * 60)}d` : `${cal.poll_interval_minutes}m`}</td>
                     {value === 'hockey_games' && (
                       <td>{cal.team_order === 'home_away' ? 'Home vs. Away' : 'Away vs. Home'}</td>
@@ -289,12 +294,12 @@ export default function CalendarsTab() {
                     <td>
                       <div className={styles.actions}>
                         {syncableTypes.has(value) && (
-                          <button className={styles.btnGhost} onClick={() => syncCalendar(cal.id)} disabled={!!syncing}>
-                            {syncing === cal.id ? 'Syncing…' : '↻ Sync'}
+                          <button className={calStyles.iconBtn} title="Sync" onClick={() => syncCalendar(cal.id)} disabled={!!syncing}>
+                            {syncing === cal.id ? '…' : '↻'}
                           </button>
                         )}
-                        <button className={styles.btnGhost} onClick={() => openEdit(cal)}>Edit</button>
-                        <button className={styles.btnDanger} onClick={() => removeCalendar(cal.id)}>Remove</button>
+                        <button className={calStyles.iconBtn} title="Edit" onClick={() => openEdit(cal)}>✎</button>
+                        <button className={calStyles.iconBtnDanger} title="Remove" onClick={() => removeCalendar(cal.id)}>🗑</button>
                       </div>
                     </td>
                   </tr>

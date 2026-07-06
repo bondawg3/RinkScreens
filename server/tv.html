@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/Nazareth_Ice_Oasis_Icon.png">
 <title>RinkScreens</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -164,14 +165,32 @@ header {
 .game-table tbody tr.event-row td:nth-child(1) { border-radius: 8px 0 0 8px; }
 .game-table tbody tr.event-row td:nth-child(2) { border-radius: 0 8px 8px 0; }
 .game-table tbody tr.event-row:nth-child(even) td { background: rgba(235,245,255,0.88); }
+.game-table tbody tr.event-row td { vertical-align: top; }
+.game-table tbody tr.event-row td.td-time { padding: 0.4em 0.6em; }
 
 /* ── Public Skate ── */
+.skate-banner {
+  background: rgba(6,72,120,0.85);
+  color: #fff;
+  text-align: left;
+  font-size: 2.2em;
+  font-weight: bold;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 14px 24px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
 .skate-wrap {
   display: -webkit-box;
   display: -ms-flexbox;
   display: flex;
   gap: 24px;
-  height: 100%;
+  -webkit-box-flex: 1;
+  -ms-flex: 1;
+  flex: 1;
+  min-height: 0;
 }
 
 .skate-sessions { -webkit-box-flex: 1; -ms-flex: 1; flex: 1; border-radius: 6px; overflow: hidden; }
@@ -187,6 +206,13 @@ header {
   text-transform: uppercase;
   margin-bottom: 0;
   border-radius: 6px 6px 0 0;
+}
+
+/* Session header followed by a gapped (border-spacing) table rather than a
+   flush list — round the bottom corners too since they're exposed to the
+   background instead of butting against another rounded block. */
+.section-title.section-title-gapped {
+  border-radius: 6px;
 }
 
 .session-row {
@@ -205,10 +231,13 @@ header {
 .session-date { font-size: 1.2em; font-weight: bold; color: #064878; min-width: 240px; }
 .session-time { font-size: 1.4em; font-weight: bold; color: #0a84c8; }
 
-.price-table { width: 100%; border-collapse: collapse; }
-.price-table tr { background: rgba(255,255,255,0.88); border-bottom: 2px solid rgba(10,132,200,0.1); }
-.price-label  { padding: 12px 16px; font-size: 1.2em; font-weight: 600; color: #064878; }
-.price-amount { padding: 12px 16px; font-size: 1.4em; font-weight: bold; color: #0a84c8; text-align: right; }
+.price-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.price-table tr { border-bottom: 2px solid rgba(10,132,200,0.1); }
+.price-table tr:last-child { border-bottom: none; }
+.price-table tr:last-child .price-label  { border-radius: 0 0 0 6px; }
+.price-table tr:last-child .price-amount { border-radius: 0 0 6px 0; }
+.price-label  { padding: 12px 16px; font-size: 1.2em; font-weight: 600; color: #064878; background: rgba(255,255,255,0.88); }
+.price-amount { padding: 12px 16px; font-size: 1.4em; font-weight: bold; color: #0a84c8; text-align: right; background: rgba(255,255,255,0.88); }
 .price-subheading { margin-left: 0.75em; font-size: 0.8em; font-weight: 400; color: #4a7a9b; margin-top: 2px; }
 
 /* ── Preview date bar ── */
@@ -374,6 +403,14 @@ function get(url, cb) {
 }
 
 // ── Format helpers ─────────────────────────────────────────────────────────
+// Escape data before inserting into innerHTML — titles and team names come
+// from external calendar feeds and must never be treated as markup
+function esc(v) {
+  return String(v == null ? '' : v)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
 function fmtTime(iso) {
   var d = new Date(iso);
   var h = d.getHours(), m = d.getMinutes();
@@ -390,11 +427,34 @@ function fmtDate(iso) {
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────
-function renderGames(games, calMap, teamMap) {
+function buildPriceTable(prices) {
+  if (!prices || !prices.length) {
+    return '<div style="padding:16px;color:rgba(255,255,255,0.7)">Pricing not configured</div>';
+  }
+  var html = '';
+  for (var j = 0; j < prices.length; j++) {
+    var labelCell = esc(prices[j].label);
+    if (prices[j].subheading) {
+      labelCell += '<div class="price-subheading">' + esc(prices[j].subheading) + '</div>';
+    }
+    html += '<tr><td class="price-label">' + labelCell + '</td><td class="price-amount">' + esc(prices[j].price) + '</td></tr>';
+  }
+  return '<table class="price-table">' + html + '</table>';
+}
+
+function wrapWithPricing(pageHtml, prices) {
+  if (!prices) return pageHtml;
+  return '<div class="skate-wrap">' +
+    '<div class="skate-sessions">' + pageHtml + '</div>' +
+    '<div class="skate-pricing"><div class="section-title">Admission</div>' + buildPriceTable(prices) + '</div>' +
+    '</div>';
+}
+
+function renderGames(games, calMap, teamMap, prices) {
   teamMap = teamMap || {};
   if (!games || games.length === 0) {
     document.getElementById('content').innerHTML =
-      '<div class="empty"><div class="empty-icon">&#127944;</div><p>No games scheduled for today</p></div>';
+      wrapWithPricing('<div class="empty"><div class="empty-icon">&#127944;</div><p>No games scheduled for today</p></div>', prices);
     return;
   }
 
@@ -413,7 +473,7 @@ function renderGames(games, calMap, teamMap) {
     var calName = calMap && calMap[key] ? calMap[key] : '';
     tbody +=
       '<tr class="col-header-row">' +
-        '<td class="col-cal-name" colspan="2">' + calName + '</td>' +
+        '<td class="col-cal-name" colspan="2">' + esc(calName) + '</td>' +
         '<td class="col-transparent td-gap"></td>' +
         '<td style="white-space:nowrap">Home</td>' +
         '<td style="width:70px;min-width:70px;text-align:center">LR#</td>' +
@@ -430,13 +490,13 @@ function renderGames(games, calMap, teamMap) {
       var awayStyle = awayInfo.color ? 'background:' + awayInfo.color + ';' + (awayInfo.textColor ? 'color:' + awayInfo.textColor + ';' : '') : '';
       tbody += '<tr class="game-row">' +
         '<td class="td-time">' + fmtTime(g.start_time) + '</td>' +
-        '<td class="td-title">' + (g.title || '') + '</td>' +
+        '<td class="td-title">' + esc(g.title || '') + '</td>' +
         '<td class="td-gap"></td>' +
-        '<td class="td-home"' + (homeStyle ? ' style="' + homeStyle + '"' : '') + '>' + homeInfo.label + '</td>' +
-        '<td class="td-locker">' + (g.home_locker || '') + '</td>' +
+        '<td class="td-home"' + (homeStyle ? ' style="' + esc(homeStyle) + '"' : '') + '>' + esc(homeInfo.label) + '</td>' +
+        '<td class="td-locker">' + esc(g.home_locker || '') + '</td>' +
         '<td class="td-gap"></td>' +
-        '<td class="td-away"' + (awayStyle ? ' style="' + awayStyle + '"' : '') + '>' + awayInfo.label + '</td>' +
-        '<td class="td-locker">' + (g.away_locker || '') + '</td>' +
+        '<td class="td-away"' + (awayStyle ? ' style="' + esc(awayStyle) + '"' : '') + '>' + esc(awayInfo.label) + '</td>' +
+        '<td class="td-locker">' + esc(g.away_locker || '') + '</td>' +
         '</tr>';
     }
     if (gi < groupOrder.length - 1) {
@@ -445,10 +505,10 @@ function renderGames(games, calMap, teamMap) {
   }
 
   document.getElementById('content').innerHTML =
-    '<table class="game-table"><tbody>' + tbody + '</tbody></table>';
+    wrapWithPricing('<table class="game-table"><tbody>' + tbody + '</tbody></table>', prices);
 }
 
-function renderSkate(sessions, prices) {
+function renderSkate(sessions, prices, heading) {
   var sessionHtml = '';
   if (!sessions || sessions.length === 0) {
     sessionHtml = '<div style="padding:16px;color:rgba(255,255,255,0.7)">No upcoming sessions</div>';
@@ -462,36 +522,166 @@ function renderSkate(sessions, prices) {
     }
   }
 
-  var priceHtml = '';
-  if (prices && prices.length) {
-    for (var j = 0; j < prices.length; j++) {
-      var labelCell = prices[j].label;
-      if (prices[j].subheading) {
-        labelCell += '<div class="price-subheading">' + prices[j].subheading + '</div>';
-      }
-      priceHtml += '<tr><td class="price-label">' + labelCell + '</td><td class="price-amount">' + prices[j].price + '</td></tr>';
-    }
-    priceHtml = '<table class="price-table">' + priceHtml + '</table>';
-  } else {
-    priceHtml = '<div style="padding:16px;color:rgba(255,255,255,0.7)">Pricing not configured</div>';
-  }
+  var sessionsBlock = '<div class="section-title">Upcoming Sessions</div>' + sessionHtml;
 
   document.getElementById('content').innerHTML =
-    '<div class="skate-wrap">' +
-    '<div class="skate-sessions"><div class="section-title">Upcoming Sessions</div>' + sessionHtml + '</div>' +
-    '<div class="skate-pricing"><div class="section-title">Admission</div>' + priceHtml + '</div>' +
-    '</div>';
+    (heading ? '<div class="skate-banner">' + esc(heading) + '</div>' : '') +
+    wrapWithPricing(sessionsBlock, prices);
+}
+
+function renderFigureSkating(screen, events, prices) {
+  var oMode = screen.overflow_mode || 'none';
+  var twoCol = !!screen.two_column;
+  var maxPerPage = twoCol ? 12 : 24; // rows per column; 2-col = 24 events/page
+
+  // Filter to today (or from now for flow mode)
+  var filtered2 = filterByCalIds(events, screen.calendar_ids);
+  var todayEvents = [];
+  if (oMode === 'flow' && !PREVIEW_DATE) {
+    clearInterval(reloadTimer);
+    reloadTimer = setInterval(loadScreen, 300000);
+    var realNow = new Date();
+    var flowDayEnd = new Date(realNow.getFullYear(), realNow.getMonth(), realNow.getDate() + 1);
+    for (var i = 0; i < filtered2.length; i++) {
+      var st = new Date(filtered2[i].start_time);
+      if (st >= realNow && st < flowDayEnd) todayEvents.push(filtered2[i]);
+    }
+  } else {
+    var refNow = getNow();
+    var todayStart = new Date(refNow.getFullYear(), refNow.getMonth(), refNow.getDate());
+    var todayEnd = new Date(todayStart.getTime() + 86400000);
+    for (var i = 0; i < filtered2.length; i++) {
+      var st = new Date(filtered2[i].start_time);
+      if (st >= todayStart && st < todayEnd) todayEvents.push(filtered2[i]);
+    }
+  }
+  todayEvents.sort(function(a, b) { return new Date(a.start_time) - new Date(b.start_time); });
+
+  // Consolidate rows: group events sharing the same start minute, show time once
+  var rows = [];
+  var timeMap = {};
+  for (var i = 0; i < todayEvents.length; i++) {
+    var ev = todayEvents[i];
+    var d = new Date(ev.start_time);
+    var key = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate() + '-' + d.getHours() + '-' + d.getMinutes();
+    if (!timeMap[key]) {
+      timeMap[key] = { timeStr: fmtTime(ev.start_time), titles: [] };
+      rows.push(timeMap[key]);
+    }
+    timeMap[key].titles.push(ev.raw_title || ev.title || '');
+  }
+  function titlesCell(titles) {
+    return titles.map(function(t) { return esc(t); }).join('<br>');
+  }
+
+  function buildColTable(colRows) {
+    if (!colRows.length) return '';
+    var t = '<table class="game-table"><tbody>';
+    for (var i = 0; i < colRows.length; i++) {
+      t += '<tr class="event-row">' +
+        '<td class="td-time" style="white-space:nowrap">' + colRows[i].timeStr + '</td>' +
+        '<td style="padding:0.4em 0.6em;font-size:1em;">' + titlesCell(colRows[i].titles) + '</td>' +
+        '</tr>';
+    }
+    t += '</tbody></table>';
+    return t;
+  }
+
+  function buildPage(pageRows) {
+    var header = '<div class="section-title section-title-gapped">Upcoming Sessions</div>';
+    if (!pageRows.length) return header + '<div class="empty"><p>No events scheduled.</p></div>';
+    if (!twoCol) {
+      var t = '<table class="game-table"><tbody>';
+      for (var i = 0; i < pageRows.length; i++) {
+        t += '<tr class="event-row">' +
+          '<td class="td-time">' + pageRows[i].timeStr + '</td>' +
+          '<td style="padding:0.4em 0.6em;font-size:1em;">' + titlesCell(pageRows[i].titles) + '</td>' +
+          '</tr>';
+      }
+      t += '</tbody></table>';
+      return header + t;
+    } else {
+      var half = Math.ceil(pageRows.length / 2);
+      var col1 = pageRows.slice(0, half);
+      var col2 = pageRows.slice(half);
+      return header + '<div style="display:flex;gap:24px;height:100%">' +
+        '<div style="flex:1;overflow:hidden">' + buildColTable(col1) + '</div>' +
+        '<div style="flex:1;overflow:hidden">' + buildColTable(col2) + '</div>' +
+        '</div>';
+    }
+  }
+
+  function buildPriceTable() {
+    if (!prices || !prices.length) {
+      return '<div style="padding:16px;color:rgba(255,255,255,0.7)">Pricing not configured</div>';
+    }
+    var html = '';
+    for (var j = 0; j < prices.length; j++) {
+      var labelCell = esc(prices[j].label);
+      if (prices[j].subheading) {
+        labelCell += '<div class="price-subheading">' + esc(prices[j].subheading) + '</div>';
+      }
+      html += '<tr><td class="price-label">' + labelCell + '</td><td class="price-amount">' + esc(prices[j].price) + '</td></tr>';
+    }
+    return '<table class="price-table">' + html + '</table>';
+  }
+
+  function wrapWithPricing(pageHtml) {
+    if (!prices) return pageHtml;
+    return '<div class="skate-wrap">' +
+      '<div class="skate-sessions">' + pageHtml + '</div>' +
+      '<div class="skate-pricing"><div class="section-title">Admission</div>' + buildPriceTable() + '</div>' +
+      '</div>';
+  }
+
+  var content = document.getElementById('content');
+  var bannerHtml = screen.name ? '<div class="skate-banner" style="background:#62B0D0">' + esc(screen.name) + '</div>' : '';
+
+  if (oMode === 'rotate' && rows.length > maxPerPage) {
+    // Split into pages, rotate on interval
+    var pages = [];
+    for (var i = 0; i < rows.length; i += maxPerPage) {
+      pages.push(rows.slice(i, i + maxPerPage));
+    }
+    var pageHtmls = [];
+    for (var i = 0; i < pages.length; i++) pageHtmls.push(wrapWithPricing(buildPage(pages[i])));
+
+    content.innerHTML = bannerHtml + pageHtmls[0];
+    fitTable();
+    var pageIdx = 0;
+    refreshTimer = setInterval(function() {
+      pageIdx = (pageIdx + 1) % pageHtmls.length;
+      content.innerHTML = bannerHtml + pageHtmls[pageIdx];
+      fitTable();
+    }, (screen.rotate_interval || 30) * 1000);
+  } else {
+    // No rotation — show first maxPerPage rows
+    content.innerHTML = bannerHtml + (rows.length
+      ? wrapWithPricing(buildPage(rows.slice(0, maxPerPage)))
+      : wrapWithPricing('<div class="empty"><p>No events scheduled for today.</p></div>'));
+    fitTable();
+  }
 }
 
 // ── Auto-fit table font size ──────────────────────────────────────────────
 function fitTable() {
   var content = document.getElementById('content');
-  var table = content ? content.querySelector('.game-table') : null;
-  if (!table) return;
-  table.style.fontSize = '2em';
-  while ((table.scrollWidth > content.clientWidth || table.scrollHeight > content.clientHeight) && parseFloat(table.style.fontSize) > 0.5) {
-    var size = Math.round((parseFloat(table.style.fontSize) - 0.05) * 100) / 100;
-    table.style.fontSize = size + 'em';
+  var tables = content ? content.querySelectorAll('.game-table') : null;
+  if (!tables || !tables.length) return;
+  function setSize(size) {
+    for (var i = 0; i < tables.length; i++) tables[i].style.fontSize = size + 'em';
+  }
+  function overflowing() {
+    for (var i = 0; i < tables.length; i++) {
+      if (tables[i].scrollWidth > tables[i].clientWidth || tables[i].scrollHeight > content.clientHeight) return true;
+    }
+    return false;
+  }
+  var size = 2;
+  setSize(size);
+  while (overflowing() && size > 0.5) {
+    size = Math.round((size - 0.05) * 100) / 100;
+    setSize(size);
   }
 }
 
@@ -551,28 +741,49 @@ function loadScreen() {
                 }
               }
             }
-            renderGames(filtered, calMap, teamMap);
-            fitTable();
+            if (screen.show_pricing) {
+              get('/api/skate-prices', function(err5, prices) {
+                var selectedIds = screen.pricing_ids || [];
+                var filteredPrices = (prices || []).filter(function(p) { return selectedIds.indexOf(p.id) !== -1; });
+                renderGames(filtered, calMap, teamMap, filteredPrices);
+                fitTable();
+              });
+            } else {
+              renderGames(filtered, calMap, teamMap);
+              fitTable();
+            }
           });
         });
       });
 
     } else if (dtype === 'skate') {
-      get('/api/games', function(err2, games) {
-        get('/api/skate-prices', function(err3, prices) {
-          var now = getNow();
+      // Sessions come from the skate-sessions endpoint (Public Skates calendars),
+      // narrowed to this screen's selected calendars. ?from= keeps the preview
+      // date bar working and keeps in-progress sessions visible until they end.
+      var skateNow = getNow();
+      get('/api/skate-sessions?from=' + encodeURIComponent(skateNow.toISOString()), function(err2, sessions) {
+        function finishSkate(prices) {
           var daysAhead = screen.days_ahead != null ? screen.days_ahead : 14;
-          var cutoff = new Date(now.getTime() + daysAhead * 86400000);
-          var sessions = [];
-          if (games) {
-            for (var i = 0; i < games.length; i++) {
-              var st = new Date(games[i].start_time);
-              if (games[i].is_skate && st >= now && st < cutoff) sessions.push(games[i]);
+          var cutoff = new Date(skateNow.getTime() + daysAhead * 86400000);
+          var list = [];
+          if (sessions) {
+            for (var i = 0; i < sessions.length; i++) {
+              var st = new Date(sessions[i].start_time);
+              if (st < cutoff) list.push(sessions[i]);
             }
           }
-          sessions = filterByCalIds(sessions, screen.calendar_ids);
-          renderSkate(sessions, prices || []);
-        });
+          list = filterByCalIds(list, screen.calendar_ids);
+          renderSkate(list, prices, screen.name);
+        }
+        if (screen.show_pricing) {
+          get('/api/skate-prices', function(err3, prices) {
+            var selectedIds = screen.pricing_ids || [];
+            var filteredPrices = (prices || []).filter(function(p) { return selectedIds.indexOf(p.id) !== -1; });
+            finishSkate(filteredPrices);
+          });
+        } else {
+          finishSkate(null);
+        }
       });
 
     } else if (dtype === 'webpage') {
@@ -583,7 +794,7 @@ function loadScreen() {
         var iframeId = 'webpage-frame';
         document.getElementById('content').innerHTML =
           '<div style="width:100%;height:100%;display:flex;justify-content:center;overflow:hidden;">' +
-          '<iframe id="' + iframeId + '" src="' + screen.webpage_url + '" style="width:' + wpWidth + '%;height:' + Math.round(100 / wpZoom) + '%;border:none;flex-shrink:0;transform:scale(' + wpZoom + ');transform-origin:top center;" allowfullscreen></iframe>' +
+          '<iframe id="' + iframeId + '" src="' + esc(screen.webpage_url) + '" style="width:' + wpWidth + '%;height:' + Math.round(100 / wpZoom) + '%;border:none;flex-shrink:0;transform:scale(' + wpZoom + ');transform-origin:top center;" allowfullscreen></iframe>' +
           '</div>';
         if (wpRefresh > 0) {
           setTimeout(function reloadFrame() {
@@ -622,13 +833,24 @@ function loadScreen() {
             var title = ev.raw_title || ev.title || '';
             html += '<tr class="event-row">' +
               '<td class="td-time">' + timeStr + '</td>' +
-              '<td style="padding:0.4em 0.6em;font-size:1em;">' + title + '</td>' +
+              '<td style="padding:0.4em 0.6em;font-size:1em;">' + esc(title) + '</td>' +
               '</tr>';
           }
           html += '</tbody></table>';
         }
-        document.getElementById('content').innerHTML = html;
-        fitTable();
+        function finishRinkEvents(prices) {
+          document.getElementById('content').innerHTML = wrapWithPricing(html, prices);
+          fitTable();
+        }
+        if (screen.show_pricing) {
+          get('/api/skate-prices', function(err3, prices) {
+            var selectedIds = screen.pricing_ids || [];
+            var filteredPrices = (prices || []).filter(function(p) { return selectedIds.indexOf(p.id) !== -1; });
+            finishRinkEvents(filteredPrices);
+          });
+        } else {
+          finishRinkEvents(null);
+        }
       });
 
     } else if (dtype === 'figure_skating') {
@@ -636,117 +858,14 @@ function loadScreen() {
         if (err2 || !events) return;
         if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
 
-        var oMode = screen.overflow_mode || 'none';
-        var twoCol = !!screen.two_column;
-        var maxPerPage = twoCol ? 12 : 24; // rows per column; 2-col = 24 events/page
-
-        // Filter to today (or from now for flow mode)
-        var filtered2 = filterByCalIds(events, screen.calendar_ids);
-        var todayEvents = [];
-        if (oMode === 'flow' && !PREVIEW_DATE) {
-          clearInterval(reloadTimer);
-          reloadTimer = setInterval(loadScreen, 300000);
-          var realNow = new Date();
-          var flowDayEnd = new Date(realNow.getFullYear(), realNow.getMonth(), realNow.getDate() + 1);
-          for (var i = 0; i < filtered2.length; i++) {
-            var st = new Date(filtered2[i].start_time);
-            if (st >= realNow && st < flowDayEnd) todayEvents.push(filtered2[i]);
-          }
+        if (screen.show_pricing) {
+          get('/api/skate-prices', function(err3, prices) {
+            var selectedIds = screen.pricing_ids || [];
+            var filtered = (prices || []).filter(function(p) { return selectedIds.indexOf(p.id) !== -1; });
+            renderFigureSkating(screen, events, filtered);
+          });
         } else {
-          var refNow = getNow();
-          var todayStart = new Date(refNow.getFullYear(), refNow.getMonth(), refNow.getDate());
-          var todayEnd = new Date(todayStart.getTime() + 86400000);
-          for (var i = 0; i < filtered2.length; i++) {
-            var st = new Date(filtered2[i].start_time);
-            if (st >= todayStart && st < todayEnd) todayEvents.push(filtered2[i]);
-          }
-        }
-        todayEvents.sort(function(a, b) { return new Date(a.start_time) - new Date(b.start_time); });
-
-        // Consolidate rows: group events sharing the same start minute, show time once
-        var rows = [];
-        var timeMap = {};
-        for (var i = 0; i < todayEvents.length; i++) {
-          var ev = todayEvents[i];
-          var d = new Date(ev.start_time);
-          var key = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate() + '-' + d.getHours() + '-' + d.getMinutes();
-          if (!timeMap[key]) {
-            timeMap[key] = { timeStr: fmtTime(ev.start_time), titles: [] };
-            rows.push(timeMap[key]);
-          }
-          timeMap[key].titles.push(ev.raw_title || ev.title || '');
-        }
-        // Flatten: each group's first title shows the time, rest are blank
-        var flatRows = [];
-        for (var i = 0; i < rows.length; i++) {
-          var g = rows[i];
-          for (var j = 0; j < g.titles.length; j++) {
-            flatRows.push({ time: j === 0 ? g.timeStr : '', title: g.titles[j] });
-          }
-        }
-
-        function buildColTable(colRows) {
-          if (!colRows.length) return '';
-          var t = '<table class="game-table" style="height:100%"><tbody>';
-          for (var i = 0; i < colRows.length; i++) {
-            t += '<tr class="event-row">' +
-              '<td class="td-time" style="white-space:nowrap">' + colRows[i].time + '</td>' +
-              '<td style="padding:0.4em 0.6em;font-size:1em;">' + colRows[i].title + '</td>' +
-              '</tr>';
-          }
-          t += '</tbody></table>';
-          return t;
-        }
-
-        function buildPage(pageRows) {
-          if (!pageRows.length) return '<div class="empty"><p>No events scheduled.</p></div>';
-          if (!twoCol) {
-            var t = '<table class="game-table"><tbody>';
-            t += '<tr class="col-header-row"><td class="col-cal-name" colspan="2">Figure Skating</td></tr>';
-            for (var i = 0; i < pageRows.length; i++) {
-              t += '<tr class="event-row">' +
-                '<td class="td-time">' + pageRows[i].time + '</td>' +
-                '<td style="padding:0.4em 0.6em;font-size:1em;">' + pageRows[i].title + '</td>' +
-                '</tr>';
-            }
-            t += '</tbody></table>';
-            return t;
-          } else {
-            var half = Math.ceil(pageRows.length / 2);
-            var col1 = pageRows.slice(0, half);
-            var col2 = pageRows.slice(half);
-            return '<div style="display:flex;gap:24px;height:100%">' +
-              '<div style="flex:1;overflow:hidden">' + buildColTable(col1) + '</div>' +
-              '<div style="flex:1;overflow:hidden">' + buildColTable(col2) + '</div>' +
-              '</div>';
-          }
-        }
-
-        var content = document.getElementById('content');
-
-        if (oMode === 'rotate' && flatRows.length > maxPerPage) {
-          // Split into pages, rotate on interval
-          var pages = [];
-          for (var i = 0; i < flatRows.length; i += maxPerPage) {
-            pages.push(flatRows.slice(i, i + maxPerPage));
-          }
-          var pageHtmls = [];
-          for (var i = 0; i < pages.length; i++) pageHtmls.push(buildPage(pages[i]));
-
-          content.innerHTML = pageHtmls[0];
-          fitTable();
-          var pageIdx = 0;
-          refreshTimer = setInterval(function() {
-            pageIdx = (pageIdx + 1) % pageHtmls.length;
-            content.innerHTML = pageHtmls[pageIdx];
-            fitTable();
-          }, (screen.rotate_interval || 30) * 1000);
-        } else {
-          // No rotation — show first maxPerPage rows
-          content.innerHTML = flatRows.length
-            ? buildPage(flatRows.slice(0, maxPerPage))
-            : '<div class="empty"><p>No events scheduled for today.</p></div>';
-          fitTable();
+          renderFigureSkating(screen, events, null);
         }
       });
 
@@ -822,9 +941,22 @@ function loadScreen() {
 
                 items.sort(function(a, b) { return new Date(a.start_time) - new Date(b.start_time); });
 
+                function finishCustom(customHtml, prices) {
+                  document.getElementById('content').innerHTML = wrapWithPricing(customHtml, prices);
+                  fitTable();
+                }
+
                 if (items.length === 0) {
-                  document.getElementById('content').innerHTML =
-                    '<div class="empty"><div class="empty-icon">&#128197;</div><p>No events scheduled for today</p></div>';
+                  var emptyHtml = '<div class="empty"><div class="empty-icon">&#128197;</div><p>No events scheduled for today</p></div>';
+                  if (screen.show_pricing) {
+                    get('/api/skate-prices', function(err7, prices) {
+                      var selectedIds = screen.pricing_ids || [];
+                      var filteredPrices = (prices || []).filter(function(p) { return selectedIds.indexOf(p.id) !== -1; });
+                      finishCustom(emptyHtml, filteredPrices);
+                    });
+                  } else {
+                    finishCustom(emptyHtml, null);
+                  }
                   return;
                 }
 
@@ -840,27 +972,34 @@ function loadScreen() {
                     var awayStyle = awayInfo.color ? 'background:' + awayInfo.color + ';' + (awayInfo.textColor ? 'color:' + awayInfo.textColor + ';' : '') : '';
                     tbody += '<tr class="game-row">' +
                       '<td class="td-time">' + timeStr + '</td>' +
-                      '<td class="td-title">' + calName + '</td>' +
+                      '<td class="td-title">' + esc(calName) + '</td>' +
                       '<td class="td-gap"></td>' +
-                      '<td class="td-home"' + (homeStyle ? ' style="' + homeStyle + '"' : '') + '>' + homeInfo.label + '</td>' +
-                      '<td class="td-locker">' + (it.home_locker || '') + '</td>' +
+                      '<td class="td-home"' + (homeStyle ? ' style="' + esc(homeStyle) + '"' : '') + '>' + esc(homeInfo.label) + '</td>' +
+                      '<td class="td-locker">' + esc(it.home_locker || '') + '</td>' +
                       '<td class="td-gap"></td>' +
-                      '<td class="td-away"' + (awayStyle ? ' style="' + awayStyle + '"' : '') + '>' + awayInfo.label + '</td>' +
-                      '<td class="td-locker">' + (it.away_locker || '') + '</td>' +
+                      '<td class="td-away"' + (awayStyle ? ' style="' + esc(awayStyle) + '"' : '') + '>' + esc(awayInfo.label) + '</td>' +
+                      '<td class="td-locker">' + esc(it.away_locker || '') + '</td>' +
                       '</tr>';
                   } else {
                     tbody += '<tr class="event-row">' +
                       '<td class="td-time">' + timeStr + '</td>' +
                       '<td style="padding:0.4em 0.6em;font-size:1em;">' +
-                        (calName ? '<span style="opacity:0.6;margin-right:0.5em">' + calName + '</span>' : '') +
-                        it.title +
+                        (calName ? '<span style="opacity:0.6;margin-right:0.5em">' + esc(calName) + '</span>' : '') +
+                        esc(it.title) +
                       '</td>' +
                       '</tr>';
                   }
                 }
-                document.getElementById('content').innerHTML =
-                  '<table class="game-table"><tbody>' + tbody + '</tbody></table>';
-                fitTable();
+                var customHtml = '<table class="game-table"><tbody>' + tbody + '</tbody></table>';
+                if (screen.show_pricing) {
+                  get('/api/skate-prices', function(err7, prices) {
+                    var selectedIds = screen.pricing_ids || [];
+                    var filteredPrices = (prices || []).filter(function(p) { return selectedIds.indexOf(p.id) !== -1; });
+                    finishCustom(customHtml, filteredPrices);
+                  });
+                } else {
+                  finishCustom(customHtml, null);
+                }
               });
             });
           });
@@ -869,7 +1008,7 @@ function loadScreen() {
 
     } else if (dtype === 'message') {
       document.getElementById('content').innerHTML =
-        '<div class="empty"><p>' + (screen.custom_message || 'Welcome!') + '</p></div>';
+        '<div class="empty"><p>' + esc(screen.custom_message || 'Welcome!') + '</p></div>';
 
     } else if (dtype === 'announcement') {
       var annoData = screen.announcement_data;
@@ -884,23 +1023,21 @@ function loadScreen() {
       for (var ai = 0; ai < annoData.elements.length; ai++) {
         var ae = annoData.elements[ai];
         if (ae.type === 'text') {
-          var escapedTxt = String(ae.text || '')
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
           annoHtml += '<div style="' +
-            'position:absolute;left:' + ae.x + '%;top:' + ae.y + '%;' +
+            'position:absolute;left:' + Number(ae.x) + '%;top:' + Number(ae.y) + '%;' +
             'transform:translate(-50%,-50%);' +
             'width:max-content;' +
-            'color:' + (ae.color || '#fff') + ';' +
-            'font-family:' + (ae.font || 'Arial') + ',sans-serif;' +
+            'color:' + esc(ae.color || '#fff') + ';' +
+            'font-family:' + esc(ae.font || 'Arial') + ',sans-serif;' +
             'font-size:' + ((ae.size || 48) / 19.2).toFixed(3) + 'vw;' +
             'font-weight:' + (ae.bold ? 'bold' : 'normal') + ';' +
-            'text-align:' + (ae.align || 'left') + ';' +
+            'text-align:' + esc(ae.align || 'left') + ';' +
             'white-space:pre;line-height:1.2;pointer-events:none;' +
-            '">' + escapedTxt + '</div>';
+            '">' + esc(ae.text || '') + '</div>';
         } else if (ae.type === 'image') {
-          annoHtml += '<img src="/uploads/' + ae.filename + '" style="' +
-            'position:absolute;left:' + ae.x + '%;top:' + ae.y + '%;' +
-            'width:' + (ae.width || 25) + '%;' +
+          annoHtml += '<img src="/uploads/' + esc(ae.filename) + '" style="' +
+            'position:absolute;left:' + Number(ae.x) + '%;top:' + Number(ae.y) + '%;' +
+            'width:' + (Number(ae.width) || 25) + '%;' +
             'transform:translate(-50%,-50%);pointer-events:none;" alt="" />';
         }
       }
@@ -914,9 +1051,9 @@ get('/api/settings', function(err, s) {
   if (err || !s) return;
   var el = document.getElementById('rink-name');
   if (s.logo_filename) {
-    el.innerHTML = '<img class="rink-logo" src="/uploads/' + s.logo_filename + '" alt="' + (s.rink_name || 'Rink') + '">';
+    el.innerHTML = '<img class="rink-logo" src="/uploads/' + esc(s.logo_filename) + '" alt="' + esc(s.rink_name || 'Rink') + '">';
   } else if (s.rink_name) {
-    el.innerHTML = s.rink_name;
+    el.innerHTML = esc(s.rink_name);
   }
 });
 

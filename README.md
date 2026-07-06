@@ -1,4 +1,4 @@
-# RinkScreens — v1.10.0
+# RinkScreens — v1.15.0
 
 Digital signage system for ice rinks. Pulls games from Google Calendar (iCal) and displays them on smart TVs around the facility. An admin panel on any local browser lets staff control what each screen shows and manage locker room assignments, pricing, and backgrounds.
 
@@ -95,7 +95,7 @@ Navigate to `/admin` from any browser on the local network.
 Settings is organized into sub-tabs:
 - **General** — rink name and logo (logo replaces text in TV header)
 - **Calendars** — add/edit/delete iCal calendars (Hockey Games, Public Skates, Rink Events, Figure Skating) with poll interval and locker sequence overrides; **Last Sync** column shows success/failure status per calendar
-- **Pricing** — admission pricing tiers (label + subheading + price + sort order) shown on TV displays for public skate and other rink events
+- **Pricing** — admission pricing tiers (label + subheading + price + sort order); each screen (Public Skate, Game Board, Rink Events, Figure Skating, Custom) has a **Show Pricing** checkbox plus a picker for which tiers to display on that screen
 - **Locker Rooms** — add/edit/delete rooms; define named **Locker Room Sequences** for auto-assignment
 - **Displays** — register physical TV devices (name + IP address)
 - **Admin** — change the admin login password
@@ -125,12 +125,12 @@ Events are imported if they start within the last 12 hours through the next 30 d
 | Title has a colon | Everything before `:` (e.g. "CON") | Parsed from matchup after colon | Parsed from matchup after colon |
 | No colon, has "vs" | _(blank)_ | First team per team order setting | Second team per team order setting |
 | No colon, no "vs" | Full raw title | `Away TBD` | `Home TBD` |
-| Title contains "Practice", "Scrimmage", "League Pickup", or "Stick & Shoot" | Full raw title (normalized to "Stick & Shoot") | `Open` | `Open` |
+| Title contains "Practice", "Scrimmage", "League Pickup", or "Stick & Shoot" | Full raw title, even if it contains a colon (normalized to "Stick & Shoot") | `Open` | `Open` |
 
 ### NCWHL calendar special rules
 Calendars with "NCWHL" in the name use a different parsing strategy:
 - Title = everything up to and including the word "Game" (e.g. `"Maroon Game M2 (Home) vs. M7 (Away)"` → title `"Maroon Game"`)
-- `(Home)` and `(Away)` tags are stripped before the "vs" split
+- `(Home)` / `(Away)` tags decide which team is home and which is away (overriding the team order setting), then are stripped from the displayed names; when no tags are present the calendar's team order setting applies
 - The colon rule is not applied
 
 ### Reparse Titles
@@ -147,11 +147,14 @@ All display pages live at `/tv/:screenId` — plain HTML/CSS/JS with no React or
 
 | Display type | What it shows |
 |---|---|
-| Game Board | Today's games with time, away vs. home team, locker rooms |
-| Public Skate | Upcoming public skate sessions and admission pricing |
-| Rink Events | Today's rink events in table format |
-| Figure Skating | Today's figure skating events in table format |
+| Game Board | Today's games with time, away vs. home team, locker rooms — optional admission pricing panel |
+| Public Skate | Heading banner (screen name), upcoming public skate sessions — optional admission pricing panel |
+| Rink Events | Today's rink events in table format — optional admission pricing panel |
+| Figure Skating | Today's figure skating events in table format — optional admission pricing panel |
+| Custom | Combined games/rink events/figure skating for today in one table — optional admission pricing panel |
 | Custom Message | Static text message configured per screen |
+
+Pricing is opt-in per screen via the **Show Pricing** checkbox in each type's Screens section; the selected tiers render in a side panel next to the schedule.
 
 The TV header shows the rink logo (or name) on the left, a live clock on the right, and the current date centered.
 
@@ -171,7 +174,7 @@ TVs auto-reconnect every 3 seconds if the server restarts.
 
 ## Data storage
 
-All data is stored in `data/db.json` — a flat JSON file, no database binary required.
+All data is stored in `data/db.json` — a flat JSON file, no database binary required. Writes are atomic (temp file + rename), and the previous state is kept as `data/db.json.bak`; if `db.json` is ever corrupted, the server recovers from the backup automatically and preserves the bad file as `db.json.corrupt`.
 
 | Table | Purpose |
 |---|---|
@@ -187,6 +190,17 @@ All data is stored in `data/db.json` — a flat JSON file, no database binary re
 | `settings` | Rink name, logo filename, legacy iCal URL |
 
 Uploaded files are stored in `uploads/` (gitignored).
+
+---
+
+## Testing
+
+```powershell
+npm test            # run the full suite once
+npm run test:watch  # watch mode during development
+```
+
+Tests live in `tests/` (Vitest + Supertest) and cover calendar title parsing, locker room auto-assignment, the JSON store, and the REST API. They run against a temp data directory (via the `RINKSCREENS_DATA_DIR` env var), so the real `data/db.json` is never touched.
 
 ---
 

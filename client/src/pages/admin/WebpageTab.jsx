@@ -4,7 +4,7 @@ import styles from './AdminTab.module.css';
 import tStyles from './ScreensTab.module.css';
 import sStyles from './ScreensSection.module.css';
 import Thumbnail from './Thumbnail';
-import { useScreenCards, InUseBadge, EyeButton, EyeHint } from './screenCard';
+import { useScreenCards, InUseBadge, EyeButton, EyeHint, DuplicateButton } from './screenCard';
 
 const EMPTY_FORM = { name: '', webpage_url: '', webpage_width: 100, webpage_zoom: 100 };
 
@@ -22,7 +22,7 @@ function toMinutes(val, unit) {
 export default function WebpageTab() {
   const { data: allScreens, reload } = useApi('/screens');
   const { data: displays } = useApi('/displays');
-  const { eyeHint, assignedDisplayName, toggleVisible, deleteScreen } =
+  const { eyeHint, assignedDisplayName, toggleVisible, deleteScreen, duplicateScreen } =
     useScreenCards({ displays, reload, confirmMessage: 'Delete this webpage screen?' });
   const [modal, setModal] = useState(null); // null | 'add' | screen object
   const [form, setForm] = useState(EMPTY_FORM);
@@ -110,11 +110,12 @@ export default function WebpageTab() {
                 })()}
               </div>
               <div className={tStyles.cardActions}>
-                <a href={`/tv/${sc.id}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost}>Preview</a>
-                <button className={styles.btnGhost} onClick={() => openEdit(sc)}>Edit</button>
+                <a href={`/tv/${sc.id}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">📺</a>
+                <button className={styles.btnGhost} onClick={() => openEdit(sc)} title="Edit">✎</button>
                 <button className={styles.btnGhost} title="Resync page" onClick={() => apiFetch(`/screens/${sc.id}/reload`, { method: 'POST' })}>&#8635;</button>
                 <EyeButton screen={sc} assignedName={assignedDisplayName(sc.id)} onToggle={toggleVisible} />
-                <button className={styles.btnDanger} onClick={() => deleteScreen(sc.id)}>Delete</button>
+                <button className={styles.btnDanger} onClick={() => deleteScreen(sc.id)} title="Delete">🗑</button>
+                <DuplicateButton screen={sc} onDuplicate={duplicateScreen} />
               </div>
               <EyeHint show={eyeHint === sc.id} name={assignedDisplayName(sc.id)} />
             </div>

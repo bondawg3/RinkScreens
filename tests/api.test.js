@@ -153,6 +153,27 @@ describe('screens', () => {
     expect(res.status).toBe(404);
   });
 
+  it('duplicates a screen with the same settings and a " - Copy" name', async () => {
+    const created = await auth(request(app).post('/api/screens')).send({ name: 'Rink TV', bg_opacity: 55, calendar_ids: [1, 2], show_pricing: true });
+    const dup = await auth(request(app).post(`/api/screens/${created.body.id}/duplicate`)).send();
+    expect(dup.status).toBe(200);
+    expect(dup.body.id).not.toBe(created.body.id);
+
+    const list = await request(app).get('/api/screens');
+    const copy = list.body.find((s) => s.id === dup.body.id);
+    expect(copy).toMatchObject({
+      name: 'Rink TV - Copy',
+      bg_opacity: 55,
+      calendar_ids: [1, 2],
+      show_pricing: true,
+    });
+  });
+
+  it('404s when duplicating a missing screen', async () => {
+    const res = await auth(request(app).post('/api/screens/999/duplicate')).send();
+    expect(res.status).toBe(404);
+  });
+
   it('defaults show_locker_rooms to true and allows turning it off', async () => {
     const created = await auth(request(app).post('/api/screens')).send({ name: 'Game Board' });
     const list = await request(app).get('/api/screens');

@@ -3,7 +3,7 @@ import { useApi, apiFetch } from '../../hooks/useApi';
 import adminStyles from './AdminTab.module.css';
 import s from './ScreensSection.module.css';
 import Thumbnail from './Thumbnail';
-import { useScreenCards, InUseBadge, EyeButton, EyeHint } from './screenCard';
+import { useScreenCards, InUseBadge, EyeButton, EyeHint, DuplicateButton } from './screenCard';
 import { stepDate, todayStr, fmtDateLabel } from '../../utils/date';
 
 const CAL_TYPE_LABELS = {
@@ -131,7 +131,7 @@ export default function ScreensSection({ displayType, calendarType }) {
     } catch (ex) { setErr(ex.message); }
   }
 
-  const { eyeHint, assignedDisplayName, toggleVisible, deleteScreen } =
+  const { eyeHint, assignedDisplayName, toggleVisible, deleteScreen, duplicateScreen } =
     useScreenCards({ displays, reload });
 
   function calNamesForScreen(screen) {
@@ -177,13 +177,14 @@ export default function ScreensSection({ displayType, calendarType }) {
                 {bg && <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{bg} — {sc.bg_opacity ?? 100}% opacity</div>}
                 <InUseBadge name={assignedDisplayName(sc.id)} />
                 <div className={s.cardActions}>
-                  <a href={`/tv/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost}>Preview</a>
-                  <button className={adminStyles.btnGhost} onClick={() => openEdit(sc)}>Edit</button>
+                  <a href={`/tv/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost} title="Preview">📺</a>
+                  <button className={adminStyles.btnGhost} onClick={() => openEdit(sc)} title="Edit">✎</button>
                   {sc.show_pricing && (
                     <button className={s.pricingBtn} title="Choose which prices to show" onClick={() => openPricingModal(sc)}>$</button>
                   )}
                   <EyeButton screen={sc} assignedName={assignedDisplayName(sc.id)} onToggle={toggleVisible} />
-                  <button className={adminStyles.btnDanger} onClick={() => deleteScreen(sc.id)}>Delete</button>
+                  <button className={adminStyles.btnDanger} onClick={() => deleteScreen(sc.id)} title="Delete">🗑</button>
+                  <DuplicateButton screen={sc} onDuplicate={duplicateScreen} />
                 </div>
                 <EyeHint show={eyeHint === sc.id} name={assignedDisplayName(sc.id)} />
               </div>

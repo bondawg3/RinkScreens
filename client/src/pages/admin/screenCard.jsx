@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { apiFetch } from '../../hooks/useApi';
+import adminStyles from './AdminTab.module.css';
 import s from './ScreensSection.module.css';
 
 // Shared screen-card behavior: which display a screen is assigned to, the
@@ -28,7 +29,22 @@ export function useScreenCards({ displays, reload, confirmMessage = 'Delete this
     reload();
   }
 
-  return { eyeHint, assignedDisplayName, toggleVisible, deleteScreen };
+  async function duplicateScreen(id) {
+    await apiFetch(`/screens/${id}/duplicate`, { method: 'POST' });
+    reload();
+  }
+
+  return { eyeHint, assignedDisplayName, toggleVisible, deleteScreen, duplicateScreen };
+}
+
+export function DuplicateButton({ screen, onDuplicate }) {
+  return (
+    <button
+      className={adminStyles.btnGhost}
+      onClick={() => onDuplicate(screen.id)}
+      title="Duplicate this screen"
+    >⧉</button>
+  );
 }
 
 export function InUseBadge({ name }) {

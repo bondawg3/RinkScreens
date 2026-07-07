@@ -2,6 +2,15 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.20.0] — 2026-07-06
+
+### Added
+- **Duplicate screen button** — every screen card (Game Board, Public Skate, Figure Skating, Rink Events, Custom, Webpage, and Announcement tabs) now has a duplicate button (⧉) to the right of Delete. It creates a copy of the screen with all the same settings, named "&lt;screen name&gt; - Copy", via a new `POST /api/screens/:id/duplicate` endpoint.
+
+### Changed
+- **Screen card Edit/Delete buttons are now icons** — matching the angled pencil (✎) and trash can (🗑) icons already used elsewhere in the admin (Games tab, Calendars), instead of "Edit"/"Delete" text labels.
+- **Preview links are now a TV icon (📺)** — every "Preview" link that opens a screen's `/tv/:id` page (screen cards on all type tabs, plus the Displays tab) now shows a TV icon instead of the text label.
+
 ## [1.19.0] — 2026-07-06
 
 Codebase-wide consolidation pass: same behavior and visuals, less duplicated code and far less disk I/O. No screen types or admin workflows change.

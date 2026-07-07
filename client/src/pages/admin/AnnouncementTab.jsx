@@ -4,7 +4,7 @@ import adminStyles from './AdminTab.module.css';
 import tStyles from './ScreensTab.module.css';
 import s from './AnnouncementTab.module.css';
 import Thumbnail from './Thumbnail';
-import { useScreenCards, InUseBadge, EyeButton, EyeHint } from './screenCard';
+import { useScreenCards, InUseBadge, EyeButton, EyeHint, DuplicateButton } from './screenCard';
 
 const FONTS = [
   'Arial', 'Verdana', 'Trebuchet MS', 'Georgia',
@@ -457,7 +457,7 @@ export default function AnnouncementTab() {
   const { data: backgrounds } = useApi('/backgrounds');
   const { data: displays } = useApi('/displays');
   const [editingScreen, setEditingScreen] = useState(null);
-  const { eyeHint, assignedDisplayName, toggleVisible, deleteScreen } =
+  const { eyeHint, assignedDisplayName, toggleVisible, deleteScreen, duplicateScreen } =
     useScreenCards({ displays, reload, confirmMessage: 'Delete this announcement screen?' });
 
   const screens = (allScreens || []).filter(sc => sc.display_type === 'announcement');
@@ -492,10 +492,11 @@ export default function AnnouncementTab() {
               </div>
               <InUseBadge name={assignedDisplayName(sc.id)} />
               <div className={tStyles.cardActions}>
-                <a href={`/tv/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost}>Preview</a>
-                <button className={adminStyles.btnGhost} onClick={() => setEditingScreen(sc)}>Edit</button>
+                <a href={`/tv/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost} title="Preview">📺</a>
+                <button className={adminStyles.btnGhost} onClick={() => setEditingScreen(sc)} title="Edit">✎</button>
                 <EyeButton screen={sc} assignedName={assignedDisplayName(sc.id)} onToggle={toggleVisible} />
-                <button className={adminStyles.btnDanger} onClick={() => deleteScreen(sc.id)}>Delete</button>
+                <button className={adminStyles.btnDanger} onClick={() => deleteScreen(sc.id)} title="Delete">🗑</button>
+                <DuplicateButton screen={sc} onDuplicate={duplicateScreen} />
               </div>
               <EyeHint show={eyeHint === sc.id} name={assignedDisplayName(sc.id)} />
             </div>

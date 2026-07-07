@@ -88,7 +88,7 @@ export default function DisplaysTab() {
 
                 <div className={tStyles.cardActions}>
                   {assignedScreen && (
-                    <a href={`/tv/${assignedScreen.id}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost}>Preview</a>
+                    <a href={`/tv/${assignedScreen.id}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">📺</a>
                   )}
                   <button className={styles.btnGhost} onClick={() => startEdit(d)}>Edit</button>
                   <button className={styles.btnDanger} onClick={() => deleteDisplay(d.id)}>Remove</button>
@@ -119,7 +119,7 @@ export default function DisplaysTab() {
                     : <span className={styles.offline}>● Unassigned</span>}
                 </div>
                 <div className={tStyles.cardActions}>
-                  <a href={`/tv/${sc.id}`} target="_blank" rel="noreferrer" className={styles.btnGhost}>Preview</a>
+                  <a href={`/tv/${sc.id}`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">📺</a>
                 </div>
               </div>
             </div>

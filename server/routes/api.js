@@ -211,6 +211,14 @@ router.delete('/screens/:id', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+router.post('/screens/:id/duplicate', requireAuth, (req, res) => {
+  const screen = db.findById('screens', req.params.id);
+  if (!screen) return res.status(404).json({ error: 'not found' });
+  const { id, created_at, ...copy } = screen;
+  const row = db.insert('screens', { ...copy, name: `${screen.name} - Copy` });
+  res.json({ id: row.id });
+});
+
 router.post('/screens/:id/reload', requireAuth, (req, res) => {
   ws.push(String(req.params.id), { type: 'reload' });
   res.json({ ok: true });

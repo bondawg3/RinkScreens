@@ -321,32 +321,34 @@ export default function ScreensSection({ displayType, calendarType }) {
                   Only the first {form.two_column ? '24 events (12 per column)' : '24 events'} will be shown.
                 </div>
               )}
-              {form.overflow_mode === 'rotate' && (
-                <>
-                  <label className={adminStyles.label}>Rotate Interval</label>
-                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                    <input
-                      className={adminStyles.input}
-                      type="number"
-                      min="1"
-                      style={{ width: '80px', marginBottom: 0 }}
-                      value={rotateVal}
-                      onChange={(e) => setRotateVal(e.target.value)}
-                    />
-                    <div className={s.unitToggle}>
-                      <button type="button"
-                        className={rotateUnit === 'seconds' ? s.unitActive : s.unitBtn}
-                        onClick={() => switchRotateUnit('seconds')}>Seconds</button>
-                      <button type="button"
-                        className={rotateUnit === 'minutes' ? s.unitActive : s.unitBtn}
-                        onClick={() => switchRotateUnit('minutes')}>Minutes</button>
-                    </div>
-                  </div>
-                </>
-              )}
               {form.overflow_mode === 'flow' && (
                 <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: '-0.25rem' }}>
                   Only shows events from the current time onward. Past events are removed automatically.
+                </div>
+              )}
+
+              <label className={adminStyles.label}>Rotate Interval</label>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input
+                  className={adminStyles.input}
+                  type="number"
+                  min="1"
+                  style={{ width: '80px', marginBottom: 0 }}
+                  value={rotateVal}
+                  onChange={(e) => setRotateVal(e.target.value)}
+                />
+                <div className={s.unitToggle}>
+                  <button type="button"
+                    className={rotateUnit === 'seconds' ? s.unitActive : s.unitBtn}
+                    onClick={() => switchRotateUnit('seconds')}>Seconds</button>
+                  <button type="button"
+                    className={rotateUnit === 'minutes' ? s.unitActive : s.unitBtn}
+                    onClick={() => switchRotateUnit('minutes')}>Minutes</button>
+                </div>
+              </div>
+              {form.overflow_mode !== 'rotate' && (
+                <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: '-0.25rem' }}>
+                  Only takes effect when Overflow is set to "Rotate pages."
                 </div>
               )}
             </>)}

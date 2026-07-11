@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.22.5] — 2026-07-11
+
+### Fixed
+- **Figure Skating's Rotate Interval control disappeared outside "Rotate pages" mode** — it now always shows (with a note that it only takes effect when Overflow is set to "Rotate pages"), instead of vanishing while browsing the "None" or "Flow with time" options.
+
 ## [1.22.4] — 2026-07-11
 
 ### Changed

@@ -152,7 +152,7 @@ Each display can be preset with what it shows through the day, up to a month ahe
 
 | Display type | What it shows |
 |---|---|
-| Game Board | Today's games with time, away vs. home team, locker rooms (toggleable) — optional admission pricing panel. Includes any non-game hockey calendar activity too (practices, stick & shoot, etc. — anything from a calendar typed "Hockey Games" that isn't flagged as a public skate). A day with more than 6 such events automatically splits into pages that rotate every 30 seconds, earliest first, instead of cramming everything onto one screen |
+| Game Board | Today's games with time, away vs. home team, locker rooms (toggleable) — optional admission pricing panel. Includes any non-game hockey calendar activity too (practices, stick & shoot, etc. — anything from a calendar typed "Hockey Games" that isn't flagged as a public skate). A day with more than 6 such events automatically splits into pages that rotate, earliest first, instead of cramming everything onto one screen; the rotation speed is configurable per screen (seconds or minutes), defaulting to 30 seconds |
 | Public Skate | Heading banner (screen name), upcoming public skate sessions — optional admission pricing panel |
 | Rink Events | Today's rink events in table format, "Schedule" subheading — optional admission pricing panel |
 | Figure Skating | Today's figure skating events in table format — optional admission pricing panel |

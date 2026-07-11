@@ -2,6 +2,14 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.22.3] — 2026-07-11
+
+### Added
+- **Configurable page-rotation speed on Game Board screens** — a "Page Rotation Interval" input (with a Seconds/Minutes toggle, matching the Webpage screen's refresh-interval control) now lets each Game Board screen set how fast it cycles pages on a busy day (more than 6 events), instead of a fixed 30-second default.
+
+### Changed
+- **Figure Skating's rotation-speed field** now uses the same value + Seconds/Minutes toggle control as Game Board and Webpage, instead of a plain "seconds" number box.
+
 ## [1.22.2] — 2026-07-10
 
 ### Added

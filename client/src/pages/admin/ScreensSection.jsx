@@ -13,6 +13,19 @@ const CAL_TYPE_LABELS = {
   figure_skating: 'Figure Skating',
 };
 
+// rotate_interval is always stored in seconds; these just govern how the
+// admin form displays/edits that number (as seconds or minutes), mirroring
+// the Webpage screen's refresh-interval input + unit toggle.
+function toDisplayRotate(seconds) {
+  const s = seconds || 30;
+  if (s >= 60 && s % 60 === 0) return { val: s / 60, unit: 'minutes' };
+  return { val: s, unit: 'seconds' };
+}
+function toRotateSeconds(val, unit) {
+  const n = Number(val) || 0;
+  return Math.max(5, unit === 'minutes' ? n * 60 : n);
+}
+
 export default function ScreensSection({ displayType, calendarType }) {
   const { data: allScreens, reload } = useApi('/screens');
   const { data: allCalendars } = useApi('/calendars');
@@ -28,6 +41,8 @@ export default function ScreensSection({ displayType, calendarType }) {
   const [previewDates, setPreviewDates] = useState({});
   const [modal, setModal] = useState(null); // null | 'add' | screen object
   const [form, setForm] = useState({ name: '', all_calendars: false, calendar_ids: [], background_id: '', bg_opacity: 100, two_column: false, overflow_mode: 'none', rotate_interval: 30, days_ahead: 14, show_pricing: false, show_locker_rooms: true });
+  const [rotateVal, setRotateVal] = useState(30);
+  const [rotateUnit, setRotateUnit] = useState('seconds');
   const [err, setErr] = useState('');
   const [pricingModal, setPricingModal] = useState(null); // screen object being edited for pricing
   const [pricingSelection, setPricingSelection] = useState([]);
@@ -45,6 +60,8 @@ export default function ScreensSection({ displayType, calendarType }) {
 
   function openAdd() {
     setForm({ name: '', all_calendars: false, calendar_ids: [], background_id: '', bg_opacity: 100, two_column: false, overflow_mode: 'none', rotate_interval: 30, days_ahead: 14, show_pricing: false, show_locker_rooms: true });
+    setRotateVal(30);
+    setRotateUnit('seconds');
     setErr('');
     setModal('add');
   }
@@ -64,8 +81,21 @@ export default function ScreensSection({ displayType, calendarType }) {
       show_pricing: screen.show_pricing || false,
       show_locker_rooms: screen.show_locker_rooms !== false,
     });
+    const { val, unit } = toDisplayRotate(screen.rotate_interval ?? 30);
+    setRotateVal(val);
+    setRotateUnit(unit);
     setErr('');
     setModal(screen);
+  }
+
+  function switchRotateUnit(unit) {
+    if (unit === rotateUnit) return;
+    if (unit === 'minutes') {
+      setRotateVal(Math.round(toRotateSeconds(rotateVal, 'seconds') / 60) || 1);
+    } else {
+      setRotateVal(toRotateSeconds(rotateVal, 'minutes'));
+    }
+    setRotateUnit(unit);
   }
 
   function openPricingModal(screen) {
@@ -111,10 +141,13 @@ export default function ScreensSection({ displayType, calendarType }) {
       ...((displayType === 'games' || displayType === 'custom') && {
         show_locker_rooms: form.show_locker_rooms,
       }),
+      ...(displayType === 'games' && {
+        rotate_interval: toRotateSeconds(rotateVal, rotateUnit),
+      }),
       ...(displayType === 'figure_skating' && {
         two_column: form.two_column,
         overflow_mode: form.overflow_mode,
-        rotate_interval: Number(form.rotate_interval),
+        rotate_interval: toRotateSeconds(rotateVal, rotateUnit),
       }),
       ...(displayType === 'skate' && {
         days_ahead: Number(form.days_ahead),
@@ -289,13 +322,27 @@ export default function ScreensSection({ displayType, calendarType }) {
                 </div>
               )}
               {form.overflow_mode === 'rotate' && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.25rem' }}>
-                  <span style={{ fontSize: '0.85rem' }}>Rotate every</span>
-                  <input className={adminStyles.input} type="number" min="5" max="300" style={{ width: 70, marginBottom: 0 }}
-                    value={form.rotate_interval}
-                    onChange={(e) => setForm({ ...form, rotate_interval: e.target.value })} />
-                  <span style={{ fontSize: '0.85rem' }}>seconds</span>
-                </div>
+                <>
+                  <label className={adminStyles.label}>Rotate Interval</label>
+                  <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                    <input
+                      className={adminStyles.input}
+                      type="number"
+                      min="1"
+                      style={{ width: '80px', marginBottom: 0 }}
+                      value={rotateVal}
+                      onChange={(e) => setRotateVal(e.target.value)}
+                    />
+                    <div className={s.unitToggle}>
+                      <button type="button"
+                        className={rotateUnit === 'seconds' ? s.unitActive : s.unitBtn}
+                        onClick={() => switchRotateUnit('seconds')}>Seconds</button>
+                      <button type="button"
+                        className={rotateUnit === 'minutes' ? s.unitActive : s.unitBtn}
+                        onClick={() => switchRotateUnit('minutes')}>Minutes</button>
+                    </div>
+                  </div>
+                </>
               )}
               {form.overflow_mode === 'flow' && (
                 <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: '-0.25rem' }}>
@@ -303,6 +350,33 @@ export default function ScreensSection({ displayType, calendarType }) {
                 </div>
               )}
             </>)}
+
+            {displayType === 'games' && (
+              <>
+                <label className={adminStyles.label}>Page Rotation Interval</label>
+                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                  <input
+                    className={adminStyles.input}
+                    type="number"
+                    min="1"
+                    style={{ width: '80px', marginBottom: 0 }}
+                    value={rotateVal}
+                    onChange={(e) => setRotateVal(e.target.value)}
+                  />
+                  <div className={s.unitToggle}>
+                    <button type="button"
+                      className={rotateUnit === 'seconds' ? s.unitActive : s.unitBtn}
+                      onClick={() => switchRotateUnit('seconds')}>Seconds</button>
+                    <button type="button"
+                      className={rotateUnit === 'minutes' ? s.unitActive : s.unitBtn}
+                      onClick={() => switchRotateUnit('minutes')}>Minutes</button>
+                  </div>
+                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: '-0.25rem' }}>
+                  Only applies on days with more than 6 events, when the board splits into rotating pages.
+                </div>
+              </>
+            )}
 
             {(displayType === 'games' || displayType === 'custom') && (() => {
               const hasHockeyCalendar = displayType !== 'custom' ? true : (

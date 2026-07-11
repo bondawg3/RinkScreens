@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.22.2] — 2026-07-10
+
+### Added
+- **Game Board pagination for busy days** — a day with more than 6 hockey-calendar entries (games, practices, stick & shoot, etc. — anything from a "Hockey Games"-typed calendar that isn't a public skate) now splits into pages of 6 that rotate automatically every 30 seconds, in chronological order (earliest events first), instead of all cramming onto one screen with ever-shrinking text. Each page still groups its events by calendar with the usual header row.
+
 ## [1.22.1] — 2026-07-10
 
 ### Fixed

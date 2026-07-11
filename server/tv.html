@@ -557,23 +557,16 @@ function wrapWithPricing(pageHtml, prices) {
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────
-function renderGames(games, calMap, teamMap, prices, screenName, showLockerRooms) {
-  teamMap = teamMap || {};
-  var bannerHtml = (prices && screenName) ? '<div class="skate-banner">' + esc(screenName) + '</div>' : '';
-  var header = prices ? '<div class="section-title section-title-gapped">Today\'s Games</div>' : '';
-  if (!games || games.length === 0) {
-    document.getElementById('content').innerHTML = bannerHtml +
-      wrapWithPricing(header + '<div class="empty"><div class="empty-icon">&#127944;</div><p>No games scheduled for today</p></div>', prices);
-    return;
-  }
-
-  // Group by calendar
+// Builds the grouped-by-calendar tbody rows for one page's worth of games
+// (game order within the page is preserved — callers pass chronologically
+// sorted slices, so calendar groups on a page stay in time order).
+function buildGamesRows(pageGames, calMap, teamMap, showLockerRooms) {
   var groups = {};
   var groupOrder = [];
-  for (var i = 0; i < games.length; i++) {
-    var key = games[i].calendar_id ? String(games[i].calendar_id) : '__none__';
+  for (var i = 0; i < pageGames.length; i++) {
+    var key = pageGames[i].calendar_id ? String(pageGames[i].calendar_id) : '__none__';
     if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
-    groups[key].push(games[i]);
+    groups[key].push(pageGames[i]);
   }
 
   var tbody = '';
@@ -611,9 +604,48 @@ function renderGames(games, calMap, teamMap, prices, screenName, showLockerRooms
       tbody += '<tr style="height:0.6em"><td colspan="8" style="padding:0;border:none;background:transparent"></td></tr>';
     }
   }
+  return tbody;
+}
 
-  document.getElementById('content').innerHTML = bannerHtml +
-    wrapWithPricing(header + '<table class="game-table"><tbody>' + tbody + '</tbody></table>', prices);
+// Games/practices/stick-&-shoot etc. for the day, grouped by calendar. A busy
+// day (more than GAMES_PER_PAGE entries) is split into pages that rotate
+// automatically — e.g. 8 events becomes a page of the first 6, then a page
+// with the remaining 2 — rather than cramming everything onto one screen.
+var GAMES_PER_PAGE = 6;
+function renderGames(screen, games, calMap, teamMap, prices, showLockerRooms) {
+  teamMap = teamMap || {};
+  var bannerHtml = (prices && screen.name) ? '<div class="skate-banner">' + esc(screen.name) + '</div>' : '';
+  var header = prices ? '<div class="section-title section-title-gapped">Today\'s Games</div>' : '';
+  var content = document.getElementById('content');
+
+  if (!games || games.length === 0) {
+    content.innerHTML = bannerHtml +
+      wrapWithPricing(header + '<div class="empty"><div class="empty-icon">&#127944;</div><p>No games scheduled for today</p></div>', prices);
+    return;
+  }
+
+  function pageHtml(pageGames) {
+    return wrapWithPricing(header + '<table class="game-table"><tbody>' +
+      buildGamesRows(pageGames, calMap, teamMap, showLockerRooms) + '</tbody></table>', prices);
+  }
+
+  if (games.length > GAMES_PER_PAGE) {
+    var pages = [];
+    for (var i = 0; i < games.length; i += GAMES_PER_PAGE) pages.push(games.slice(i, i + GAMES_PER_PAGE));
+    var pageHtmls = pages.map(pageHtml);
+
+    content.innerHTML = bannerHtml + pageHtmls[0];
+    fitTable();
+    var pageIdx = 0;
+    refreshTimer = setInterval(function() {
+      pageIdx = (pageIdx + 1) % pageHtmls.length;
+      content.innerHTML = bannerHtml + pageHtmls[pageIdx];
+      fitTable();
+    }, (screen.rotate_interval || 30) * 1000);
+  } else {
+    content.innerHTML = bannerHtml + pageHtml(games);
+    fitTable();
+  }
 }
 
 function renderSkate(sessions, prices, heading) {
@@ -819,8 +851,7 @@ function renderScreenConfig(screen) {
         var teamMap = buildTeamMap(results[2]);
         var showLockerRooms = screen.show_locker_rooms !== false;
         loadPricesFor(screen, function(prices) {
-          renderGames(filtered, calMap, teamMap, prices, prices ? screen.name : null, showLockerRooms);
-          fitTable();
+          renderGames(screen, filtered, calMap, teamMap, prices, showLockerRooms);
         });
       });
 

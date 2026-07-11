@@ -18,7 +18,7 @@ Digital signage system for ice rinks. Pulls games from Google Calendar (iCal) an
       ┌────────┴────────┐
    TV #1 browser    TV #2 browser   ...
    /tv/1            /tv/2
-   (Game Board)     (Public Skate)
+   (Hockey)         (Public Skate)
 ```
 
 Each TV opens `http://[server-ip]:3001/tv/[displayId]` in its built-in browser (the display's id from the admin Displays tab). What the display renders is resolved through its schedule: an active schedule block's screen when one applies, otherwise the display's assigned screen. The server pushes updates via WebSocket so screens react instantly when admin changes anything — no manual refresh needed.
@@ -97,14 +97,14 @@ Every screen card also has a duplicate button (⧉) next to Delete that creates 
 Settings is organized into sub-tabs:
 - **General** — rink name and logo (logo replaces text in TV header)
 - **Calendars** — add/edit/delete iCal calendars (Hockey Games, Public Skates, Rink Events, Figure Skating) with poll interval and locker sequence overrides; **Last Sync** column shows success/failure status per calendar
-- **Pricing** — admission pricing tiers (label + subheading + price + sort order); each screen (Public Skate, Game Board, Rink Events, Figure Skating, Custom) has a **Show Pricing** checkbox plus a picker for which tiers to display on that screen
+- **Pricing** — admission pricing tiers (label + subheading + price + sort order); each screen (Public Skate, Hockey, Rink Events, Figure Skating, Custom) has a **Show Pricing** checkbox plus a picker for which tiers to display on that screen
 - **Locker Rooms** — add/edit/delete rooms; define named **Locker Room Sequences** for auto-assignment
 - **Displays** — register physical TV devices (name + IP address)
 - **Admin** — change the admin login password
 
 ### Leagues & Teams tab
 - One tab per league; leagues are auto-created from Hockey Games calendars on sync
-- Set a team's background and text color (shown on the Game Board TV display)
+- Set a team's background and text color (shown on the Hockey TV display)
 - Set a display name override per team (used on TV instead of the calendar name)
 - Assign a **Locker Room Sequence** per league used by auto-assignment; syncs automatically to/from the matching calendar's sequence setting
 
@@ -152,7 +152,7 @@ Each display can be preset with what it shows through the day, up to a month ahe
 
 | Display type | What it shows |
 |---|---|
-| Game Board | Today's games with time, away vs. home team, locker rooms (toggleable) — optional admission pricing panel. Includes any non-game hockey calendar activity too (practices, stick & shoot, etc. — anything from a calendar typed "Hockey Games" that isn't flagged as a public skate). A day with more than 6 such events automatically splits into pages that rotate, earliest first, instead of cramming everything onto one screen; the rotation speed is configurable per screen (seconds or minutes), defaulting to 30 seconds |
+| Hockey | Today's games with time, away vs. home team, locker rooms (toggleable) — optional admission pricing panel. Includes any non-game hockey calendar activity too (practices, stick & shoot, etc. — anything from a calendar typed "Hockey Games" that isn't flagged as a public skate). A day with more than 6 such events automatically splits into pages that rotate, earliest first, instead of cramming everything onto one screen; the rotation speed is configurable per screen (seconds or minutes), defaulting to 30 seconds |
 | Public Skate | Heading banner (screen name), upcoming public skate sessions — optional admission pricing panel |
 | Rink Events | Today's rink events in table format, "Schedule" subheading — optional admission pricing panel |
 | Figure Skating | Today's figure skating events in table format — optional admission pricing panel |

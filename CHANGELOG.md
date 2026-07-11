@@ -2,18 +2,23 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.22.4] — 2026-07-11
+
+### Changed
+- **Terminology cleanup: "Game Board" → "Hockey"** — the admin UI (nav tab, scheduler palette, screen-type dropdowns) already used "Hockey" everywhere; this fixes the remaining stale "Game Board" wording in the README and a code comment so docs match what's actually on screen. No behavior change.
+
 ## [1.22.3] — 2026-07-11
 
 ### Added
-- **Configurable page-rotation speed on Game Board screens** — a "Page Rotation Interval" input (with a Seconds/Minutes toggle, matching the Webpage screen's refresh-interval control) now lets each Game Board screen set how fast it cycles pages on a busy day (more than 6 events), instead of a fixed 30-second default.
+- **Configurable page-rotation speed on Hockey screens** — a "Page Rotation Interval" input (with a Seconds/Minutes toggle, matching the Webpage screen's refresh-interval control) now lets each Hockey screen set how fast it cycles pages on a busy day (more than 6 events), instead of a fixed 30-second default.
 
 ### Changed
-- **Figure Skating's rotation-speed field** now uses the same value + Seconds/Minutes toggle control as Game Board and Webpage, instead of a plain "seconds" number box.
+- **Figure Skating's rotation-speed field** now uses the same value + Seconds/Minutes toggle control as Hockey and Webpage, instead of a plain "seconds" number box.
 
 ## [1.22.2] — 2026-07-10
 
 ### Added
-- **Game Board pagination for busy days** — a day with more than 6 hockey-calendar entries (games, practices, stick & shoot, etc. — anything from a "Hockey Games"-typed calendar that isn't a public skate) now splits into pages of 6 that rotate automatically every 30 seconds, in chronological order (earliest events first), instead of all cramming onto one screen with ever-shrinking text. Each page still groups its events by calendar with the usual header row.
+- **Hockey screen pagination for busy days** — a day with more than 6 hockey-calendar entries (games, practices, stick & shoot, etc. — anything from a "Hockey Games"-typed calendar that isn't a public skate) now splits into pages of 6 that rotate automatically every 30 seconds, in chronological order (earliest events first), instead of all cramming onto one screen with ever-shrinking text. Each page still groups its events by calendar with the usual header row.
 
 ## [1.22.1] — 2026-07-10
 
@@ -26,7 +31,7 @@ All notable changes to RinkScreens are documented here.
 
 ### Changed
 - Bigger whole-day (⤢) and delete (🗑) buttons on scheduled blocks, and more breathing room around the day timeline's top/bottom edges plus a taller scroll area.
-- The "Show Pricing on this screen" checkbox no longer appears when editing or creating a Hockey (Game Board) screen — it isn't applicable there.
+- The "Show Pricing on this screen" checkbox no longer appears when editing or creating a Hockey screen — it isn't applicable there.
 - Removed a legacy leftover "Custom Message" screen and screen-type from a prior iteration; any screen types outside the current tab set now have nowhere to silently linger.
 
 ## [1.22.0] — 2026-07-08

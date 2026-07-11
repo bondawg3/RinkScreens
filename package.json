@@ -9,7 +9,8 @@
     "build": "vite build",
     "start": "node server/index.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "package": "powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

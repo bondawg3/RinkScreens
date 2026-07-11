@@ -4,6 +4,7 @@ import Display from './pages/Display';
 import LoginPage from './pages/LoginPage';
 import AdminLayout from './pages/admin/AdminLayout';
 import DisplaysTab from './pages/admin/DisplaysTab';
+import DisplaySchedulePage from './pages/admin/DisplaySchedulePage';
 import GamesTab from './pages/admin/GamesTab';
 import SkateTab from './pages/admin/SkateTab';
 import BackgroundsTab from './pages/admin/BackgroundsTab';
@@ -31,6 +32,7 @@ export default function App() {
         }>
           <Route index element={<Navigate to="displays" replace />} />
           <Route path="displays" element={<DisplaysTab />} />
+          <Route path="displays/:displayId/schedule" element={<DisplaySchedulePage />} />
           <Route path="games" element={<GamesTab />} />
           <Route path="rink-events" element={<RinkEventsTab />} />
           <Route path="figure-skating" element={<FigureSkatingTab />} />

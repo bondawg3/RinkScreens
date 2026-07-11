@@ -492,7 +492,7 @@ export default function AnnouncementTab() {
               </div>
               <InUseBadge name={assignedDisplayName(sc.id)} />
               <div className={tStyles.cardActions}>
-                <a href={`/tv/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost} title="Preview">📺</a>
+                <a href={`/tv/screen/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost} title="Preview">📺</a>
                 <button className={adminStyles.btnGhost} onClick={() => setEditingScreen(sc)} title="Edit">✎</button>
                 <EyeButton screen={sc} assignedName={assignedDisplayName(sc.id)} onToggle={toggleVisible} />
                 <button className={adminStyles.btnDanger} onClick={() => deleteScreen(sc.id)} title="Delete">🗑</button>

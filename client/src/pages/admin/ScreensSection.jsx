@@ -177,7 +177,7 @@ export default function ScreensSection({ displayType, calendarType }) {
                 {bg && <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{bg} — {sc.bg_opacity ?? 100}% opacity</div>}
                 <InUseBadge name={assignedDisplayName(sc.id)} />
                 <div className={s.cardActions}>
-                  <a href={`/tv/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost} title="Preview">📺</a>
+                  <a href={`/tv/screen/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost} title="Preview">📺</a>
                   <button className={adminStyles.btnGhost} onClick={() => openEdit(sc)} title="Edit">✎</button>
                   {sc.show_pricing && (
                     <button className={s.pricingBtn} title="Choose which prices to show" onClick={() => openPricingModal(sc)}>$</button>
@@ -330,22 +330,24 @@ export default function ScreensSection({ displayType, calendarType }) {
               );
             })()}
 
-            <label className={s.calCheckItem} style={{ marginTop: '0.25rem', flexWrap: 'wrap' }}>
-              <input
-                type="checkbox"
-                checked={form.show_pricing && !(displayType === 'figure_skating' && form.two_column)}
-                disabled={displayType === 'figure_skating' && form.two_column}
-                onChange={(e) => setForm({ ...form, show_pricing: e.target.checked })}
-              />
-              <span style={{ color: displayType === 'figure_skating' && form.two_column ? 'var(--text-light)' : undefined }}>
-                Show Pricing on this screen
-              </span>
-              {displayType === 'figure_skating' && form.two_column && (
-                <span style={{ flexBasis: '100%', fontSize: '0.78rem', fontStyle: 'italic', color: 'var(--text-light)' }}>
-                  Unavailable with two-column layout
+            {displayType !== 'games' && (
+              <label className={s.calCheckItem} style={{ marginTop: '0.25rem', flexWrap: 'wrap' }}>
+                <input
+                  type="checkbox"
+                  checked={form.show_pricing && !(displayType === 'figure_skating' && form.two_column)}
+                  disabled={displayType === 'figure_skating' && form.two_column}
+                  onChange={(e) => setForm({ ...form, show_pricing: e.target.checked })}
+                />
+                <span style={{ color: displayType === 'figure_skating' && form.two_column ? 'var(--text-light)' : undefined }}>
+                  Show Pricing on this screen
                 </span>
-              )}
-            </label>
+                {displayType === 'figure_skating' && form.two_column && (
+                  <span style={{ flexBasis: '100%', fontSize: '0.78rem', fontStyle: 'italic', color: 'var(--text-light)' }}>
+                    Unavailable with two-column layout
+                  </span>
+                )}
+              </label>
+            )}
 
             {err && <span className={adminStyles.error}>{err}</span>}
             <div className={s.modalActions}>

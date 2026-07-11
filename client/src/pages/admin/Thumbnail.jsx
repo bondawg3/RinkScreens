@@ -7,9 +7,17 @@ export default function Thumbnail({ screenId, previewDate }) {
   const wrapRef = useRef(null);
   const [scale, setScale] = useState(0.2);
 
+  // Keep the 1920px-wide iframe scaled to whatever width the wrapper currently
+  // is — recomputes when the grid density (and thus cell width) changes, not
+  // just on mount, so the whole screen always fits regardless of columns.
   useEffect(() => {
-    if (!wrapRef.current) return;
-    setScale(wrapRef.current.offsetWidth / 1920);
+    const el = wrapRef.current;
+    if (!el) return;
+    const update = () => { if (el.offsetWidth) setScale(el.offsetWidth / 1920); };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   if (!screenId) {
@@ -20,7 +28,7 @@ export default function Thumbnail({ screenId, previewDate }) {
     );
   }
 
-  const src = previewDate ? `/tv/${screenId}?preview_date=${previewDate}` : `/tv/${screenId}`;
+  const src = previewDate ? `/tv/screen/${screenId}?preview_date=${previewDate}` : `/tv/screen/${screenId}`;
   return (
     <div className={s.thumbWrap} ref={wrapRef} style={{ '--thumb-scale': scale }}>
       <iframe key={src} src={src} title={`Screen ${screenId}`} scrolling="no" />

@@ -8,6 +8,11 @@ const { startPolling } = require('./calendar');
 const apiRouter = require('./routes/api');
 const uploadRouter = require('./routes/upload');
 const db = require('./db');
+const { pruneOldBlocks } = require('./schedule');
+
+// Past schedule blocks are dead weight in db.json — drop anything older than a week
+const pruned = pruneOldBlocks(7);
+if (pruned) console.log(`[schedule] pruned ${pruned} past schedule block(s)`);
 
 // Seed a default screen for each display type if none exists yet
 (function seedDefaultScreens() {
@@ -45,10 +50,16 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads'), {
 app.use('/api', apiRouter);
 app.use('/api', uploadRouter);
 
-// TV-compatible plain HTML display (no React, works on Samsung/LG browsers)
+// TV-compatible plain HTML display (no React, works on Samsung/LG browsers).
+// Physical TVs load /tv/:displayId — what they render is resolved through the
+// display's schedule. /tv/screen/:screenId renders one screen config directly
+// (admin previews/thumbnails), bypassing scheduling.
 const tvHtml = require('fs').readFileSync(path.join(__dirname, 'tv.html'), 'utf8');
-app.get('/tv/:screenId', (req, res) => {
-  res.send(tvHtml.replace('{{SCREEN_ID}}', req.params.screenId));
+app.get('/tv/screen/:screenId', (req, res) => {
+  res.send(tvHtml.replace('{{DISPLAY_ID}}', '').replace('{{SCREEN_ID}}', req.params.screenId));
+});
+app.get('/tv/:displayId', (req, res) => {
+  res.send(tvHtml.replace('{{DISPLAY_ID}}', req.params.displayId).replace('{{SCREEN_ID}}', ''));
 });
 
 // Serve built React app in production

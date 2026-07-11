@@ -21,7 +21,7 @@ Digital signage system for ice rinks. Pulls games from Google Calendar (iCal) an
    (Game Board)     (Public Skate)
 ```
 
-Each TV opens `http://[server-ip]:3001/tv/[screenId]` in its built-in browser. The server pushes updates via WebSocket so screens react instantly when admin changes anything — no manual refresh needed.
+Each TV opens `http://[server-ip]:3001/tv/[displayId]` in its built-in browser (the display's id from the admin Displays tab). What the display renders is resolved through its schedule: an active schedule block's screen when one applies, otherwise the display's assigned screen. The server pushes updates via WebSocket so screens react instantly when admin changes anything — no manual refresh needed.
 
 ---
 
@@ -145,7 +145,10 @@ Re-syncing never overwrites locker room assignments or team names already set by
 
 ## TV display pages
 
-All display pages live at `/tv/:screenId` — plain HTML/CSS/JS with no React or ES modules, compatible with Samsung, LG, and other smart TV built-in browsers.
+Physical TVs load `/tv/:displayId`; admin previews of a single screen config load `/tv/screen/:screenId`. Both are plain HTML/CSS/JS with no React or ES modules, compatible with Samsung, LG, and other smart TV built-in browsers.
+
+### Display scheduling
+Each display can be preset with what it shows through the day, up to a month ahead (📅 button on the display card opens a full-page **visual scheduler**). Drag screen thumbnails from the type-grouped palette onto a vertical day timeline; blocks snap to 15-minute boundaries, default to one hour, and resize by dragging their edges. Dropping onto an occupied time shifts neighbouring blocks to the nearest free space (never shrinking them), or prompts to replace when the day is full. Each block has remove and whole-day buttons. Navigate day-by-day (or jump via the date picker), pick a Sunday/Monday week start, and duplicate a day to the next day or a week to the following week. Outside any block the display falls back to its assigned screen, and TVs switch exactly at block boundaries. View preferences (side-swap, column density, week start, hidden types) are saved server-side for all admins.
 
 | Display type | What it shows |
 |---|---|

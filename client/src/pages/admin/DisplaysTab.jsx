@@ -1,17 +1,10 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 import tStyles from './ScreensTab.module.css';
 import Thumbnail from './Thumbnail';
-
-const DISPLAY_TYPES = [
-  { value: 'games', label: 'Game Board' },
-  { value: 'rink_events', label: 'Rink Events' },
-  { value: 'figure_skating', label: 'Figure Skating' },
-  { value: 'skate', label: 'Public Skate' },
-  { value: 'webpage', label: 'Webpage' },
-  { value: 'message', label: 'Custom Message' },
-];
+import { SCREEN_TYPES } from './ScreenPalette';
 
 export default function DisplaysTab() {
   const { data: displays, reload } = useApi('/displays');
@@ -19,6 +12,7 @@ export default function DisplaysTab() {
   const [editing, setEditing] = useState(null);
   const [editData, setEditData] = useState({});
   const [err, setErr] = useState('');
+  const navigate = useNavigate();
 
   async function saveDisplay(id) {
     try {
@@ -49,7 +43,7 @@ export default function DisplaysTab() {
   }
 
   function screenLabel(screen) {
-    const typeLabel = DISPLAY_TYPES.find((d) => d.value === screen.display_type)?.label || screen.display_type;
+    const typeLabel = SCREEN_TYPES.find((d) => d.value === screen.display_type)?.label || screen.display_type;
     return `${screen.name} (${typeLabel})`;
   }
 
@@ -76,20 +70,24 @@ export default function DisplaysTab() {
                   <label className={styles.label} style={{ marginBottom: '0.2rem', display: 'block' }}>Screen</label>
                   <select
                     className={styles.select}
+                    style={{ width: '100%', maxWidth: '100%' }}
                     value={d.screen_id ?? ''}
                     onChange={(e) => assignScreen(d.id, e.target.value ? Number(e.target.value) : null)}
                   >
                     <option value="">— None —</option>
-                    {(screens || []).map((sc) => (
-                      <option key={sc.id} value={sc.id}>{screenLabel(sc)}</option>
-                    ))}
+                    {(screens || [])
+                      .filter((sc) => sc.visible !== false || sc.id === d.screen_id)
+                      .map((sc) => (
+                        <option key={sc.id} value={sc.id}>{screenLabel(sc)}</option>
+                      ))}
                   </select>
                 </div>
 
                 <div className={tStyles.cardActions}>
                   {assignedScreen && (
-                    <a href={`/tv/${assignedScreen.id}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">📺</a>
+                    <a href={`/tv/${d.id}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">📺</a>
                   )}
+                  <button className={styles.btnGhost} onClick={() => navigate(`/admin/displays/${d.id}/schedule`)} title="Schedule">📅</button>
                   <button className={styles.btnGhost} onClick={() => startEdit(d)}>Edit</button>
                   <button className={styles.btnDanger} onClick={() => deleteDisplay(d.id)}>Remove</button>
                 </div>
@@ -105,7 +103,7 @@ export default function DisplaysTab() {
       <h2 className={styles.heading} style={{ marginTop: '2.5rem' }}>Available Screens</h2>
       <div className={tStyles.grid}>
         {(screens || []).filter((sc) => sc.visible !== false).map((sc) => {
-          const typeLabel = DISPLAY_TYPES.find((d) => d.value === sc.display_type)?.label || sc.display_type;
+          const typeLabel = SCREEN_TYPES.find((d) => d.value === sc.display_type)?.label || sc.display_type;
           const assignedTo = (displays || []).filter((d) => d.screen_id === sc.id).map((d) => d.name);
           return (
             <div key={sc.id} className={tStyles.card}>
@@ -119,7 +117,7 @@ export default function DisplaysTab() {
                     : <span className={styles.offline}>● Unassigned</span>}
                 </div>
                 <div className={tStyles.cardActions}>
-                  <a href={`/tv/${sc.id}`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">📺</a>
+                  <a href={`/tv/screen/${sc.id}`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">📺</a>
                 </div>
               </div>
             </div>

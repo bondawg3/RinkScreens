@@ -5,6 +5,7 @@ const ws = require('../ws');
 const { triggerRefresh, triggerCalendarRefresh, parseTitle, syncCalendar, scheduleCalendar, cancelCalendar } = require('../calendar');
 const { autoAssign } = require('../locker-assign');
 const { requireAuth, rotateJwtSecret, signToken, verifyToken } = require('../auth');
+const schedule = require('../schedule');
 const bcrypt = require('bcryptjs');
 
 // True when the request carries a valid admin token (for endpoints that serve
@@ -141,12 +142,13 @@ function parseCalendarIds(raw) {
   try { const p = JSON.parse(raw); return p && p.length ? p.map(Number) : null; } catch { return null; }
 }
 
-router.get('/screens', (req, res) => {
-  const screens = db.findAll('screens');
-  const backgrounds = db.findAll('backgrounds');
-  const bgMap = Object.fromEntries(backgrounds.map((b) => [b.id, b]));
-  const connected = ws.connectedScreenIds();
-  res.json(screens.map((s) => ({
+function backgroundsMap() {
+  return Object.fromEntries(db.findAll('backgrounds').map((b) => [b.id, b]));
+}
+
+// A screen row shaped for the TV/admin clients (defaults filled, JSON fields parsed)
+function serializeScreen(s, bgMap) {
+  return {
     ...s,
     calendar_ids: parseCalendarIds(s.calendar_ids),
     bg_opacity: s.bg_opacity ?? 100,
@@ -160,8 +162,41 @@ router.get('/screens', (req, res) => {
     pricing_ids: parseCalendarIds(s.pricing_ids) || [],
     bg_filename: s.background_id ? bgMap[s.background_id]?.filename : null,
     bg_label: s.background_id ? bgMap[s.background_id]?.label : null,
-    online: connected.includes(String(s.id)),
     announcement_data: s.announcement_data ? (() => { try { return JSON.parse(s.announcement_data); } catch { return null; } })() : null,
+  };
+}
+
+// Screen ids currently rendered somewhere: direct admin previews ('s:' clients)
+// plus whatever each connected physical display ('d:' clients) resolves to
+function onlineScreenIds() {
+  const ids = new Set();
+  for (const key of ws.connectedKeys()) {
+    if (key.startsWith('s:')) ids.add(Number(key.slice(2)));
+    else if (key.startsWith('d:')) {
+      const r = schedule.resolveActive(Number(key.slice(2)));
+      if (r && r.screen_id) ids.add(r.screen_id);
+    }
+  }
+  return ids;
+}
+
+// A screen edit must refresh admin previews of that screen and every display
+// currently resolving to it (via base assignment or an active schedule block)
+function notifyScreen(screenId, type) {
+  ws.push(`s:${screenId}`, { type });
+  for (const d of db.findAll('displays')) {
+    const r = schedule.resolveActive(d.id);
+    if (r && r.screen_id === Number(screenId)) ws.push(`d:${d.id}`, { type });
+  }
+}
+
+router.get('/screens', (req, res) => {
+  const screens = db.findAll('screens');
+  const bgMap = backgroundsMap();
+  const online = onlineScreenIds();
+  res.json(screens.map((s) => ({
+    ...serializeScreen(s, bgMap),
+    online: online.has(s.id),
   })));
 });
 
@@ -202,11 +237,20 @@ router.patch('/screens/:id', requireAuth, (req, res) => {
     show_locker_rooms: show_locker_rooms !== undefined ? !!show_locker_rooms : (screen.show_locker_rooms !== false),
     pricing_ids: priceIds ? JSON.stringify(priceIds) : null,
   });
-  ws.push(String(req.params.id), { type: 'reload' });
+  notifyScreen(req.params.id, 'reload');
   res.json({ ok: true });
 });
 
 router.delete('/screens/:id', requireAuth, (req, res) => {
+  // Refuse while current/future schedule blocks still point at this screen —
+  // silently removing it would leave displays rendering nothing mid-schedule
+  const screenId = Number(req.params.id);
+  const today = schedule.localDateStr(new Date());
+  const refs = db.findAll('display_schedules').filter((b) => b.content_screen_id === screenId && b.date >= today);
+  if (refs.length) {
+    const names = [...new Set(refs.map((b) => db.findById('displays', b.display_id)?.name || `display ${b.display_id}`))];
+    return res.status(400).json({ error: `This screen is scheduled on: ${names.join(', ')}. Remove those schedule blocks first.` });
+  }
   db.remove('screens', req.params.id);
   res.json({ ok: true });
 });
@@ -220,14 +264,18 @@ router.post('/screens/:id/duplicate', requireAuth, (req, res) => {
 });
 
 router.post('/screens/:id/reload', requireAuth, (req, res) => {
-  ws.push(String(req.params.id), { type: 'reload' });
+  notifyScreen(req.params.id, 'reload');
   res.json({ ok: true });
 });
 
 // ── Displays ──────────────────────────────────────────────────────────────────
 
 router.get('/displays', (req, res) => {
-  res.json(db.findAll('displays', 'created_at'));
+  const connected = ws.connectedKeys();
+  res.json(db.findAll('displays', 'created_at').map((d) => ({
+    ...d,
+    online: connected.includes(`d:${d.id}`),
+  })));
 });
 
 router.post('/displays', requireAuth, (req, res) => {
@@ -258,7 +306,164 @@ router.patch('/displays/:id', requireAuth, (req, res) => {
 });
 
 router.delete('/displays/:id', requireAuth, (req, res) => {
-  db.remove('displays', req.params.id);
+  const displayId = Number(req.params.id);
+  db.transaction((tx) => {
+    tx.remove('displays', displayId);
+    tx.findAll('display_schedules').filter((b) => b.display_id === displayId)
+      .forEach((b) => tx.remove('display_schedules', b.id));
+  });
+  res.json({ ok: true });
+});
+
+// ── Display schedules ─────────────────────────────────────────────────────────
+
+// What this display should render right now: the active schedule block's
+// screen, or the display's base screen. valid_until tells the TV when to
+// re-fetch (block end, next block start, or midnight).
+router.get('/displays/:id/active', (req, res) => {
+  const resolved = schedule.resolveActive(req.params.id);
+  if (!resolved) return res.status(404).json({ error: 'display not found' });
+  const screenRow = resolved.screen_id ? db.findById('screens', resolved.screen_id) : null;
+  res.json({
+    display_id: resolved.display.id,
+    display_name: resolved.display.name,
+    scheduled: resolved.scheduled,
+    valid_until: resolved.valid_until.toISOString(),
+    screen: screenRow ? serializeScreen(screenRow, backgroundsMap()) : null,
+  });
+});
+
+router.get('/displays/:id/schedule', requireAuth, (req, res) => {
+  const display = db.findById('displays', req.params.id);
+  if (!display) return res.status(404).json({ error: 'not found' });
+  const { from, to } = req.query;
+  let blocks = db.findAll('display_schedules').filter((b) => b.display_id === display.id);
+  if (from) blocks = blocks.filter((b) => b.date >= from);
+  if (to) blocks = blocks.filter((b) => b.date <= to);
+  blocks.sort((a, b) => (a.date === b.date ? (a.start_time < b.start_time ? -1 : 1) : (a.date < b.date ? -1 : 1)));
+  res.json(blocks);
+});
+
+router.post('/displays/:id/schedule', requireAuth, (req, res) => {
+  const display = db.findById('displays', req.params.id);
+  if (!display) return res.status(404).json({ error: 'not found' });
+  const { date, start_time, end_time, content_screen_id } = req.body;
+  const invalid = schedule.validateBlock({ date, start_time, end_time });
+  if (invalid) return res.status(400).json({ error: invalid });
+  if (!db.findById('screens', content_screen_id)) return res.status(400).json({ error: 'content_screen_id does not exist' });
+  const overlap = schedule.findOverlap(display.id, date, start_time, end_time);
+  if (overlap) return res.status(400).json({ error: `Overlaps an existing block (${overlap.start_time}–${overlap.end_time}) on ${date}.` });
+  const row = db.insert('display_schedules', {
+    display_id: display.id, date, start_time, end_time,
+    content_screen_id: Number(content_screen_id),
+  });
+  ws.push(`d:${display.id}`, { type: 'reload' });
+  res.json(row);
+});
+
+// Copies a range of days onto another range, preserving each block's day-offset
+// from the source start. Body: { from_start, from_end, to_start } (YYYY-MM-DD).
+// Duplicating a single day is from_start === from_end; a week is a 7-day span.
+// Blocks that would overlap existing blocks on their target day are skipped.
+router.post('/displays/:id/schedule/copy', requireAuth, (req, res) => {
+  const display = db.findById('displays', req.params.id);
+  if (!display) return res.status(404).json({ error: 'not found' });
+  const { from_start, from_end, to_start } = req.body;
+  const isDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
+  if (!isDate(from_start) || !isDate(from_end) || !isDate(to_start)) {
+    return res.status(400).json({ error: 'from_start, from_end, and to_start must be YYYY-MM-DD' });
+  }
+  if (from_end < from_start) return res.status(400).json({ error: 'from_end must not precede from_start' });
+
+  const source = db.findAll('display_schedules')
+    .filter((b) => b.display_id === display.id && b.date >= from_start && b.date <= from_end);
+  if (!source.length) return res.status(400).json({ error: 'No blocks in the source range to copy.' });
+
+  // Reject copying onto a range that overlaps the source (ambiguous / self-clobbering)
+  const span = schedule.dayOffset(from_start, from_end);
+  const to_end = schedule.addDays(to_start, span);
+  if (to_start <= from_end && from_start <= to_end) {
+    return res.status(400).json({ error: 'Destination overlaps the source range.' });
+  }
+
+  let created = 0, skipped = 0;
+  db.transaction((tx) => {
+    for (const b of source) {
+      const date = schedule.addDays(to_start, schedule.dayOffset(from_start, b.date));
+      const existing = tx.findAll('display_schedules')
+        .filter((e) => e.display_id === display.id && e.date === date);
+      const overlaps = existing.some((e) => e.start_time < b.end_time && b.start_time < e.end_time);
+      if (overlaps) { skipped++; continue; }
+      tx.insert('display_schedules', {
+        display_id: display.id, date,
+        start_time: b.start_time, end_time: b.end_time,
+        content_screen_id: b.content_screen_id,
+      });
+      created++;
+    }
+  });
+  ws.push(`d:${display.id}`, { type: 'reload' });
+  res.json({ created, skipped });
+});
+
+// Atomically replaces every block for one display+date with the supplied set.
+// The visual scheduler computes a whole non-overlapping day layout client-side
+// and saves it in one shot, so there's no transient-overlap window from
+// reordering blocks with individual PATCH/POST/DELETE calls. Body:
+// { date, blocks: [{ start_time, end_time, content_screen_id }] }.
+router.put('/displays/:id/schedule/day', requireAuth, (req, res) => {
+  const display = db.findById('displays', req.params.id);
+  if (!display) return res.status(404).json({ error: 'not found' });
+  const { date, blocks } = req.body;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date || '')) return res.status(400).json({ error: 'date must be YYYY-MM-DD' });
+  if (!Array.isArray(blocks)) return res.status(400).json({ error: 'blocks must be an array' });
+
+  for (const b of blocks) {
+    const invalid = schedule.validateBlock({ date, start_time: b.start_time, end_time: b.end_time });
+    if (invalid) return res.status(400).json({ error: invalid });
+    if (!db.findById('screens', b.content_screen_id)) return res.status(400).json({ error: 'content_screen_id does not exist' });
+  }
+  const sorted = [...blocks].sort((a, b) => (a.start_time < b.start_time ? -1 : 1));
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].start_time < sorted[i - 1].end_time) return res.status(400).json({ error: 'blocks overlap' });
+  }
+
+  const rows = db.transaction((tx) => {
+    tx.findAll('display_schedules')
+      .filter((b) => b.display_id === display.id && b.date === date)
+      .forEach((b) => tx.remove('display_schedules', b.id));
+    return sorted.map((b) => tx.insert('display_schedules', {
+      display_id: display.id, date,
+      start_time: b.start_time, end_time: b.end_time,
+      content_screen_id: Number(b.content_screen_id),
+    }));
+  });
+  ws.push(`d:${display.id}`, { type: 'reload' });
+  res.json(rows);
+});
+
+router.patch('/schedule-blocks/:id', requireAuth, (req, res) => {
+  const block = db.findById('display_schedules', req.params.id);
+  if (!block) return res.status(404).json({ error: 'not found' });
+  const date = req.body.date ?? block.date;
+  const start_time = req.body.start_time ?? block.start_time;
+  const end_time = req.body.end_time ?? block.end_time;
+  const content_screen_id = req.body.content_screen_id !== undefined ? Number(req.body.content_screen_id) : block.content_screen_id;
+  const invalid = schedule.validateBlock({ date, start_time, end_time });
+  if (invalid) return res.status(400).json({ error: invalid });
+  if (!db.findById('screens', content_screen_id)) return res.status(400).json({ error: 'content_screen_id does not exist' });
+  const overlap = schedule.findOverlap(block.display_id, date, start_time, end_time, block.id);
+  if (overlap) return res.status(400).json({ error: `Overlaps an existing block (${overlap.start_time}–${overlap.end_time}) on ${date}.` });
+  db.update('display_schedules', block.id, { date, start_time, end_time, content_screen_id });
+  ws.push(`d:${block.display_id}`, { type: 'reload' });
+  res.json({ ok: true });
+});
+
+router.delete('/schedule-blocks/:id', requireAuth, (req, res) => {
+  const block = db.findById('display_schedules', req.params.id);
+  if (!block) return res.status(404).json({ error: 'not found' });
+  db.remove('display_schedules', block.id);
+  ws.push(`d:${block.display_id}`, { type: 'reload' });
   res.json({ ok: true });
 });
 

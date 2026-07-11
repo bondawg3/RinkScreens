@@ -325,10 +325,15 @@ header {
 <div id="content"></div>
 
 <script>
+// Exactly one of these is set: DISPLAY_ID on a physical TV (/tv/:displayId,
+// content resolved through the display's schedule), SCREEN_ID on an admin
+// preview of one screen config (/tv/screen/:screenId, no scheduling).
+var DISPLAY_ID = '{{DISPLAY_ID}}';
 var SCREEN_ID = '{{SCREEN_ID}}';
 var refreshTimer = null;  // figure-skating page rotation
 var reloadTimer = null;   // periodic full reload
 var webpageTimer = null;  // webpage iframe refresh
+var boundaryTimer = null; // one-shot re-fetch at the next schedule block boundary
 var PREVIEW_DATE = (typeof URLSearchParams !== 'undefined')
   ? (new URLSearchParams(location.search).get('preview_date') || null)
   : null;
@@ -755,17 +760,41 @@ function loadScreen() {
   // figure-skating rotation or a webpage must not keep its old timer firing
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
   if (webpageTimer) { clearTimeout(webpageTimer); webpageTimer = null; }
+  if (boundaryTimer) { clearTimeout(boundaryTimer); boundaryTimer = null; }
   if (reloadTimer) { clearInterval(reloadTimer); }
   reloadTimer = setInterval(loadScreen, 60000);
 
-  get('/api/screens', function(err, screens) {
-    if (err || !screens) return;
-    var screen = null;
-    for (var i = 0; i < screens.length; i++) {
-      if (String(screens[i].id) === String(SCREEN_ID)) { screen = screens[i]; break; }
-    }
-    if (!screen) return;
+  if (DISPLAY_ID) {
+    // Physical display: the server resolves the schedule to one screen config
+    get('/api/displays/' + DISPLAY_ID + '/active', function(err, data) {
+      if (err || !data) return;
+      // Re-fetch exactly when the current block ends / the next one starts,
+      // so scheduled switches don't wait for the 60s poll
+      if (data.valid_until) {
+        var waitMs = new Date(data.valid_until).getTime() - Date.now();
+        if (waitMs > 0) boundaryTimer = setTimeout(loadScreen, Math.max(waitMs, 1000) + 500);
+      }
+      if (!data.screen) {
+        document.getElementById('content').innerHTML =
+          '<div class="empty"><p>No screen assigned to this display.</p></div>';
+        return;
+      }
+      renderScreenConfig(data.screen);
+    });
+  } else {
+    get('/api/screens', function(err, screens) {
+      if (err || !screens) return;
+      var screen = null;
+      for (var i = 0; i < screens.length; i++) {
+        if (String(screens[i].id) === String(SCREEN_ID)) { screen = screens[i]; break; }
+      }
+      if (!screen) return;
+      renderScreenConfig(screen);
+    });
+  }
+}
 
+function renderScreenConfig(screen) {
     // Background
     var bgEl = document.getElementById('bg');
     if (screen.bg_color) bgEl.style.backgroundColor = screen.bg_color;
@@ -994,7 +1023,6 @@ function loadScreen() {
       }
       content.innerHTML = annoHtml;
     }
-  });
 }
 
 // ── Settings (rink name / logo) ───────────────────────────────────────────────
@@ -1012,7 +1040,8 @@ get('/api/settings', function(err, s) {
 function connectWS() {
   try {
     var proto = location.protocol === 'https:' ? 'wss' : 'ws';
-    var ws = new WebSocket(proto + '://' + location.host + '?screenId=' + SCREEN_ID);
+    var ws = new WebSocket(proto + '://' + location.host +
+      (DISPLAY_ID ? '?displayId=' + DISPLAY_ID : '?screenId=' + SCREEN_ID));
     ws.onmessage = function(e) {
       try {
         var msg = JSON.parse(e.data);

@@ -2,6 +2,45 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.22.1] — 2026-07-10
+
+### Fixed
+- **Scheduler timeline gridlines were invisible** — they were styled for a dark background; the admin panel is a light theme. Hour lines are now a solid ice-blue, quarter-hour lines a dotted ice-blue, both clearly visible on the timeline's white background.
+- **Hour labels overlapped the grid instead of sitting in the left gutter** — they're now positioned in the dedicated gutter column, calendar-style, instead of floating inside the first grid line.
+- **Screen thumbnails didn't rescale when the palette's column density changed** (and the 4-column density in particular clipped the screen) — thumbnails now use a `ResizeObserver` to keep the scaled iframe matched to their actual cell width at any density.
+- **Scheduler palette was missing screen types and screens** — it was grouped by an ad hoc "display type" list left over from an earlier iteration (labels like "Game Board" with no Custom/Announcement groups) and silently dropped screens marked hidden. The palette now groups screens to match the real admin tabs (Hockey, Rink Events, Figure Skating, Public Skate, Webpage, Announcements, Custom) and only its own per-type checkboxes hide a group; a type with zero visible screens is still listed, just greyed out. The Displays tab's screen-assignment dropdown had the same stale type list and has been fixed the same way, and now only lists visible screens (plus whichever screen a display is already assigned to, so its selection never disappears).
+- **Display card's screen dropdown could overflow its thumbnail** — it now fills the card width and truncates long labels instead of stretching the card.
+
+### Changed
+- Bigger whole-day (⤢) and delete (🗑) buttons on scheduled blocks, and more breathing room around the day timeline's top/bottom edges plus a taller scroll area.
+- The "Show Pricing on this screen" checkbox no longer appears when editing or creating a Hockey (Game Board) screen — it isn't applicable there.
+- Removed a legacy leftover "Custom Message" screen and screen-type from a prior iteration; any screen types outside the current tab set now have nowhere to silently linger.
+
+## [1.22.0] — 2026-07-08
+
+### Added
+- **Visual drag-and-drop scheduler** — the per-display 📅 button now opens a full-page scheduler (its own route off the Displays tab) instead of the type-in modal. A vertical day timeline sits beside a palette of screen thumbnails grouped by display type; drag a thumbnail onto the timeline to schedule it. Blocks start at the 15-minute slot they're dropped on, default to one hour, and resize by dragging their top/bottom edges in 15-minute steps (15-minute minimum). Dropping onto an occupied time shifts neighbouring blocks toward the nearest free space (blocks are fixed-duration and never shrink); when the day can't absorb it, you're prompted to replace the block at the drop point (if it's the same size or larger) or told it "does not fit the available time slot." Each block has a 🗑 remove button and a whole-day (`00:00–24:00`) button.
+- **Palette controls** — the screen palette is grouped to match the admin's screen-type tabs (Hockey, Rink Events, Figure Skating, Public Skate, Webpage, Announcements, Custom), with per-type show/hide checkboxes and a 2–4-column density selector. Only screens marked visible are schedulable; a type with no visible screens is still listed but greyed out.
+- **Richer date navigation** — prev/next day buttons and a date picker (today … +31 days), plus a **Week starts** Sunday/Monday selector.
+- **Duplicate day / duplicate week** — copy the current day to the next day, or the whole week to the following week (week bounds follow the Week Start choice), via a new `POST /api/displays/:id/schedule/copy` range-copy endpoint that preserves each block's day-offset and skips blocks that would overlap existing ones on a target day.
+- **Shared view preferences** — side-swap, grid density, week start, and hidden types persist server-side (in `settings.schedule_prefs`) and apply for every admin.
+
+### Changed
+- Schedule edits from the visual editor save through a new atomic `PUT /api/displays/:id/schedule/day` endpoint that replaces a day's blocks in one transaction, so rearranging blocks never hits a transient-overlap rejection. The v1 single-day `…/schedule/bulk` endpoint was replaced by the more general range-copy endpoint, and the v1 schedule modal was removed.
+
+## [1.21.0] — 2026-07-08
+
+### Added
+- **Display scheduling** — each physical display can now be preset with what it shows throughout the day, up to a month ahead. A new 📅 Schedule button on each display card (Displays tab) opens a day-by-day calendar of time blocks; each block picks an existing screen to show during that window. Outside any block, the display falls back to its assigned screen. Blocks snap to 15-minute boundaries (matching typical ice slots), cannot overlap, and cannot cross midnight (enter two blocks instead). A "copy this day" control replicates one day's blocks across a date range, skipping days where they'd overlap existing blocks.
+- **On-time switching** — TVs re-fetch exactly at each schedule boundary (block start/end/midnight) via a `valid_until` timestamp from the new `GET /api/displays/:id/active` endpoint, instead of waiting for the next 60-second poll.
+- New API: `GET /api/displays/:id/active`, `GET/POST /api/displays/:id/schedule`, `POST /api/displays/:id/schedule/bulk`, `PATCH/DELETE /api/schedule-blocks/:id`, backed by a new `display_schedules` table. Blocks older than a week are pruned at server startup.
+
+### Changed
+- **BREAKING: TV URLs are now per display, not per screen** — physical TVs must load `/tv/:displayId` (the display's id from the Displays tab) instead of `/tv/:screenId`. Every TV's configured URL needs a one-time update after deploying this version. Admin previews of a screen config live at `/tv/screen/:screenId` (all in-app preview links and thumbnails updated).
+- **Online status** — a display's Online badge now reflects its own WebSocket connection (previously displays never showed online); a screen shows online when an admin preview of it is open or a connected display is currently showing it (including via a schedule block).
+- Editing a screen now refreshes every display currently showing it — including displays showing it through a schedule block, not just those assigned to it.
+- Deleting a screen is blocked while current/future schedule blocks reference it (the error lists which displays); deleting a display removes its schedule blocks.
+
 ## [1.20.0] — 2026-07-06
 
 ### Added

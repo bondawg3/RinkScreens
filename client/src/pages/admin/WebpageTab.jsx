@@ -110,7 +110,7 @@ export default function WebpageTab() {
                 })()}
               </div>
               <div className={tStyles.cardActions}>
-                <a href={`/tv/${sc.id}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">📺</a>
+                <a href={`/tv/screen/${sc.id}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">📺</a>
                 <button className={styles.btnGhost} onClick={() => openEdit(sc)} title="Edit">✎</button>
                 <button className={styles.btnGhost} title="Resync page" onClick={() => apiFetch(`/screens/${sc.id}/reload`, { method: 'POST' })}>&#8635;</button>
                 <EyeButton screen={sc} assignedName={assignedDisplayName(sc.id)} onToggle={toggleVisible} />

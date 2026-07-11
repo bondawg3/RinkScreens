@@ -233,6 +233,7 @@ export default function ScreensSection({ displayType, calendarType }) {
         <div className={s.modalBackdrop} onClick={() => setModal(null)}>
           <div className={s.modal} onClick={(e) => e.stopPropagation()}>
             <div className={s.modalTitle}>{modal === 'add' ? 'Add Screen' : `Edit — ${modal.name}`}</div>
+            <div className={s.modalBody}>
 
             <label className={adminStyles.label}>Name</label>
             <input
@@ -426,6 +427,7 @@ export default function ScreensSection({ displayType, calendarType }) {
             )}
 
             {err && <span className={adminStyles.error}>{err}</span>}
+            </div>
             <div className={s.modalActions}>
               <button className={adminStyles.btnGhost} onClick={() => setModal(null)}>Cancel</button>
               <button
@@ -442,20 +444,22 @@ export default function ScreensSection({ displayType, calendarType }) {
         <div className={s.modalBackdrop} onClick={() => setPricingModal(null)}>
           <div className={s.modal} onClick={(e) => e.stopPropagation()}>
             <div className={s.modalTitle}>Pricing — {pricingModal.name}</div>
-            <div className={s.calCheckList}>
-              {(skatePrices || []).length === 0 && (
-                <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>No pricing options configured yet. Add some in Settings.</span>
-              )}
-              {(skatePrices || []).map((p) => (
-                <label key={p.id} className={s.calCheckItem}>
-                  <input
-                    type="checkbox"
-                    checked={pricingSelection.includes(p.id)}
-                    onChange={() => togglePricingId(p.id)}
-                  />
-                  {p.label}{p.subheading ? ` (${p.subheading})` : ''} — {p.price}
-                </label>
-              ))}
+            <div className={s.modalBody}>
+              <div className={s.calCheckList}>
+                {(skatePrices || []).length === 0 && (
+                  <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>No pricing options configured yet. Add some in Settings.</span>
+                )}
+                {(skatePrices || []).map((p) => (
+                  <label key={p.id} className={s.calCheckItem}>
+                    <input
+                      type="checkbox"
+                      checked={pricingSelection.includes(p.id)}
+                      onChange={() => togglePricingId(p.id)}
+                    />
+                    {p.label}{p.subheading ? ` (${p.subheading})` : ''} — {p.price}
+                  </label>
+                ))}
+              </div>
             </div>
             <div className={s.modalActions}>
               <button className={adminStyles.btnGhost} onClick={() => setPricingModal(null)}>Cancel</button>

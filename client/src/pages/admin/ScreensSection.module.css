@@ -216,22 +216,33 @@
 .modal {
   background: #fff;
   border-radius: 10px;
-  padding: 1.5rem;
-  width: 440px;
+  width: 520px;
   max-width: 90vw;
   max-height: 90vh;
-  overflow-y: auto;
   box-shadow: 0 8px 32px rgba(0,0,0,0.2);
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  overflow: hidden; /* clip children to the rounded corners */
 }
 
 .modalTitle {
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--text);
-  margin-bottom: 0.25rem;
+  padding: 1.5rem 1.5rem 0.75rem;
+  flex-shrink: 0;
+}
+
+/* Scrolls independently so the title and Cancel/Save stay put as fields
+   accumulate (Layout, Overflow, Rotate Interval, Pricing, ...) */
+.modalBody {
+  padding: 0 1.5rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+  min-height: 0;
 }
 
 .calCheckList {
@@ -288,5 +299,8 @@
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
+  padding: 0.75rem 1.5rem 1.5rem;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border, #e5e7eb);
   margin-top: 0.5rem;
 }

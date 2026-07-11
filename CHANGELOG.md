@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.22.6] — 2026-07-11
+
+### Fixed
+- **Screen edit modal (Hockey, Rink Events, Figure Skating, Public Skate, Custom) was getting cramped** as more per-type settings accumulated (Layout, Overflow, Rotate Interval, Pricing, Locker Rooms...). Widened the modal (440px → 520px, fixing the truncated "Two columns (max 12 rows each)" label) and split it into a sticky title, an independently scrolling body, and sticky Cancel/Save buttons — so a tall form scrolls internally instead of the whole modal growing past the viewport. Same fix applied to the Pricing picker modal, which shares the same layout.
+
 ## [1.22.5] — 2026-07-11
 
 ### Fixed

@@ -1,3 +1,37 @@
+@font-face {
+  font-family: 'DSEG14 Classic';
+  src: url('/fonts/DSEG14Classic-Bold.woff2') format('woff2'),
+       url('/fonts/DSEG14Classic-Bold.woff') format('woff');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DS-Digital';
+  src: url('/fonts/DS-Digital.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DS-Digital';
+  src: url('/fonts/DS-Digital-Bold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DSEG7 Classic';
+  src: url('/fonts/DSEG7Classic-Bold.woff2') format('woff2'),
+       url('/fonts/DSEG7Classic-Bold.woff') format('woff');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {

@@ -9,10 +9,22 @@ import { useScreenCards, InUseBadge, EyeButton, EyeHint, DuplicateButton } from 
 const FONTS = [
   'Arial', 'Verdana', 'Trebuchet MS', 'Georgia',
   'Times New Roman', 'Impact', 'Courier New', 'Palatino Linotype',
+  'Orbitron', 'Share Tech Mono', 'DS-Digital', 'DSEG14 Classic', 'DSEG7 Classic',
 ];
 
 function makeId() {
   return 'el-' + Math.random().toString(36).slice(2, 9);
+}
+
+function formatDateTimePreview(format, showSeconds) {
+  const now = new Date();
+  const time = now.toLocaleTimeString('en-US', {
+    hour: 'numeric', minute: '2-digit', ...(showSeconds ? { second: '2-digit' } : {}),
+  });
+  const date = now.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+  if (format === 'time') return time;
+  if (format === 'date') return date;
+  return date + '\n' + time;
 }
 
 function defaultElements() {
@@ -110,6 +122,16 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
     setSelectedId(el.id);
   }
 
+  function addDateTime() {
+    const el = {
+      id: makeId(), type: 'datetime', format: 'datetime', showSeconds: false,
+      color: '#ffffff', font: 'DS-Digital', size: 48, bold: false, align: 'center',
+      x: 50, y: 50,
+    };
+    setElements(prev => [...prev, el]);
+    setSelectedId(el.id);
+  }
+
   function deleteEl(id) {
     setElements(prev => prev.filter(el => el.id !== id));
     if (selectedId === id) setSelectedId(null);
@@ -198,6 +220,18 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                       lineHeight: 1.2,
                       pointerEvents: 'none',
                     }}>{el.text || ' '}</span>
+                  ) : el.type === 'datetime' ? (
+                    <span style={{
+                      color: el.color,
+                      fontFamily: el.font + ', sans-serif',
+                      fontSize: Math.round(el.size * scale) + 'px',
+                      fontWeight: el.bold ? 'bold' : 'normal',
+                      textAlign: el.align,
+                      whiteSpace: 'pre',
+                      display: 'block',
+                      lineHeight: 1.2,
+                      pointerEvents: 'none',
+                    }}>{formatDateTimePreview(el.format, el.showSeconds)}</span>
                   ) : (
                     <img
                       src={`/uploads/${el.filename}`}
@@ -285,6 +319,7 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
               <button className={s.addBtn} onClick={() => addText('heading')}>+ Heading</button>
               <button className={s.addBtn} onClick={() => addText('body')}>+ Body</button>
               <button className={s.addBtn} onClick={() => addText('footer')}>+ Footer</button>
+              <button className={s.addBtn} onClick={addDateTime}>+ Date/Time</button>
             </div>
             <div style={{ marginTop: '0.25rem' }}>
               <select
@@ -305,7 +340,7 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
           {selectedEl ? (
             <div className={s.propSection}>
               <div className={s.propSectionTitle}>
-                <span>{selectedEl.type === 'text' ? 'Text' : 'Image'}</span>
+                <span>{selectedEl.type === 'text' ? 'Text' : selectedEl.type === 'datetime' ? 'Date/Time' : 'Image'}</span>
                 <button className={s.deleteBtnDark} onClick={() => deleteEl(selectedId)}>Remove</button>
               </div>
 
@@ -319,6 +354,105 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                       onChange={e => updateEl(selectedId, { text: e.target.value })}
                     />
                   </div>
+
+                  <div>
+                    <div className={s.propLabel}>Font</div>
+                    <select
+                      className={s.propSelect}
+                      value={selectedEl.font}
+                      onChange={e => updateEl(selectedId, { font: e.target.value })}
+                    >
+                      {FONTS.map(f => (
+                        <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <div className={s.propLabel}>Size — {selectedEl.size}px</div>
+                    <div className={s.propRow}>
+                      <input
+                        type="range" min="12" max="200" step="4"
+                        value={selectedEl.size}
+                        onChange={e => updateEl(selectedId, { size: Number(e.target.value) })}
+                      />
+                      <input
+                        className={s.numInput}
+                        type="number" min="4" max="400"
+                        value={selectedEl.size}
+                        onChange={e => updateEl(selectedId, { size: Number(e.target.value) })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className={s.propRow}>
+                    <div>
+                      <div className={s.propLabel}>Color</div>
+                      <input
+                        type="color"
+                        className={s.colorInput}
+                        value={selectedEl.color}
+                        onChange={e => updateEl(selectedId, { color: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <div className={s.propLabel}>Bold</div>
+                      <label className={s.checkRow}>
+                        <input
+                          type="checkbox"
+                          checked={selectedEl.bold}
+                          onChange={e => updateEl(selectedId, { bold: e.target.checked })}
+                        />
+                        Bold
+                      </label>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className={s.propLabel}>Align</div>
+                    <div className={s.alignToggle}>
+                      {['left', 'center', 'right'].map(a => (
+                        <button
+                          key={a}
+                          type="button"
+                          className={selectedEl.align === a ? s.alignActive : s.alignBtn}
+                          onClick={() => updateEl(selectedId, { align: a })}
+                        >
+                          {a === 'left' ? '⇤' : a === 'center' ? '⇔' : '⇥'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {selectedEl.type === 'datetime' && (
+                <>
+                  <div>
+                    <div className={s.propLabel}>Format</div>
+                    <select
+                      className={s.propSelect}
+                      value={selectedEl.format}
+                      onChange={e => updateEl(selectedId, { format: e.target.value })}
+                    >
+                      <option value="datetime">Date &amp; Time</option>
+                      <option value="date">Date only</option>
+                      <option value="time">Time only</option>
+                    </select>
+                  </div>
+
+                  {selectedEl.format !== 'date' && (
+                    <div>
+                      <label className={s.checkRow}>
+                        <input
+                          type="checkbox"
+                          checked={!!selectedEl.showSeconds}
+                          onChange={e => updateEl(selectedId, { showSeconds: e.target.checked })}
+                        />
+                        Show seconds
+                      </label>
+                    </div>
+                  )}
 
                   <div>
                     <div className={s.propLabel}>Font</div>

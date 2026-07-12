@@ -74,8 +74,10 @@ Every screen card also has a duplicate button (⧉) next to Delete that creates 
 - Resync button forces an immediate iframe reload on the live TV
 
 ### Announcements tab
-- Full-screen canvas editor: drag text and image elements freely
+- Full-screen canvas editor: drag text, image, and date/time elements freely
 - Text controls: font, size, color, bold, alignment
+- Date/Time element: shows date & time, date only, or time only, updating live on the TV; optional "Show seconds"; same font/size/color/bold/alignment controls as text
+- Font picker includes "Orbitron", "Share Tech Mono", "DS-Digital", "DSEG7 Classic", and "DSEG14 Classic" (segmented LCD looks, self-hosted) for a digital-watchface feel — DS-Digital is the default for new Date/Time elements
 - Background: color picker (presets + custom hex) and background image with opacity
 - Images tab (formerly Backgrounds) splits uploads into **Background** and **General** types; inline label editing with ✏ / ✓ / ✕
 

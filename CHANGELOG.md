@@ -2,6 +2,36 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.22.12] — 2026-07-11
+
+### Added
+- **"Show seconds" option for the Date/Time announcement element** — a checkbox (for the "Date & Time" and "Time only" formats) that adds a ticking `:SS` to the live clock on the TV, off by default.
+
+## [1.22.11] — 2026-07-11
+
+### Added
+- **"DS-Digital" font** — added the user-supplied DS-Digital font family (normal + bold) to the Announcement editor's font picker, self-hosted from `client/public/fonts`. It's now the default font for new Date/Time elements, replacing DSEG7 Classic as the default (DSEG14 Classic and DSEG7 Classic remain available as alternatives).
+
+## [1.22.10] — 2026-07-11
+
+### Added
+- **"DSEG7 Classic" font** — a true 7-segment digital font (like a calculator display), added alongside DSEG14 Classic. DSEG14's letterforms (especially "Y") use extra diagonal segments that can look unfamiliar; DSEG7 Classic uses simpler, more calculator-like letter shapes and is now the default for new Date/Time elements. DSEG14 Classic remains available in the font picker.
+
+## [1.22.9] — 2026-07-11
+
+### Added
+- **True 7/14-segment digital font ("DSEG14 Classic")** for the Announcement editor's font picker — the blocky LCD/digital-watch look (segments visible even when "off"), self-hosted as a webfont so it renders correctly on TVs without internet access to Google Fonts. Now the default font for new Date/Time elements.
+
+## [1.22.8] — 2026-07-11
+
+### Added
+- **Digital-style fonts for text and Date/Time elements** — added "Orbitron" (bold LCD/digital look) and "Share Tech Mono" (monospace terminal look) to the font picker in the Announcement editor, loaded via Google Fonts. New Date/Time elements now default to Orbitron for a digital watchface feel.
+
+## [1.22.7] — 2026-07-11
+
+### Added
+- **Date/Time element for Announcement screens** — a new "+ Date/Time" element type in the Announcement editor, alongside Heading/Body/Footer/Image. Configurable format (date & time, date only, or time only), plus the usual font, size, color, bold, and alignment controls. On the TV display it updates live every second.
+
 ## [1.22.6] — 2026-07-11
 
 ### Fixed

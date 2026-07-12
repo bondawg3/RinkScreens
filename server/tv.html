@@ -4,8 +4,45 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="icon" type="image/png" href="/Nazareth_Ice_Oasis_Icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400..900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <title>RinkScreens</title>
 <style>
+@font-face {
+  font-family: 'DSEG14 Classic';
+  src: url('/fonts/DSEG14Classic-Bold.woff2') format('woff2'),
+       url('/fonts/DSEG14Classic-Bold.woff') format('woff');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DS-Digital';
+  src: url('/fonts/DS-Digital.ttf') format('truetype');
+  font-weight: normal;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DS-Digital';
+  src: url('/fonts/DS-Digital-Bold.ttf') format('truetype');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'DSEG7 Classic';
+  src: url('/fonts/DSEG7Classic-Bold.woff2') format('woff2'),
+       url('/fonts/DSEG7Classic-Bold.woff') format('woff');
+  font-weight: bold;
+  font-style: normal;
+  font-display: swap;
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
@@ -410,6 +447,27 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock();
 
+var annoClockTimer = null;
+function updateAnnoDateTimes() {
+  var els = document.getElementsByClassName('anno-datetime');
+  if (!els.length) return;
+  var d = new Date();
+  var h = d.getHours(), m = d.getMinutes(), sec = d.getSeconds();
+  var ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  var timeBase = h + ':' + (m < 10 ? '0' : '') + m;
+  var time = timeBase + ' ' + ampm;
+  var timeWithSec = timeBase + ':' + (sec < 10 ? '0' : '') + sec + ' ' + ampm;
+  var date = DAY_NAMES[d.getDay()] + ', ' + MONTH_NAMES[d.getMonth()] + ' ' + d.getDate();
+  for (var i = 0; i < els.length; i++) {
+    var format = els[i].getAttribute('data-format');
+    var t = els[i].getAttribute('data-seconds') === '1' ? timeWithSec : time;
+    if (format === 'time') els[i].textContent = t;
+    else if (format === 'date') els[i].textContent = date;
+    else els[i].textContent = date + '\n' + t;
+  }
+}
+
 // ── XHR helpers ────────────────────────────────────────────────────────────
 function get(url, cb) {
   var xhr = new XMLHttpRequest();
@@ -793,6 +851,7 @@ function loadScreen() {
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
   if (webpageTimer) { clearTimeout(webpageTimer); webpageTimer = null; }
   if (boundaryTimer) { clearTimeout(boundaryTimer); boundaryTimer = null; }
+  if (annoClockTimer) { clearInterval(annoClockTimer); annoClockTimer = null; }
   if (reloadTimer) { clearInterval(reloadTimer); }
   reloadTimer = setInterval(loadScreen, 60000);
 
@@ -1050,9 +1109,24 @@ function renderScreenConfig(screen) {
             'position:absolute;left:' + Number(ae.x) + '%;top:' + Number(ae.y) + '%;' +
             'width:' + (Number(ae.width) || 25) + '%;' +
             'transform:translate(-50%,-50%);pointer-events:none;" alt="" />';
+        } else if (ae.type === 'datetime') {
+          annoHtml += '<div class="anno-datetime" data-format="' + esc(ae.format || 'datetime') + '" data-seconds="' + (ae.showSeconds ? '1' : '0') + '" style="' +
+            'position:absolute;left:' + Number(ae.x) + '%;top:' + Number(ae.y) + '%;' +
+            'transform:translate(-50%,-50%);' +
+            'width:max-content;' +
+            'color:' + esc(ae.color || '#fff') + ';' +
+            'font-family:' + esc(ae.font || 'Arial') + ',sans-serif;' +
+            'font-size:' + ((ae.size || 48) / 19.2).toFixed(3) + 'vw;' +
+            'font-weight:' + (ae.bold ? 'bold' : 'normal') + ';' +
+            'text-align:' + esc(ae.align || 'left') + ';' +
+            'white-space:pre;line-height:1.2;pointer-events:none;' +
+            '"></div>';
         }
       }
       content.innerHTML = annoHtml;
+      updateAnnoDateTimes();
+      if (annoClockTimer) clearInterval(annoClockTimer);
+      annoClockTimer = setInterval(updateAnnoDateTimes, 1000);
     }
 }
 

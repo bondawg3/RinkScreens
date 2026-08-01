@@ -3,6 +3,7 @@ import { useApi, apiFetch } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 import tStyles from './ScreensTab.module.css';
 import sStyles from './ScreensSection.module.css';
+import Modal from './Modal';
 import Thumbnail from './Thumbnail';
 import { useScreenCards, InUseBadge, EyeButton, EyeHint, DuplicateButton } from './screenCard';
 
@@ -127,10 +128,15 @@ export default function WebpageTab() {
       </div>
 
       {modal && (
-        <div className={tStyles.modalBackdrop} onClick={() => setModal(null)}>
-          <div className={tStyles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={tStyles.modalTitle}>{modal === 'add' ? 'Add Webpage Screen' : `Edit — ${modal.name}`}</div>
-
+        <Modal
+          onClose={() => setModal(null)}
+          title={modal === 'add' ? 'Add Webpage Screen' : `Edit — ${modal.name}`}
+          width={520}
+          footer={<>
+            <button className={styles.btnGhost} onClick={() => setModal(null)}>Cancel</button>
+            <button className={styles.btnPrimary} onClick={save}>Save</button>
+          </>}
+        >
             <label className={styles.label}>Name</label>
             <input
               className={styles.input}
@@ -191,12 +197,7 @@ export default function WebpageTab() {
             </div>
 
             {err && <span className={styles.error}>{err}</span>}
-            <div className={tStyles.modalActions}>
-              <button className={styles.btnGhost} onClick={() => setModal(null)}>Cancel</button>
-              <button className={styles.btnPrimary} onClick={save}>Save</button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

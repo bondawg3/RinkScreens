@@ -284,9 +284,14 @@ router.get('/displays', (req, res) => {
   })));
 });
 
+function validTvNumber(n) {
+  return /^\d{1,2}$/.test(String(n).trim());
+}
+
 router.post('/displays', requireAuth, (req, res) => {
   const { name, tv_number } = req.body;
   if (!name || !tv_number) return res.status(400).json({ error: 'name and TV number required' });
+  if (!validTvNumber(tv_number)) return res.status(400).json({ error: 'TV number must be a whole number from 0 to 99.' });
   const dupName = findByNameCi('displays', name);
   if (dupName) return res.status(400).json({ error: `A display named "${dupName.name}" already exists.` });
   const dupNum = db.findAll('displays').find((d) => String(d.tv_number) === String(tv_number));
@@ -301,6 +306,7 @@ router.patch('/displays/:id', requireAuth, (req, res) => {
   const { name, tv_number, screen_id } = req.body;
   const newName = name ?? display.name;
   const newNum = tv_number ?? display.tv_number;
+  if (!validTvNumber(newNum)) return res.status(400).json({ error: 'TV number must be a whole number from 0 to 99.' });
   const dupName = findByNameCi('displays', newName, display.id);
   if (dupName) return res.status(400).json({ error: `A display named "${dupName.name}" already exists.` });
   const dupNum = db.findAll('displays').find((d) => d.id !== display.id && String(d.tv_number) === String(newNum));
@@ -649,7 +655,7 @@ router.get('/calendars', (req, res) => {
 });
 
 router.post('/calendars', requireAuth, async (req, res) => {
-  const { name, url, type, poll_interval_minutes = 5, team_order = 'home_away' } = req.body;
+  const { name, url, type, poll_interval_minutes = 5, team_order = 'home_away', event_mode = 'teams' } = req.body;
   if (!name || !url || !type) return res.status(400).json({ error: 'name, url, and type are required' });
 
   if (findByNameCi('calendars', name)) {
@@ -660,7 +666,7 @@ router.post('/calendars', requireAuth, async (req, res) => {
   }
 
   const { locker_sequence_id } = req.body;
-  const row = db.insert('calendars', { name, url, type, poll_interval_minutes: Number(poll_interval_minutes), team_order, locker_sequence_id: locker_sequence_id || null });
+  const row = db.insert('calendars', { name, url, type, poll_interval_minutes: Number(poll_interval_minutes), team_order, event_mode, locker_sequence_id: locker_sequence_id || null });
   // Sync immediately in the background and start the poll cycle (previously
   // new calendars were never polled until a server restart)
   syncCalendar(row).then(() => ws.broadcast({ type: 'refresh_data' })).catch(() => {});
@@ -672,7 +678,7 @@ router.patch('/calendars/:id', requireAuth, async (req, res) => {
   const cal = db.findById('calendars', req.params.id);
   if (!cal) return res.status(404).json({ error: 'not found' });
 
-  const { name, url, poll_interval_minutes, team_order, locker_sequence_id } = req.body;
+  const { name, url, poll_interval_minutes, team_order, event_mode, locker_sequence_id } = req.body;
 
   if (name && name.toLowerCase() !== cal.name.toLowerCase() && findByNameCi('calendars', name, cal.id)) {
     return res.status(400).json({ error: `A calendar named "${name}" already exists.` });
@@ -690,6 +696,7 @@ router.patch('/calendars/:id', requireAuth, async (req, res) => {
     url: url ?? cal.url,
     poll_interval_minutes: poll_interval_minutes !== undefined ? Number(poll_interval_minutes) : cal.poll_interval_minutes,
     team_order: team_order ?? cal.team_order ?? 'home_away',
+    event_mode: event_mode ?? cal.event_mode ?? 'teams',
     locker_sequence_id: newSeqId,
   });
   // Keep league in sync when sequence is explicitly set via calendar modal

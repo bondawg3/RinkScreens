@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import adminStyles from './AdminTab.module.css';
 import s from './ScreensSection.module.css';
+import Modal from './Modal';
 import Thumbnail from './Thumbnail';
 import { useScreenCards, InUseBadge, EyeButton, EyeHint, DuplicateButton } from './screenCard';
 import { stepDate, todayStr, fmtDateLabel } from '../../utils/date';
@@ -230,11 +231,19 @@ export default function ScreensSection({ displayType, calendarType }) {
       </div>
 
       {modal && (
-        <div className={s.modalBackdrop} onClick={() => setModal(null)}>
-          <div className={s.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={s.modalTitle}>{modal === 'add' ? 'Add Screen' : `Edit — ${modal.name}`}</div>
-            <div className={s.modalBody}>
-
+        <Modal
+          onClose={() => setModal(null)}
+          title={modal === 'add' ? 'Add Screen' : `Edit — ${modal.name}`}
+          width={520}
+          footer={<>
+            <button className={adminStyles.btnGhost} onClick={() => setModal(null)}>Cancel</button>
+            <button
+              className={adminStyles.btnPrimary}
+              onClick={save}
+              disabled={!form.all_calendars && form.calendar_ids.length === 0}
+            >Save</button>
+          </>}
+        >
             <label className={adminStyles.label}>Name</label>
             <input
               className={adminStyles.input}
@@ -354,33 +363,6 @@ export default function ScreensSection({ displayType, calendarType }) {
               )}
             </>)}
 
-            {displayType === 'games' && (
-              <>
-                <label className={adminStyles.label}>Page Rotation Interval</label>
-                <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                  <input
-                    className={adminStyles.input}
-                    type="number"
-                    min="1"
-                    style={{ width: '80px', marginBottom: 0 }}
-                    value={rotateVal}
-                    onChange={(e) => setRotateVal(e.target.value)}
-                  />
-                  <div className={s.unitToggle}>
-                    <button type="button"
-                      className={rotateUnit === 'seconds' ? s.unitActive : s.unitBtn}
-                      onClick={() => switchRotateUnit('seconds')}>Seconds</button>
-                    <button type="button"
-                      className={rotateUnit === 'minutes' ? s.unitActive : s.unitBtn}
-                      onClick={() => switchRotateUnit('minutes')}>Minutes</button>
-                  </div>
-                </div>
-                <div style={{ fontSize: '0.78rem', color: 'var(--muted)', marginTop: '-0.25rem' }}>
-                  Only applies on days with more than 6 events, when the board splits into rotating pages.
-                </div>
-              </>
-            )}
-
             {(displayType === 'games' || displayType === 'custom') && (() => {
               const hasHockeyCalendar = displayType !== 'custom' ? true : (
                 form.all_calendars
@@ -427,46 +409,35 @@ export default function ScreensSection({ displayType, calendarType }) {
             )}
 
             {err && <span className={adminStyles.error}>{err}</span>}
-            </div>
-            <div className={s.modalActions}>
-              <button className={adminStyles.btnGhost} onClick={() => setModal(null)}>Cancel</button>
-              <button
-                className={adminStyles.btnPrimary}
-                onClick={save}
-                disabled={!form.all_calendars && form.calendar_ids.length === 0}
-              >Save</button>
-            </div>
-          </div>
-        </div>
+        </Modal>
       )}
 
       {pricingModal && (
-        <div className={s.modalBackdrop} onClick={() => setPricingModal(null)}>
-          <div className={s.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={s.modalTitle}>Pricing — {pricingModal.name}</div>
-            <div className={s.modalBody}>
-              <div className={s.calCheckList}>
-                {(skatePrices || []).length === 0 && (
-                  <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>No pricing options configured yet. Add some in Settings.</span>
-                )}
-                {(skatePrices || []).map((p) => (
-                  <label key={p.id} className={s.calCheckItem}>
-                    <input
-                      type="checkbox"
-                      checked={pricingSelection.includes(p.id)}
-                      onChange={() => togglePricingId(p.id)}
-                    />
-                    {p.label}{p.subheading ? ` (${p.subheading})` : ''} — {p.price}
-                  </label>
-                ))}
-              </div>
-            </div>
-            <div className={s.modalActions}>
-              <button className={adminStyles.btnGhost} onClick={() => setPricingModal(null)}>Cancel</button>
-              <button className={adminStyles.btnPrimary} onClick={savePricingSelection}>Save</button>
-            </div>
+        <Modal
+          onClose={() => setPricingModal(null)}
+          title={`Pricing — ${pricingModal.name}`}
+          width={520}
+          footer={<>
+            <button className={adminStyles.btnGhost} onClick={() => setPricingModal(null)}>Cancel</button>
+            <button className={adminStyles.btnPrimary} onClick={savePricingSelection}>Save</button>
+          </>}
+        >
+          <div className={s.calCheckList}>
+            {(skatePrices || []).length === 0 && (
+              <span style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>No pricing options configured yet. Add some in Settings.</span>
+            )}
+            {(skatePrices || []).map((p) => (
+              <label key={p.id} className={s.calCheckItem}>
+                <input
+                  type="checkbox"
+                  checked={pricingSelection.includes(p.id)}
+                  onChange={() => togglePricingId(p.id)}
+                />
+                {p.label}{p.subheading ? ` (${p.subheading})` : ''} — {p.price}
+              </label>
+            ))}
           </div>
-        </div>
+        </Modal>
       )}
     </div>
   );

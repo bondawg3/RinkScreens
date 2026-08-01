@@ -58,34 +58,25 @@ describe('parseTitle', () => {
     });
   });
 
-  describe('pickup / practice events', () => {
-    it.each(['Practice', 'Scrimmage', 'League Pickup'])(
-      'marks both teams Open for "%s"',
-      (raw) => {
-        const r = parseTitle(raw, null);
-        expect(r.away_team).toBe('Open');
-        expect(r.home_team).toBe('Open');
-        expect(r.title).toBe(raw);
-      }
-    );
-
-    it('normalizes Stick & Shoot casing', () => {
-      const r = parseTitle('ADULT STICK & SHOOT', null);
-      expect(r.title).toBe('ADULT Stick & Shoot');
+  describe('"open" event mode calendars', () => {
+    it('marks both teams Open and keeps the full raw title', () => {
+      const r = parseTitle('ADULT Stick & Shoot', { name: 'Stick & Shoot', event_mode: 'open' });
       expect(r.away_team).toBe('Open');
       expect(r.home_team).toBe('Open');
+      expect(r.title).toBe('ADULT Stick & Shoot');
     });
 
-    it('handles extra whitespace around the ampersand', () => {
-      const r = parseTitle('Stick  &  Shoot', null);
-      expect(r.away_team).toBe('Open');
-    });
-
-    it('keeps the full raw title even when a pickup title contains a colon', () => {
-      const r = parseTitle('CON: Practice', null);
+    it('keeps the full raw title even when it contains a colon', () => {
+      const r = parseTitle('CON: Practice', { name: 'Practice Cal', event_mode: 'open' });
       expect(r.title).toBe('CON: Practice');
       expect(r.away_team).toBe('Open');
       expect(r.home_team).toBe('Open');
+    });
+
+    it('does not apply Open mode when event_mode is unset', () => {
+      const r = parseTitle('Practice', null);
+      expect(r.away_team).toBe('');
+      expect(r.home_team).toBe('');
     });
   });
 

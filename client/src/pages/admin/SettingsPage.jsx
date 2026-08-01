@@ -4,6 +4,7 @@ import styles from './AdminTab.module.css';
 import settStyles from './RinkSettings.module.css';
 import calStyles from './CalendarModal.module.css';
 import s from './SettingsPage.module.css';
+import Modal from './Modal';
 import CalendarsTab from './SettingsTab';
 
 const SUB_TABS = ['General', 'Calendars', 'Pricing', 'Locker Rooms', 'Displays', 'Backups', 'Updates', 'Admin'];
@@ -76,6 +77,10 @@ function DisplayRow({ display, onSaved, onDeleted }) {
 
   async function save() {
     setError('');
+    if (!/^\d{1,2}$/.test(String(tvNumber).trim())) {
+      setError('TV number must be a whole number from 0 to 99.');
+      return;
+    }
     try {
       await apiFetch(`/displays/${display.id}`, { method: 'PATCH', body: JSON.stringify({ name, tv_number: tvNumber }) });
       setEditing(false);
@@ -92,9 +97,27 @@ function DisplayRow({ display, onSaved, onDeleted }) {
   if (editing) {
     return (
       <tr>
-        <td><input className={styles.input} value={name} onChange={(e) => setName(e.target.value)} autoFocus /></td>
+        <td><input className={styles.input} value={name} onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') save(); }} autoFocus /></td>
         <td>
-          <input className={styles.input} type="number" min="1" value={tvNumber} onChange={(e) => setTvNumber(e.target.value)} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--ice-blue)' }}>TV#</span>
+            <input
+              className={styles.input}
+              type="number"
+              min="0"
+              max="99"
+              step="1"
+              style={{ width: '4.5rem', minWidth: '4.5rem', flex: 'none' }}
+              value={tvNumber}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v.length > 2) return;
+                setTvNumber(v);
+              }}
+              onKeyDown={(e) => { if (e.key === 'Enter') save(); }}
+            />
+          </div>
           {error && <div className={styles.error} style={{ marginTop: 4 }}>{error}</div>}
         </td>
         <td>
@@ -165,13 +188,19 @@ function SequenceModal({ existing, lockerRooms, onClose, onSaved }) {
   }
 
   return (
-    <div className={calStyles.backdrop} onClick={onClose}>
-      <div className={calStyles.modal} style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
-        <div className={calStyles.modalHeader}>
-          <span>{isEdit ? 'Edit' : 'Add'} Locker Room Sequence</span>
-          <button className={calStyles.closeBtn} onClick={onClose}>✕</button>
-        </div>
-        <form onSubmit={submit} className={calStyles.modalBody}>
+    <Modal
+      onClose={onClose}
+      title={`${isEdit ? 'Edit' : 'Add'} Locker Room Sequence`}
+      width={520}
+      closeButton
+      onSubmit={submit}
+      footer={<>
+        <button type="button" className={styles.btnGhost} onClick={onClose}>Cancel</button>
+        <button type="submit" className={styles.btnPrimary} disabled={saving}>
+          {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Sequence'}
+        </button>
+      </>}
+    >
           <div className={styles.field}>
             <label className={styles.label}>Sequence Name</label>
             <input className={styles.input} value={name} onChange={(e) => setName(e.target.value)}
@@ -211,15 +240,7 @@ function SequenceModal({ existing, lockerRooms, onClose, onSaved }) {
             </div>
           )}
           {error && <div className={styles.errorMsg}>{error}</div>}
-          <div className={calStyles.modalFooter}>
-            <button type="button" className={styles.btnGhost} onClick={onClose}>Cancel</button>
-            <button type="submit" className={styles.btnPrimary} disabled={saving}>
-              {saving ? 'Saving…' : isEdit ? 'Save Changes' : 'Add Sequence'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -393,6 +414,10 @@ function DisplaysSection() {
 
   async function addDisplay(e) {
     e.preventDefault(); setDispAddErr('');
+    if (!/^\d{1,2}$/.test(String(newDispNum).trim())) {
+      setDispAddErr('TV number must be a whole number from 0 to 99.');
+      return;
+    }
     try {
       await apiFetch('/displays', { method: 'POST', body: JSON.stringify({ name: newDispName, tv_number: newDispNum }) });
       setNewDispName(''); setNewDispNum(''); reloadDisplays();
@@ -406,8 +431,9 @@ function DisplaysSection() {
       <form onSubmit={addDisplay} className={styles.addForm}>
         <input className={styles.input} value={newDispName} onChange={(e) => setNewDispName(e.target.value)}
           placeholder="Display name (e.g. Lobby TV)" required />
-        <input className={styles.input} type="number" min="1" value={newDispNum} onChange={(e) => setNewDispNum(e.target.value)}
-          placeholder="TV number (e.g. 1)" required />
+        <input className={styles.input} type="number" min="0" max="99" step="1" value={newDispNum}
+          onChange={(e) => { const v = e.target.value; if (v.length > 2) return; setNewDispNum(v); }}
+          placeholder="TV#" style={{ width: '4.5rem', flex: 'none' }} required />
         <button className={styles.btnPrimary} type="submit" disabled={!newDispName.trim() || !String(newDispNum).trim()}>Add Display</button>
         {dispAddErr && <span className={styles.error}>{dispAddErr}</span>}
       </form>
@@ -550,13 +576,18 @@ function FolderPickerModal({ initialPath, onClose, onSelect }) {
   const crumbs = pathCrumbs(currentPath);
 
   return (
-    <div className={calStyles.backdrop} onClick={onClose}>
-      <div className={calStyles.modal} style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
-        <div className={calStyles.modalHeader}>
-          <span>Choose Backup Folder</span>
-          <button className={calStyles.closeBtn} onClick={onClose}>✕</button>
-        </div>
-        <div className={calStyles.modalBody}>
+    <Modal
+      onClose={onClose}
+      title="Choose Backup Folder"
+      width={520}
+      closeButton
+      footer={<>
+        <button className={styles.btnGhost} onClick={onClose}>Cancel</button>
+        <button className={styles.btnPrimary} disabled={!currentPath} onClick={() => onSelect(currentPath)}>
+          Select This Folder
+        </button>
+      </>}
+    >
           <div className={s.crumbBar}>
             <button type="button" className={s.crumb} onClick={() => load('')} disabled={loading}>💻 This PC</button>
             {crumbs.map((c, i) => (
@@ -596,15 +627,7 @@ function FolderPickerModal({ initialPath, onClose, onSelect }) {
               <button type="button" className={styles.btnGhost} style={{ marginTop: 8, alignSelf: 'flex-start' }} onClick={() => setNewFolder(true)}>+ New Folder</button>
             )
           )}
-        </div>
-        <div className={calStyles.modalFooter} style={{ padding: '0.5rem 1.25rem 1.25rem' }}>
-          <button className={styles.btnGhost} onClick={onClose}>Cancel</button>
-          <button className={styles.btnPrimary} disabled={!currentPath} onClick={() => onSelect(currentPath)}>
-            Select This Folder
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 

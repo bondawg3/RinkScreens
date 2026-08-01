@@ -38,14 +38,12 @@ async function fetchIcalText(cal) {
 // Shared title parsing logic used by both sync and reparse
 function parseTitle(rawTitle, cal) {
   const isNcwhl = cal && cal.name && cal.name.toUpperCase().includes('NCWHL');
-  const isPickup = /league\s+pickup|scrimmage|practice|stick\s*&\s*shoot/i.test(rawTitle);
 
-  // Pickup-style events keep the full raw title (no colon/NCWHL splitting)
-  if (isPickup) {
-    const title = /stick\s*&\s*shoot/i.test(rawTitle)
-      ? rawTitle.replace(/stick\s*&\s*shoot/i, 'Stick & Shoot')
-      : rawTitle;
-    return { title, away_team: 'Open', home_team: 'Open' };
+  // "Open" calendars (e.g. stick & shoot, pickup, practice) skip team/matchup
+  // parsing entirely — the admin sets this per calendar instead of us
+  // guessing from the title, and locker rooms display "Open" for both sides.
+  if (cal && cal.event_mode === 'open') {
+    return { title: rawTitle, away_team: 'Open', home_team: 'Open' };
   }
 
   let title = rawTitle;

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 import tStyles from './ScreensTab.module.css';
+import Modal from './Modal';
 import Thumbnail from './Thumbnail';
 import { SCREEN_TYPES } from './ScreenPalette';
 
@@ -15,6 +16,10 @@ export default function DisplaysTab() {
   const navigate = useNavigate();
 
   async function saveDisplay(id) {
+    if (!/^\d{1,2}$/.test(String(editData.tv_number).trim())) {
+      setErr('TV number must be a whole number from 0 to 99.');
+      return;
+    }
     try {
       await apiFetch(`/displays/${id}`, { method: 'PATCH', body: JSON.stringify(editData) });
       setEditing(null);
@@ -132,20 +137,33 @@ export default function DisplaysTab() {
       </div>
 
       {editing && (
-        <div className={tStyles.modalBackdrop} onClick={() => setEditing(null)}>
-          <div className={tStyles.modal} onClick={(e) => e.stopPropagation()}>
-            <div className={tStyles.modalTitle}>Edit Display</div>
-            <label className={styles.label}>Name</label>
-            <input className={styles.input} value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} />
-            <label className={styles.label}>TV Number</label>
-            <input className={styles.input} type="number" min="1" value={editData.tv_number} onChange={(e) => setEditData({ ...editData, tv_number: e.target.value })} />
-            {err && <span className={styles.error}>{err}</span>}
-            <div className={tStyles.modalActions}>
-              <button className={styles.btnGhost} onClick={() => setEditing(null)}>Cancel</button>
-              <button className={styles.btnPrimary} onClick={() => saveDisplay(editing)}>Save</button>
-            </div>
-          </div>
-        </div>
+        <Modal
+          onClose={() => setEditing(null)}
+          title="Edit Display"
+          width={520}
+          footer={<>
+            <button className={styles.btnGhost} onClick={() => setEditing(null)}>Cancel</button>
+            <button className={styles.btnPrimary} onClick={() => saveDisplay(editing)}>Save</button>
+          </>}
+        >
+          <label className={styles.label}>Name</label>
+          <input className={styles.input} value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} />
+          <label className={styles.label}>TV Number</label>
+          <input
+            className={styles.input}
+            type="number"
+            min="0"
+            max="99"
+            step="1"
+            value={editData.tv_number}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v.length > 2) return;
+              setEditData({ ...editData, tv_number: v });
+            }}
+          />
+          {err && <span className={styles.error}>{err}</span>}
+        </Modal>
       )}
     </div>
   );

@@ -2,6 +2,36 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.23.11] — 2026-08-01
+
+### Changed
+- **Larger date and clock in the TV screen header** — the date and time text in the top title bar of the TV display pages was noticeably smaller than the text in the schedule tables below it; both are now sized up to match.
+
+## [1.23.10] — 2026-08-01
+
+### Changed
+- **Games with no parsed teams now display "Open" instead of "TBD"** — on both the Game Board screen and TV display pages, a game whose title had no parseable matchup now shows "Open" in the away/home team slots, matching the wording used for calendars set to Open event type.
+
+## [1.23.9] — 2026-08-01
+
+### Changed
+- **Hockey calendars now have an explicit "Event Type" setting** — instead of guessing from the title (matching "Practice", "Scrimmage", "League Pickup", or "Stick & Shoot"), each Hockey calendar's admin settings now has an Event Type toggle: **Team Order** (parses home/away from the title, as before) or **Open** (every event on that calendar shows `Open`/`Open` in the locker rooms, regardless of title). This removes the keyword-guessing and lets any calendar be marked as team-less (not just ones with recognized keywords).
+
+## [1.23.8] — 2026-07-31
+
+### Changed
+- **Screen settings popups now share one implementation** — the Add/Edit Screen, Pricing, Display, Webpage Screen, Locker Room Sequence, Backup Folder, and Calendar popups each defined their own copy of the modal layout (backdrop, title/header, scrolling body, action buttons). They're now built from a single shared component, so a future layout fix (like the widen/scroll fix in 1.23.6) only needs to happen once instead of being replicated — and missed — across files.
+
+## [1.23.7] — 2026-07-31
+
+### Fixed
+- **TV number validation on display edit/add forms** — the TV number field (which sets a display's web address) now rejects non-numeric input, numbers outside 0–99, and duplicates already in use by another display, both in the Displays tab and Settings > Displays.
+
+## [1.23.6] — 2026-07-31
+
+### Fixed
+- **Some screen settings popups could cut off content** — an earlier fix widened the screen edit modal and made its content area scroll independently of the title/buttons so all fields stay reachable. That fix only applied to the Hockey/Rink Events/Figure Skating/Public Skate/Custom screen editor. The Display edit modal, Webpage screen modal, and the Locker Room Sequence / Backup Folder modals now get the same treatment.
+
 ## [1.23.5] — 2026-07-31
 
 ### Changed

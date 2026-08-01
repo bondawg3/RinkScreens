@@ -1,0 +1,83 @@
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal {
+  background: #fff;
+  border-radius: 10px;
+  max-width: 90vw;
+  max-height: 90vh;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.modalTitle {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text);
+  padding: 1.5rem 1.5rem 0.75rem;
+  flex-shrink: 0;
+}
+
+.modalHeader {
+  background: var(--ice-dark);
+  color: #fff;
+  padding: 0.9rem 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 1rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.closeBtn {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1.1rem;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0 0.25rem;
+}
+
+.closeBtn:hover { color: #fff; }
+
+/* Wraps body+actions when the modal is a <form>, so the form itself
+   participates in the flex layout that lets the body scroll independently. */
+.formWrap {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Scrolls independently so the title/header and actions stay put as
+   fields accumulate. */
+.modalBody {
+  padding: 0 1.25rem;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  flex: 1;
+  min-height: 0;
+}
+
+.modalActions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  padding: 0.75rem 1.25rem 1.25rem;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border, #e5e7eb);
+  margin-top: 0.5rem;
+}

@@ -59,11 +59,11 @@ export default function GameBoard({ rinkName }) {
                 <span className={styles.clock}>{formatTime(g.start_time)}</span>
               </div>
               <div className={styles.team + ' ' + styles.away}>
-                {awayLabel || <span className={styles.tbd}>TBD</span>}
+                {awayLabel || <span className={styles.tbd}>Open</span>}
               </div>
               <div className={styles.vsCell}>VS</div>
               <div className={styles.team + ' ' + styles.home}>
-                {homeLabel || <span className={styles.tbd}>TBD</span>}
+                {homeLabel || <span className={styles.tbd}>Open</span>}
               </div>
             </div>
           );

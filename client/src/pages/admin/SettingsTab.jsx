@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 import calStyles from './CalendarModal.module.css';
+import Modal from './Modal';
 
 const CALENDAR_TYPES = [
   { value: 'hockey_games', label: 'Hockey' },
@@ -52,6 +53,7 @@ function CalendarModal({ type, existing, onClose, onSaved }) {
     String(initUnit === 'days' ? existingMins / (24 * 60) : existingMins)
   );
   const [teamOrder, setTeamOrder] = useState(existing?.team_order ?? 'home_away');
+  const [eventMode, setEventMode] = useState(existing?.event_mode ?? 'teams');
   const [seqId, setSeqId] = useState(existing?.locker_sequence_id ? String(existing.locker_sequence_id) : '');
   const { data: sequences } = useApi('/locker-sequences');
   const [error, setError] = useState('');
@@ -77,6 +79,7 @@ function CalendarModal({ type, existing, onClose, onSaved }) {
       const body = { name, url, poll_interval_minutes: mins };
       if (type === 'hockey_games') {
         body.team_order = teamOrder;
+        body.event_mode = eventMode;
         body.locker_sequence_id = seqId ? Number(seqId) : null;
       }
       if (isEdit) {
@@ -94,13 +97,18 @@ function CalendarModal({ type, existing, onClose, onSaved }) {
   }
 
   return (
-    <div className={calStyles.backdrop} onClick={onClose}>
-      <div className={calStyles.modal} onClick={(e) => e.stopPropagation()}>
-        <div className={calStyles.modalHeader}>
-          <span>{isEdit ? 'Edit' : 'Add'} {TYPE_LABELS[type]} Calendar</span>
-          <button className={calStyles.closeBtn} onClick={onClose}>✕</button>
-        </div>
-        <form onSubmit={submit} className={calStyles.modalBody}>
+    <Modal
+      onClose={onClose}
+      title={`${isEdit ? 'Edit' : 'Add'} ${TYPE_LABELS[type]} Calendar`}
+      closeButton
+      onSubmit={submit}
+      footer={<>
+        <button type="button" className={styles.btnGhost} onClick={onClose}>Cancel</button>
+        <button type="submit" className={styles.btnPrimary} disabled={saving}>
+          {saving ? 'Validating…' : isEdit ? 'Save Changes' : 'Add Calendar'}
+        </button>
+      </>}
+    >
           <div className={styles.field}>
             <label className={styles.label}>Display Name</label>
             <input
@@ -177,6 +185,32 @@ function CalendarModal({ type, existing, onClose, onSaved }) {
           )}
           {type === 'hockey_games' && (
             <div className={styles.field}>
+              <label className={styles.label}>Event Type</label>
+              <div className={calStyles.teamOrderToggle}>
+                <button
+                  type="button"
+                  className={eventMode === 'teams' ? calStyles.teamOrderActive : calStyles.teamOrderBtn}
+                  onClick={() => setEventMode('teams')}
+                >
+                  Team Order
+                </button>
+                <button
+                  type="button"
+                  className={eventMode === 'open' ? calStyles.teamOrderActive : calStyles.teamOrderBtn}
+                  onClick={() => setEventMode('open')}
+                >
+                  Open
+                </button>
+              </div>
+              <span className={styles.hint} style={{ fontSize: '0.8rem' }}>
+                {eventMode === 'open'
+                  ? 'Locker rooms will show "Open" instead of team names for this calendar\'s events'
+                  : 'Teams are parsed from the event title'}
+              </span>
+            </div>
+          )}
+          {type === 'hockey_games' && eventMode === 'teams' && (
+            <div className={styles.field}>
               <label className={styles.label}>Team Order in Event Title</label>
               <div className={calStyles.teamOrderToggle}>
                 <button
@@ -202,15 +236,7 @@ function CalendarModal({ type, existing, onClose, onSaved }) {
             </div>
           )}
           {error && <div className={styles.errorMsg}>{error}</div>}
-          <div className={calStyles.modalFooter}>
-            <button type="button" className={styles.btnGhost} onClick={onClose}>Cancel</button>
-            <button type="submit" className={styles.btnPrimary} disabled={saving}>
-              {saving ? 'Validating…' : isEdit ? 'Save Changes' : 'Add Calendar'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -277,7 +303,7 @@ export default function CalendarsTab() {
                 <tr>
                   <th>Display Name</th>
                   <th>Poll Interval</th>
-                  {value === 'hockey_games' && <th>Team Order</th>}
+                  {value === 'hockey_games' && <th>Event Type</th>}
                   <th>Last Sync</th>
                   <th></th>
                 </tr>
@@ -288,7 +314,7 @@ export default function CalendarsTab() {
                     <td>{cal.name}</td>
                     <td>{cal.poll_interval_minutes % (24 * 60) === 0 ? `${cal.poll_interval_minutes / (24 * 60)}d` : `${cal.poll_interval_minutes}m`}</td>
                     {value === 'hockey_games' && (
-                      <td>{cal.team_order === 'home_away' ? 'Home vs. Away' : 'Away vs. Home'}</td>
+                      <td>{cal.event_mode === 'open' ? 'Open' : (cal.team_order === 'home_away' ? 'Home vs. Away' : 'Away vs. Home')}</td>
                     )}
                     <td><SyncStatus cal={cal} /></td>
                     <td>

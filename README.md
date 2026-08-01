@@ -1,4 +1,4 @@
-# RinkScreens — v1.23.5
+# RinkScreens — v1.23.11
 
 Digital signage system for ice rinks. Pulls games from Google Calendar (iCal) and displays them on smart TVs around the facility. An admin panel on any local browser lets staff control what each screen shows and manage locker room assignments, pricing, and backgrounds.
 
@@ -131,8 +131,10 @@ Events are imported if they start within the last 12 hours through the next 30 d
 |---|---|---|---|
 | Title has a colon | Everything before `:` (e.g. "CON") | Parsed from matchup after colon | Parsed from matchup after colon |
 | No colon, has "vs" | _(blank)_ | First team per team order setting | Second team per team order setting |
-| No colon, no "vs" | Full raw title | `Away TBD` | `Home TBD` |
-| Title contains "Practice", "Scrimmage", "League Pickup", or "Stick & Shoot" | Full raw title, even if it contains a colon (normalized to "Stick & Shoot") | `Open` | `Open` |
+| No colon, no "vs" | Full raw title | _(blank, displays as `Open`)_ | _(blank, displays as `Open`)_ |
+| Calendar's Event Type is set to "Open" | Full raw title, even if it contains a colon | `Open` | `Open` |
+
+Each Hockey calendar has an **Event Type** setting: **Team Order** (the rules above parse home/away from the title) or **Open** (every event on that calendar gets `Open`/`Open` regardless of title, for calendars like practices or stick & shoot where there are no teams).
 
 ### NCWHL calendar special rules
 Calendars with "NCWHL" in the name use a different parsing strategy:

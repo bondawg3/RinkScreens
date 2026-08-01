@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.23.17] — 2026-08-01
+
+### Fixed
+- **Self-update installs still didn't finish on autostart setups** — when RinkScreens is launched via Task Scheduler (`install-autostart.bat`), Windows runs it inside a job object that kills the entire process tree — including the detached PowerShell helper that applies the update — the instant the main RinkScreens process exits. The install would appear to work (the server did stop) but the helper never got to extract the new files or restart, so the old version came back untouched. The helper is now launched via its own one-shot Scheduled Task instead of a plain detached child process, so it survives the parent exiting.
+
 ## [1.23.16] — 2026-08-01
 
 ### Changed

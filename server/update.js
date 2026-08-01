@@ -13,7 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { spawn } = require('child_process');
+const { execFileSync } = require('child_process');
 const db = require('./db');
 
 const APP_DIR = path.join(__dirname, '..');
@@ -193,9 +193,18 @@ function startInstallScheduler() {
   return enabled;
 }
 
-// Downloads the release asset, stages a detached PowerShell helper to apply
-// it once this process exits, then schedules this process to exit so the
-// helper can safely overwrite the running app's files and restart it.
+const UPDATE_TASK_NAME = 'RinkScreensUpdateApply';
+
+// Downloads the release asset, stages a helper to apply it once this process
+// exits, then schedules this process to exit so the helper can safely
+// overwrite the running app's files and restart it.
+//
+// The helper is launched via a one-shot Scheduled Task rather than a plain
+// detached child process. When RinkScreens itself autostarts via Task
+// Scheduler (install-autostart.bat), Windows runs it inside a job object
+// that kills the entire process tree — including "detached" children — the
+// moment the main task process exits. A separately-registered task isn't
+// part of that job, so it survives.
 async function installUpdate() {
   const s = db.getSettings();
   if (s.update_asset_available !== 'true') throw new Error('No installable update asset found. Run "Check Now" first.');
@@ -218,14 +227,32 @@ async function installUpdate() {
   fs.copyFileSync(scriptSrc, scriptDest);
 
   const logPath = path.join(workDir, 'apply-update.log');
-  const child = spawn('powershell.exe', [
-    '-ExecutionPolicy', 'Bypass', '-NoProfile', '-File', scriptDest,
-    '-ZipPath', zipPath,
-    '-AppDir', APP_DIR,
-    '-ParentPid', String(process.pid),
-    '-LogPath', logPath,
-  ], { detached: true, stdio: 'ignore', windowsHide: true });
-  child.unref();
+
+  // schtasks' /TR argument parsing can't reliably handle a command line with
+  // several quoted, space-containing arguments, so bake the whole invocation
+  // into a wrapper .cmd and point /TR at just that one (quoted) path. The
+  // wrapper also deletes its own task once it's done, so nothing lingers in
+  // Task Scheduler.
+  const wrapperPath = path.join(workDir, 'apply-update.cmd');
+  const wrapper = [
+    '@echo off',
+    `powershell.exe -ExecutionPolicy Bypass -NoProfile -File "${scriptDest}" -ZipPath "${zipPath}" -AppDir "${APP_DIR}" -ParentPid ${process.pid} -LogPath "${logPath}"`,
+    `schtasks /Delete /TN "${UPDATE_TASK_NAME}" /F`,
+    '',
+  ].join('\r\n');
+  fs.writeFileSync(wrapperPath, wrapper);
+
+  // /ST must be a valid time even though /Run below fires immediately; a
+  // minute out gives the scheduled instance a chance to fire on its own as a
+  // fallback if the explicit /Run somehow doesn't take.
+  const st = new Date(Date.now() + 60_000);
+  const startTime = `${String(st.getHours()).padStart(2, '0')}:${String(st.getMinutes()).padStart(2, '0')}`;
+
+  execFileSync('schtasks', [
+    '/Create', '/TN', UPDATE_TASK_NAME, '/TR', `"${wrapperPath}"`,
+    '/SC', 'ONCE', '/ST', startTime, '/F',
+  ]);
+  execFileSync('schtasks', ['/Run', '/TN', UPDATE_TASK_NAME]);
 
   db.setSetting('update_last_install_at', new Date().toISOString());
 

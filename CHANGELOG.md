@@ -2,6 +2,24 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.23.14] — 2026-08-01
+
+### Fixed
+- **TV screens now render at a fixed, resolution-independent size** — the physical-TV display (`/tv/:tvNumber`) previously laid out directly against whatever viewport size/DPI each TV's browser reported, so the same screen could look noticeably smaller or larger depending on the TV. It now renders onto a fixed 1920×1080 canvas that's scaled and letterboxed to fit the real screen, so text size (including the auto-fit game table) is consistent across every TV regardless of its browser's reported resolution.
+
+## [1.23.13] — 2026-08-01
+
+### Added
+- **Calendar filter checkboxes on the Hockey tab's "By Calendar" view** — when more than one Hockey calendar exists, a row of checkboxes now appears above the grouped list so you can show or hide individual calendars' games.
+
+### Changed
+- Reverted the calendar filter checkboxes added to Rink Events / Figure Skating in 1.23.12 — that wasn't the intended location.
+
+## [1.23.12] — 2026-08-01
+
+### Added
+- **Calendar filter checkboxes on Rink Events and Figure Skating tabs** — when a section has more than one calendar of that type, a row of checkboxes now appears above the weekly list so you can show or hide individual calendars' events.
+
 ## [1.23.11] — 2026-08-01
 
 ### Changed

@@ -46,10 +46,41 @@
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* #tv-viewport fills the real window and centers a fixed-resolution
+   #tv-canvas, scaled to fit via JS (see fitViewport). This makes layout and
+   font sizing (including fitTable's auto-fit) consistent across TVs
+   regardless of what resolution/DPI each one's browser reports. */
+#tv-viewport {
+  position: fixed;
+  inset: 0;
+  display: -webkit-box;
+  display: -ms-flexbox;
+  display: flex;
+  -webkit-box-pack: center;
+  -ms-flex-pack: center;
+  justify-content: center;
+  -webkit-box-align: center;
+  -ms-flex-align: center;
+  align-items: center;
+  overflow: hidden;
+  background: #000;
+}
+
+#tv-canvas {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  -webkit-flex-shrink: 0;
+  flex-shrink: 0;
+  -webkit-transform-origin: center center;
+  transform-origin: center center;
   font-family: Arial, Helvetica, sans-serif;
   background: linear-gradient(135deg, #064878 0%, #0a84c8 60%, #1ab3e6 100%);
   color: #fff;
-  height: 100vh;
   overflow: hidden;
   display: -webkit-box;
   display: -ms-flexbox;
@@ -61,7 +92,7 @@ body {
 }
 
 .bg {
-  position: fixed;
+  position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
   background-size: cover;
   background-position: center;
@@ -69,7 +100,7 @@ body {
 }
 
 .overlay {
-  position: fixed;
+  position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
   background: rgba(0,0,0,0.3);
   z-index: 1;
@@ -355,8 +386,6 @@ header {
 </style>
 </head>
 <body>
-<div class="bg" id="bg"></div>
-<div class="overlay"></div>
 <div id="preview-bar" style="display:none">
   <button id="pb-prev">&#8249;</button>
   <input type="date" id="preview-date-input" />
@@ -368,14 +397,29 @@ header {
     <button id="pb-page-next">&#8250;</button>
   </span>
 </div>
-<header>
-  <span class="rink-name" id="rink-name">Ice Rink</span>
-  <span class="date" id="date"></span>
-  <span class="clock" id="clock"></span>
-</header>
-<div id="content"></div>
+<div id="tv-viewport">
+  <div id="tv-canvas">
+    <div class="bg" id="bg"></div>
+    <div class="overlay"></div>
+    <header>
+      <span class="rink-name" id="rink-name">Ice Rink</span>
+      <span class="date" id="date"></span>
+      <span class="clock" id="clock"></span>
+    </header>
+    <div id="content"></div>
+  </div>
+</div>
 
 <script>
+// ── Fit the fixed 1920x1080 canvas to the actual window ─────────────────────
+function fitViewport() {
+  var canvas = document.getElementById('tv-canvas');
+  var scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+  canvas.style.transform = 'scale(' + scale + ')';
+}
+fitViewport();
+window.addEventListener('resize', fitViewport);
+
 // Exactly one of these is set: DISPLAY_ID on a physical TV (/tv/:displayId,
 // content resolved through the display's schedule), SCREEN_ID on an admin
 // preview of one screen config (/tv/screen/:screenId, no scheduling).
@@ -1255,7 +1299,7 @@ function renderScreenConfig(screen) {
             'width:max-content;' +
             'color:' + esc(ae.color || '#fff') + ';' +
             'font-family:' + esc(ae.font || 'Arial') + ',sans-serif;' +
-            'font-size:' + ((ae.size || 48) / 19.2).toFixed(3) + 'vw;' +
+            'font-size:' + (ae.size || 48) + 'px;' +
             'font-weight:' + (ae.bold ? 'bold' : 'normal') + ';' +
             'text-align:' + esc(ae.align || 'left') + ';' +
             'white-space:pre;line-height:1.2;pointer-events:none;' +
@@ -1272,7 +1316,7 @@ function renderScreenConfig(screen) {
             'width:max-content;' +
             'color:' + esc(ae.color || '#fff') + ';' +
             'font-family:' + esc(ae.font || 'Arial') + ',sans-serif;' +
-            'font-size:' + ((ae.size || 48) / 19.2).toFixed(3) + 'vw;' +
+            'font-size:' + (ae.size || 48) + 'px;' +
             'font-weight:' + (ae.bold ? 'bold' : 'normal') + ';' +
             'text-align:' + esc(ae.align || 'left') + ';' +
             'white-space:pre;line-height:1.2;pointer-events:none;' +

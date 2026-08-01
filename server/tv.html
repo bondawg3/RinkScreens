@@ -970,13 +970,27 @@ function fitTable() {
   function setSize(size) {
     for (var i = 0; i < tables.length; i++) tables[i].style.fontSize = size + 'em';
   }
+  // A table with width:100% never reports scrollWidth > clientWidth even when
+  // a nowrap cell (e.g. a long game title) needs more room than its column has
+  // — table auto-layout just steals space from the .td-gap spacer columns
+  // (their specified 20px width, matching the row-to-row gap from
+  // border-spacing, is only a hint and not guaranteed) instead of the table
+  // ever truly overflowing. So instead of measuring the table as a whole,
+  // check directly whether any gap column has been squeezed below that
+  // intended 20px — that's the visible symptom we actually care about.
   function overflowing() {
+    var minGap = 20 * 0.9; // small tolerance for rounding
     for (var i = 0; i < tables.length; i++) {
-      if (tables[i].scrollWidth > tables[i].clientWidth || tables[i].scrollHeight > content.clientHeight) return true;
+      var t = tables[i];
+      if (t.scrollHeight > content.clientHeight) return true;
+      var gaps = t.querySelectorAll('.td-gap');
+      for (var g = 0; g < gaps.length; g++) {
+        if (gaps[g].offsetWidth < minGap) return true;
+      }
     }
     return false;
   }
-  var size = 2;
+  var size = 3.5;
   setSize(size);
   while (overflowing() && size > 0.5) {
     size = Math.round((size - 0.05) * 100) / 100;

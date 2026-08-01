@@ -2,6 +2,12 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.23.5] — 2026-07-31
+
+### Changed
+- **Larger text on locker-room/hockey TV screens** — the auto-fit table sizing on physical displays was capped at a font size that left a lot of unused space on screens with only a few games; the cap is raised so text scales up further before hitting the limit, making it easier to read from a distance.
+- **Auto-fit sizing now preserves spacing between column pills** — the sizing logic previously only checked whether the whole table overflowed, which missed cases where a long game title squeezed the gap between the Home/Away/LR# pills down to nothing. It now shrinks the text further whenever that gap gets squeezed, so the spacing always stays intact.
+
 ## [1.23.4] — 2026-07-31
 
 ### Fixed

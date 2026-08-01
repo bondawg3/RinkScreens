@@ -7,7 +7,7 @@ import s from './SettingsPage.module.css';
 import Modal from './Modal';
 import CalendarsTab from './SettingsTab';
 
-const SUB_TABS = ['General', 'Calendars', 'Pricing', 'Locker Rooms', 'Displays', 'Backups', 'Updates', 'Admin'];
+const SUB_TABS = ['General', 'Displays', 'Calendars', 'Pricing', 'Locker Rooms', 'Backups', 'Updates', 'Admin'];
 
 function formatBytes(n) {
   if (n < 1024) return `${n} B`;

@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.23.16] — 2026-08-01
+
+### Changed
+- **Settings tab order** — "Displays" now appears right after "General" instead of after "Locker Rooms".
+
 ## [1.23.15] — 2026-08-01
 
 ### Added

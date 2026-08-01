@@ -2,6 +2,24 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.23.20] — 2026-08-01
+
+### Fixed
+- **TV screens rendered text at inconsistent visual sizes across resolutions** — using the new TV Preview tab confirmed 720p and 4K screens showed noticeably smaller/larger text than 1080p, since layout was sized directly against each resolution's viewport. Re-applied the fixed 1920x1080 canvas + scale-to-fit approach (reverted in 1.23.18 while diagnosing an unrelated Firefox admin-nav bug, since fixed in [1.23.18]) — text now renders at the same proportional size on every TV resolution.
+
+## [1.23.19] — 2026-08-01
+
+### Added
+- **TV Preview tab** — a new admin tab (`Displays → TV Preview`) that renders the exact plain-HTML code a physical TV loads (`/tv/screen/:id`), scaled to fit, at a chosen fixed resolution (1080p, 720p, 4K, 1366×768, 1024×768, or a custom size). Lets you check how a screen actually lays out at a given TV's resolution without resizing your browser window or deploying to a real TV.
+
+## [1.23.18] — 2026-08-01
+
+### Fixed
+- **Admin dashboard header/nav overflowed the page in Firefox** — the 11-tab nav bar rendered wide enough to push the whole page's width past the viewport (Firefox measures tab text slightly wider than Chrome), pulling the Logout button off-screen and requiring a horizontal scroll to reach it. The nav now scrolls horizontally within itself instead of stretching the page.
+
+### Reverted
+- **Fixed 1920x1080 canvas scaling on TV screens (added in 1.23.14)** — the fixed-resolution letterboxed canvas fixed sizing consistency on physical TVs, but also affected the `/tv/screen/:id` preview used throughout the admin app (thumbnails, "preview" links), which is undesirable. Reverted `server/tv.html` back to the pre-1.23.14 responsive layout while we find a fix scoped to just the physical TV route.
+
 ## [1.23.17] — 2026-08-01
 
 ### Fixed

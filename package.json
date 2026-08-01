@@ -1,6 +1,6 @@
 {
   "name": "rinkscreens",
-  "version": "1.23.17",
+  "version": "1.23.20",
   "private": true,
   "scripts": {
     "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",

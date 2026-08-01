@@ -1,0 +1,44 @@
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+  align-items: flex-end;
+  margin-bottom: 0.75rem;
+}
+
+.meta {
+  font-size: 0.82rem;
+  color: var(--text-light);
+  margin-bottom: 0.5rem;
+}
+
+.previewWrap {
+  position: relative;
+  width: 100%;
+  height: calc(var(--preview-h, 1080px) * var(--preview-scale, 1));
+  overflow: hidden;
+  background: #000;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+}
+
+.previewWrap iframe {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--preview-w, 1920px);
+  height: var(--preview-h, 1080px);
+  border: none;
+  transform: scale(var(--preview-scale, 1));
+  transform-origin: top left;
+  pointer-events: none;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: rgba(255,255,255,0.5);
+  font-style: italic;
+}

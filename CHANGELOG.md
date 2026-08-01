@@ -2,6 +2,14 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.23.15] — 2026-08-01
+
+### Added
+- **Calendar filter checkboxes on the Games tab's "By Calendar" view** — same as the Hockey tab, when more than one calendar exists a row of checkboxes now lets you show or hide individual calendars' games.
+
+### Fixed
+- **Self-update installs silently did nothing** — the update package (built by `build-update-package.ps1`/`package-release.ps1`) never actually included `scripts/release-assets/apply-update.ps1`, the helper script `installUpdate()` copies and runs to apply a downloaded update. Every install attempt would download the new version's zip, then fail trying to copy a script that was never shipped to the rink PC in the first place — with no error surfaced anywhere the admin panel could show it. Both packaging scripts now include this file.
+
 ## [1.23.14] — 2026-08-01
 
 ### Fixed

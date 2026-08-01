@@ -35,6 +35,8 @@ Copy-Item "$root\package.json" "$stageDir\package.json"
 Copy-Item "$root\package-lock.json" "$stageDir\package-lock.json"
 Copy-Item "$root\README.md" "$stageDir\README.md"
 Copy-Item "$root\CHANGELOG.md" "$stageDir\CHANGELOG.md"
+New-Item -ItemType Directory -Path "$stageDir\scripts\release-assets" -Force | Out-Null
+Copy-Item "$root\scripts\release-assets\apply-update.ps1" "$stageDir\scripts\release-assets\apply-update.ps1"
 
 Write-Host "--> Installing production dependencies into the staged package" -ForegroundColor Cyan
 Push-Location $stageDir

@@ -18,6 +18,13 @@ export default function GamesTab() {
   const [autoAssignMsg, setAutoAssignMsg] = useState(null);
   const [sortBy, setSortBy] = useState('datetime');
   const [weekOffset, setWeekOffset] = useState(0);
+  const [hiddenCalIds, setHiddenCalIds] = useState([]);
+
+  function toggleCalendar(id) {
+    setHiddenCalIds((prev) => (
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    ));
+  }
 
   async function forceRefresh() {
     setRefreshing(true);
@@ -127,6 +134,7 @@ export default function GamesTab() {
     const grouped = {};
     for (const g of gamesList) {
       const key = g.calendar_id ? String(g.calendar_id) : '__none__';
+      if (hiddenCalIds.includes(key)) continue;
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push(g);
     }
@@ -143,6 +151,7 @@ export default function GamesTab() {
   }
 
   const groups = getGroups();
+  const hockeyCalendars = (calendars || []).filter((c) => c.type === 'hockey_games');
 
   function lockerSelect(game, field) {
     const value = editing === game.id ? editData[field] : (game[field] || '');
@@ -244,6 +253,21 @@ export default function GamesTab() {
       </p>
 
       {sortBy === 'datetime' && weekNav}
+
+      {sortBy === 'calendar' && hockeyCalendars.length > 1 && (
+        <div className={tabStyles.calFilterRow}>
+          {hockeyCalendars.map((c) => (
+            <label key={c.id} className={tabStyles.calFilterItem}>
+              <input
+                type="checkbox"
+                checked={!hiddenCalIds.includes(String(c.id))}
+                onChange={() => toggleCalendar(String(c.id))}
+              />
+              {c.name}
+            </label>
+          ))}
+        </div>
+      )}
 
       {groups.map((group, gi) => (
         <div key={gi} className={tabStyles.group}>

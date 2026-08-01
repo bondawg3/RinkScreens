@@ -50,6 +50,8 @@ Copy-Item "$PSScriptRoot\release-assets\install-autostart.bat" "$stageDir\instal
 Copy-Item "$PSScriptRoot\release-assets\uninstall-autostart.bat" "$stageDir\uninstall-autostart.bat"
 Copy-Item "$PSScriptRoot\release-assets\run-hidden.vbs" "$stageDir\run-hidden.vbs"
 Copy-Item "$PSScriptRoot\release-assets\INSTALL.md" "$stageDir\INSTALL.md"
+New-Item -ItemType Directory -Path "$stageDir\scripts\release-assets" -Force | Out-Null
+Copy-Item "$PSScriptRoot\release-assets\apply-update.ps1" "$stageDir\scripts\release-assets\apply-update.ps1"
 
 Write-Host "--> Zipping" -ForegroundColor Cyan
 if (Test-Path $zipPath) { Remove-Item $zipPath -Force }

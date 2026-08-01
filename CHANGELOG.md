@@ -2,6 +2,67 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.23.4] — 2026-07-31
+
+### Fixed
+- **Locker room screens with few events never split into pages** — a day with 5 or fewer games/events on a locker-room screen always rendered as a single page, even when a long gap (e.g. an afternoon skate) should have separated it into multiple screens. That floor is removed, so the existing 60-minute gap rule now applies regardless of how many events are in the day. To avoid a screen flashing by with just 1 or 2 events, consecutive small pages (2 or fewer games each) are now merged back together into one page.
+
+## [1.23.3] — 2026-07-31
+
+### Changed
+- **Displays use a TV number instead of an IP address** — since screens no longer need a fixed IP to be reached, each display in Settings > Displays is now assigned a simple TV number (1, 2, 3, …) instead of an IP address. That number sets the display's web address (e.g. `/tv/2`), which is now shown directly in the Displays tab and titled "Display 2" above the display's name, so pointing a TV's browser at the right URL no longer requires knowing its network IP.
+
+## [1.23.2] — 2026-08-01
+
+### Added
+- **Scheduled update checks and unattended auto-install** — the Updates tab's "Check schedule" can now run on a fixed interval (as before) or daily at a specific time. A separate "Automatically install updates" option installs a newer version unattended at a chosen time (e.g. 3 AM) with no confirmation prompt, so the rink doesn't need staff around to approve it — the server restarts as part of installing, so pick a time when the TVs briefly going offline won't matter.
+
+### Fixed
+- **Installing an update could corrupt the running app** — the update installer's helper script only waits up to 30 seconds for the server process to exit before it starts overwriting files regardless, but nothing ever told the server to actually exit after starting an install. A manual "Install Update" click worked by luck only if the process happened to be restarted within that window; unattended auto-installs would have hit the timeout on every run and started copying files out from under a process still using them. The server now exits itself shortly after handing off to the installer.
+
+### Added
+- **Pin backups to keep them forever** — each backup in the Backups tab's history now has a "Keep Permanently" button. Pinned backups are exempt from the automatic retention pruning (they don't count against "Keep last N backups") and can't be deleted until unpinned, so a backup you want to hang onto indefinitely (e.g. before a season change) won't get silently cleaned up.
+
+## [1.23.0] — 2026-07-31
+
+### Added
+- **Automatic updates** — a new Settings > Updates tab checks GitHub Releases for newer versions of RinkScreens and can install them with one click. Updates only ever replace app code (server, built client, dependencies) and automatically restart the server; the `data` and `uploads` folders are never part of an update package, so screens, displays, calendars, and uploaded images are always preserved. Checking runs automatically on a configurable interval (default every 24 hours) and needs a GitHub personal access token since the repo is private — see INSTALL.md for setup. Publishing a new release for the rink PC to find is now `npm run publish-release` (requires the GitHub CLI).
+
+## [1.22.18] — 2026-07-31
+
+### Changed
+- **Backup location is now a folder picker** — the Backups tab's location field is no longer free text; "Choose Folder…" opens a browser that navigates the server machine's actual drives and folders (with a "+ New Folder" option), so there's no risk of a typo'd path. Free-text entry never worked well here since the admin panel can be opened from a different machine than the server, so a native OS file picker couldn't resolve a usable server-side path.
+
+## [1.22.17] — 2026-07-31
+
+### Added
+- **Configurable backup location** — the Backups tab now has a "Backup location" field so backups can be saved to any absolute folder on the server machine (e.g. an external drive or network share) instead of just the default `data/backups`. The location is validated (must be an absolute, writable path) before saving, and the tab shows exactly where backups are currently being written. If the configured folder becomes unreachable (e.g. a USB drive unplugged), backups automatically fall back to the default location rather than failing.
+
+## [1.22.16] — 2026-07-31
+
+### Added
+- **Data backup & restore** — a new Backups tab in Settings zips the settings/screens/calendars database and all uploaded files (logo, backgrounds) into a downloadable `.zip`. Backups can be created on demand, downloaded, restored, or deleted, and restoring from an uploaded file is also supported. An automatic backup scheduler runs on an admin-configurable interval (default every 24 hours) and prunes old backups down to a configurable retention count (default 14). Restoring always takes a safety "pre-restore" backup of the current state first.
+
+## [1.22.15] — 2026-07-19
+
+### Fixed
+- **Recurring practices/games now actually sync** — Hockey calendars were parsed with a library that doesn't expand recurring events (`RRULE`), so any weekly-recurring practice series (e.g. "Blackstars 8U Practice") was silently dropped on every sync — only the series' long-past original start date was ever considered, which always fell outside the import window. Hockey calendars now use the same recurrence-expanding parser as the other calendar types, so weekly/recurring practices and games show up on the correct dates going forward.
+
+## [1.22.14] — 2026-07-19
+
+### Fixed
+- **Hockey/Game Board screens now stay in true chronological order** — games, practices, and stick-&-shoot sessions from different calendars that are interleaved throughout the day (e.g. Team A, Team B, Team A) no longer get merged into out-of-order per-team blocks; a new calendar header now starts whenever the calendar actually changes.
+- **Busy days split at natural gaps instead of a blind count** — a day with more than 5 hockey events now prefers to split into pages at the day's largest time gap (e.g. around an afternoon public skate), falling back to a fixed page size only when no clear gap exists.
+- **Page rotation now follows the actual schedule** — Hockey and Figure Skating screens with multiple pages now flip to the next page once that page's events have actually ended, instead of a flat countdown timer.
+
+### Added
+- **Preview page navigation** — the admin screen preview bar now has prev/next controls to step through every page a multi-page Hockey or Figure Skating screen produces, not just the first one.
+
+## [1.22.13] — 2026-07-12
+
+### Changed
+- **Install package now includes demo data** — `npm run package` bundles the current `data/db.json` and `uploads/` folder into the release zip, so unzipping gives a working install pre-loaded with the existing rink config, screens, and images instead of a blank first run.
+
 ## [1.22.12] — 2026-07-11
 
 ### Added

@@ -6,16 +6,16 @@ describe('parseTitle', () => {
     it('splits title before colon and matchup after', () => {
       expect(parseTitle('CON: Sharks vs Jets', null)).toEqual({
         title: 'CON',
-        away_team: 'Sharks',
-        home_team: 'Jets',
+        home_team: 'Sharks',
+        away_team: 'Jets',
       });
     });
 
     it('handles "vs." with a period', () => {
       expect(parseTitle('DIV3: Bears vs. Wolves', null)).toEqual({
         title: 'DIV3',
-        away_team: 'Bears',
-        home_team: 'Wolves',
+        home_team: 'Bears',
+        away_team: 'Wolves',
       });
     });
 
@@ -31,8 +31,8 @@ describe('parseTitle', () => {
     it('clears the title when the whole title is a matchup', () => {
       expect(parseTitle('Sharks vs Jets', null)).toEqual({
         title: '',
-        away_team: 'Sharks',
-        home_team: 'Jets',
+        home_team: 'Sharks',
+        away_team: 'Jets',
       });
     });
 
@@ -45,16 +45,16 @@ describe('parseTitle', () => {
   });
 
   describe('team order setting', () => {
-    it('defaults to away_home (first team is away)', () => {
+    it('defaults to home_away (first team is home)', () => {
+      const r = parseTitle('A vs B', { name: 'League' });
+      expect(r.home_team).toBe('A');
+      expect(r.away_team).toBe('B');
+    });
+
+    it('flips when calendar team_order is away_home', () => {
       const r = parseTitle('A vs B', { name: 'League', team_order: 'away_home' });
       expect(r.away_team).toBe('A');
       expect(r.home_team).toBe('B');
-    });
-
-    it('flips when calendar team_order is home_away', () => {
-      const r = parseTitle('A vs B', { name: 'League', team_order: 'home_away' });
-      expect(r.home_team).toBe('A');
-      expect(r.away_team).toBe('B');
     });
   });
 
@@ -110,10 +110,10 @@ describe('parseTitle', () => {
 
     it('falls back to team_order when no tags are present', () => {
       const noTags = parseTitle('Blue Game A vs B', { name: 'NCWHL Blue' });
-      expect(noTags.away_team).toBe('A'); // default away_home
+      expect(noTags.home_team).toBe('A'); // default home_away
 
-      const flipped = parseTitle('Blue Game A vs B', { name: 'NCWHL Blue', team_order: 'home_away' });
-      expect(flipped.home_team).toBe('A');
+      const flipped = parseTitle('Blue Game A vs B', { name: 'NCWHL Blue', team_order: 'away_home' });
+      expect(flipped.away_team).toBe('A');
     });
 
     it('does not apply the colon rule for NCWHL', () => {

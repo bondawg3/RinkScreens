@@ -321,6 +321,15 @@ header {
   text-align: center;
 }
 #preview-date-input::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
+#pb-page-nav {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+  padding-left: 12px;
+  border-left: 1px solid rgba(255,255,255,0.25);
+}
+#pb-page-label { white-space: nowrap; min-width: 70px; text-align: center; }
 
 /* ── Empty / Error ── */
 .empty {
@@ -353,6 +362,11 @@ header {
   <input type="date" id="preview-date-input" />
   <button id="pb-next">&#8250;</button>
   <button class="today-btn" id="pb-today">Today</button>
+  <span id="pb-page-nav">
+    <button id="pb-page-prev">&#8249;</button>
+    <span id="pb-page-label"></span>
+    <button id="pb-page-next">&#8250;</button>
+  </span>
 </div>
 <header>
   <span class="rink-name" id="rink-name">Ice Rink</span>
@@ -367,10 +381,14 @@ header {
 // preview of one screen config (/tv/screen/:screenId, no scheduling).
 var DISPLAY_ID = '{{DISPLAY_ID}}';
 var SCREEN_ID = '{{SCREEN_ID}}';
-var refreshTimer = null;  // figure-skating page rotation
+var pagedContentTimer = null; // games/figure-skating page rotation (shared, see renderPagedContent)
 var reloadTimer = null;   // periodic full reload
 var webpageTimer = null;  // webpage iframe refresh
 var boundaryTimer = null; // one-shot re-fetch at the next schedule block boundary
+// Shared state for multi-page content (games, figure skating). pageEndTimes[i]
+// is the ms timestamp when page i's last event ends, used to time live
+// rotation; in preview mode rotation is manual via the pb-page-nav controls.
+var PAGED_STATE = { pageHtmls: null, pageEndTimes: null, bannerHtml: '', pageIdx: 0 };
 var PREVIEW_DATE = (typeof URLSearchParams !== 'undefined')
   ? (new URLSearchParams(location.search).get('preview_date') || null)
   : null;
@@ -412,6 +430,17 @@ if (IS_PREVIEW) {
   document.getElementById('pb-next').onclick = function() { setPreviewDate(stepDate(PREVIEW_DATE, 1)); };
   document.getElementById('pb-today').onclick = function() { setPreviewDate(todayStr()); };
   dateInput.onchange = function() { if (dateInput.value) setPreviewDate(dateInput.value); };
+
+  document.getElementById('pb-page-prev').onclick = function() {
+    if (!PAGED_STATE.pageHtmls) return;
+    var n = PAGED_STATE.pageHtmls.length;
+    showPagedIndex((PAGED_STATE.pageIdx - 1 + n) % n);
+  };
+  document.getElementById('pb-page-next').onclick = function() {
+    if (!PAGED_STATE.pageHtmls) return;
+    var n = PAGED_STATE.pageHtmls.length;
+    showPagedIndex((PAGED_STATE.pageIdx + 1) % n);
+  };
 }
 
 // ── Filters ───────────────────────────────────────────────────────────────────
@@ -434,6 +463,62 @@ function filterToday(items) {
 }
 
 function byStartTime(a, b) { return new Date(a.start_time) - new Date(b.start_time); }
+
+// ── Paged content (games / figure skating) ──────────────────────────────────
+// Renders one page and keeps PAGED_STATE in sync so the preview page-nav
+// controls always reflect what's on screen.
+function showPagedIndex(idx) {
+  PAGED_STATE.pageIdx = idx;
+  document.getElementById('content').innerHTML = PAGED_STATE.bannerHtml + PAGED_STATE.pageHtmls[idx];
+  fitTable();
+  updatePreviewPageControls();
+}
+
+function updatePreviewPageControls() {
+  var wrap = document.getElementById('pb-page-nav');
+  if (!wrap) return;
+  var htmls = PAGED_STATE.pageHtmls;
+  if (!IS_PREVIEW || !htmls || htmls.length <= 1) {
+    wrap.style.display = 'none';
+    return;
+  }
+  wrap.style.display = 'inline-flex';
+  document.getElementById('pb-page-label').textContent = 'Page ' + (PAGED_STATE.pageIdx + 1) + ' / ' + htmls.length;
+}
+
+// In live mode, schedules the next page flip for whenever the current page's
+// last event actually ends (falling back to rotateIntervalSec if unknown),
+// with a small floor so back-to-back short pages don't flash by.
+function scheduleNextPagedFlip(rotateIntervalSec) {
+  var intervalMs = (rotateIntervalSec || 30) * 1000;
+  var endTime = PAGED_STATE.pageEndTimes ? PAGED_STATE.pageEndTimes[PAGED_STATE.pageIdx] : 0;
+  var waitMs = intervalMs;
+  if (endTime) {
+    waitMs = endTime - getNow().getTime();
+    if (waitMs < 3000) waitMs = 3000;
+  }
+  pagedContentTimer = setTimeout(function() {
+    var n = PAGED_STATE.pageHtmls.length;
+    showPagedIndex((PAGED_STATE.pageIdx + 1) % n);
+    scheduleNextPagedFlip(rotateIntervalSec);
+  }, waitMs);
+}
+
+// pageEndTimes[i] is the ms timestamp when page i's last event ends (0/falsy
+// if unknown). Live displays auto-rotate timed to those end times; in preview
+// mode (where "now" is pinned to the previewed date and can't drive rotation)
+// paging is manual via the pb-page-nav controls instead.
+function renderPagedContent(bannerHtml, pageHtmls, pageEndTimes, rotateIntervalSec) {
+  if (pagedContentTimer) { clearTimeout(pagedContentTimer); pagedContentTimer = null; }
+  PAGED_STATE.bannerHtml = bannerHtml;
+  PAGED_STATE.pageHtmls = pageHtmls;
+  PAGED_STATE.pageEndTimes = pageEndTimes;
+  showPagedIndex(0);
+
+  if (pageHtmls.length > 1 && !IS_PREVIEW) {
+    scheduleNextPagedFlip(rotateIntervalSec);
+  }
+}
 
 // ── Clock ──────────────────────────────────────────────────────────────────
 function updateClock() {
@@ -615,21 +700,26 @@ function wrapWithPricing(pageHtml, prices) {
 }
 
 // ── Render ─────────────────────────────────────────────────────────────────
-// Builds the grouped-by-calendar tbody rows for one page's worth of games
-// (game order within the page is preserved — callers pass chronologically
-// sorted slices, so calendar groups on a page stay in time order).
+// Builds the tbody rows for one page's worth of games, grouped by calendar
+// under a header row. Callers pass chronologically sorted slices; a new block
+// (with a repeated header) starts whenever the calendar changes from the
+// previous event, so interleaved events (Team A, Team B, Team A) stay in true
+// time order instead of being merged into one out-of-order block per team.
 function buildGamesRows(pageGames, calMap, teamMap, showLockerRooms) {
-  var groups = {};
-  var groupOrder = [];
+  var blocks = [];
   for (var i = 0; i < pageGames.length; i++) {
     var key = pageGames[i].calendar_id ? String(pageGames[i].calendar_id) : '__none__';
-    if (!groups[key]) { groups[key] = []; groupOrder.push(key); }
-    groups[key].push(pageGames[i]);
+    var prev = blocks.length ? blocks[blocks.length - 1] : null;
+    if (prev && prev.key === key) {
+      prev.games.push(pageGames[i]);
+    } else {
+      blocks.push({ key: key, games: [pageGames[i]] });
+    }
   }
 
   var tbody = '';
-  for (var gi = 0; gi < groupOrder.length; gi++) {
-    var key = groupOrder[gi];
+  for (var bi = 0; bi < blocks.length; bi++) {
+    var key = blocks[bi].key;
     var calName = calMap && calMap[key] ? calMap[key] : '';
     if (showLockerRooms) {
       tbody +=
@@ -645,7 +735,7 @@ function buildGamesRows(pageGames, calMap, teamMap, showLockerRooms) {
     } else {
       tbody += '<tr class="col-header-row"><td class="col-cal-name" colspan="2">' + esc(calName) + '</td></tr>';
     }
-    var grpGames = groups[key];
+    var grpGames = blocks[bi].games;
     for (var j = 0; j < grpGames.length; j++) {
       var g = grpGames[j];
       var homeInfo = teamInfo(teamMap, g.home_team);
@@ -658,25 +748,78 @@ function buildGamesRows(pageGames, calMap, teamMap, showLockerRooms) {
         tbody += buildEventRow(fmtTime(g.start_time), mergedTitle);
       }
     }
-    if (gi < groupOrder.length - 1) {
+    if (bi < blocks.length - 1) {
       tbody += '<tr style="height:0.6em"><td colspan="8" style="padding:0;border:none;background:transparent"></td></tr>';
     }
   }
   return tbody;
 }
 
-// Games/practices/stick-&-shoot etc. for the day, grouped by calendar. A busy
-// day (more than GAMES_PER_PAGE entries) is split into pages that rotate
-// automatically — e.g. 8 events becomes a page of the first 6, then a page
-// with the remaining 2 — rather than cramming everything onto one screen.
+// Games/practices/stick-&-shoot etc. for the day, grouped by calendar. Split
+// into pages at any natural gap in the schedule (e.g. an afternoon public
+// skate), falling back to a fixed chunk size when a page is still too big —
+// and those pages rotate automatically, timed to when each page's games end.
 var GAMES_PER_PAGE = 6;
+var GAMES_GAP_SPLIT_MS = 60 * 60 * 1000; // 60 minutes
+
+function splitGamesIntoPages(games) {
+  var splitIdxs = [];
+  for (var i = 0; i < games.length - 1; i++) {
+    var endCur = new Date(games[i].end_time || games[i].start_time).getTime();
+    var startNext = new Date(games[i + 1].start_time).getTime();
+    if (startNext - endCur >= GAMES_GAP_SPLIT_MS) splitIdxs.push(i + 1);
+  }
+
+  var pages = [];
+  if (splitIdxs.length) {
+    var start = 0;
+    for (var s = 0; s < splitIdxs.length; s++) {
+      pages.push(games.slice(start, splitIdxs[s]));
+      start = splitIdxs[s];
+    }
+    pages.push(games.slice(start));
+  } else {
+    pages = [games];
+  }
+
+  // Two (or more) consecutive small pages (<=2 games each) get merged into one
+  // page rather than each flashing by on its own screen.
+  var mergedPages = [];
+  for (var m = 0; m < pages.length; m++) {
+    var last = mergedPages.length ? mergedPages[mergedPages.length - 1] : null;
+    if (last && last.length <= 2 && pages[m].length <= 2) {
+      mergedPages[mergedPages.length - 1] = last.concat(pages[m]);
+    } else {
+      mergedPages.push(pages[m]);
+    }
+  }
+
+  // A page can still come out much bigger than GAMES_PER_PAGE (or no gap
+  // existed at all) — further split any oversized page by fixed count.
+  var finalPages = [];
+  for (var p = 0; p < mergedPages.length; p++) {
+    if (mergedPages[p].length > GAMES_PER_PAGE) {
+      for (var j = 0; j < mergedPages[p].length; j += GAMES_PER_PAGE) {
+        finalPages.push(mergedPages[p].slice(j, j + GAMES_PER_PAGE));
+      }
+    } else {
+      finalPages.push(mergedPages[p]);
+    }
+  }
+  return finalPages;
+}
+
 function renderGames(screen, games, calMap, teamMap, prices, showLockerRooms) {
   teamMap = teamMap || {};
+  games = (games || []).slice().sort(byStartTime);
   var bannerHtml = (prices && screen.name) ? '<div class="skate-banner">' + esc(screen.name) + '</div>' : '';
   var header = prices ? '<div class="section-title section-title-gapped">Today\'s Games</div>' : '';
   var content = document.getElementById('content');
 
-  if (!games || games.length === 0) {
+  if (games.length === 0) {
+    if (pagedContentTimer) { clearTimeout(pagedContentTimer); pagedContentTimer = null; }
+    PAGED_STATE.pageHtmls = null;
+    updatePreviewPageControls();
     content.innerHTML = bannerHtml +
       wrapWithPricing(header + '<div class="empty"><div class="empty-icon">&#127944;</div><p>No games scheduled for today</p></div>', prices);
     return;
@@ -687,23 +830,18 @@ function renderGames(screen, games, calMap, teamMap, prices, showLockerRooms) {
       buildGamesRows(pageGames, calMap, teamMap, showLockerRooms) + '</tbody></table>', prices);
   }
 
-  if (games.length > GAMES_PER_PAGE) {
-    var pages = [];
-    for (var i = 0; i < games.length; i += GAMES_PER_PAGE) pages.push(games.slice(i, i + GAMES_PER_PAGE));
-    var pageHtmls = pages.map(pageHtml);
+  var pages = splitGamesIntoPages(games);
+  var pageHtmls = pages.map(pageHtml);
+  var pageEndTimes = pages.map(function(pageGames) {
+    var maxEnd = 0;
+    for (var i = 0; i < pageGames.length; i++) {
+      var e = new Date(pageGames[i].end_time || pageGames[i].start_time).getTime();
+      if (e > maxEnd) maxEnd = e;
+    }
+    return maxEnd;
+  });
 
-    content.innerHTML = bannerHtml + pageHtmls[0];
-    fitTable();
-    var pageIdx = 0;
-    refreshTimer = setInterval(function() {
-      pageIdx = (pageIdx + 1) % pageHtmls.length;
-      content.innerHTML = bannerHtml + pageHtmls[pageIdx];
-      fitTable();
-    }, (screen.rotate_interval || 30) * 1000);
-  } else {
-    content.innerHTML = bannerHtml + pageHtml(games);
-    fitTable();
-  }
+  renderPagedContent(bannerHtml, pageHtmls, pageEndTimes, screen.rotate_interval);
 }
 
 function renderSkate(sessions, prices, heading) {
@@ -758,10 +896,12 @@ function renderFigureSkating(screen, events, prices) {
     var d = new Date(ev.start_time);
     var key = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate() + '-' + d.getHours() + '-' + d.getMinutes();
     if (!timeMap[key]) {
-      timeMap[key] = { timeStr: fmtTime(ev.start_time), titles: [] };
+      timeMap[key] = { timeStr: fmtTime(ev.start_time), titles: [], endTime: 0 };
       rows.push(timeMap[key]);
     }
     timeMap[key].titles.push(ev.raw_title || ev.title || '');
+    var evEnd = new Date(ev.end_time || ev.start_time).getTime();
+    if (evEnd > timeMap[key].endTime) timeMap[key].endTime = evEnd;
   }
   function titlesCell(titles) {
     return titles.map(function(t) { return esc(t); }).join('<br>');
@@ -793,32 +933,32 @@ function renderFigureSkating(screen, events, prices) {
     }
   }
 
-  var content = document.getElementById('content');
   var bannerHtml = screen.name ? '<div class="skate-banner">' + esc(screen.name) + '</div>' : '';
 
   if (oMode === 'rotate' && rows.length > maxPerPage) {
-    // Split into pages, rotate on interval
+    // Split into pages, rotate timed to when each page's sessions end (live)
+    // or manually via the preview page-nav controls (preview).
     var pages = [];
     for (var i = 0; i < rows.length; i += maxPerPage) {
       pages.push(rows.slice(i, i + maxPerPage));
     }
     var pageHtmls = [];
-    for (var i = 0; i < pages.length; i++) pageHtmls.push(wrapWithPricing(buildPage(pages[i]), prices));
-
-    content.innerHTML = bannerHtml + pageHtmls[0];
-    fitTable();
-    var pageIdx = 0;
-    refreshTimer = setInterval(function() {
-      pageIdx = (pageIdx + 1) % pageHtmls.length;
-      content.innerHTML = bannerHtml + pageHtmls[pageIdx];
-      fitTable();
-    }, (screen.rotate_interval || 30) * 1000);
+    var pageEndTimes = [];
+    for (var i = 0; i < pages.length; i++) {
+      pageHtmls.push(wrapWithPricing(buildPage(pages[i]), prices));
+      var maxEnd = 0;
+      for (var r = 0; r < pages[i].length; r++) {
+        if (pages[i][r].endTime > maxEnd) maxEnd = pages[i][r].endTime;
+      }
+      pageEndTimes.push(maxEnd);
+    }
+    renderPagedContent(bannerHtml, pageHtmls, pageEndTimes, screen.rotate_interval);
   } else {
     // No rotation — show first maxPerPage rows
-    content.innerHTML = bannerHtml + (rows.length
+    var singleHtml = rows.length
       ? wrapWithPricing(buildPage(rows.slice(0, maxPerPage)), prices)
-      : wrapWithPricing('<div class="empty"><p>No events scheduled for today.</p></div>', prices));
-    fitTable();
+      : wrapWithPricing('<div class="empty"><p>No events scheduled for today.</p></div>', prices);
+    renderPagedContent(bannerHtml, [singleHtml], [0], screen.rotate_interval);
   }
 }
 
@@ -847,8 +987,10 @@ function fitTable() {
 // ── Load data ──────────────────────────────────────────────────────────────
 function loadScreen() {
   // Stop timers from the previous render — a screen switched away from
-  // figure-skating rotation or a webpage must not keep its old timer firing
-  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+  // games/figure-skating rotation or a webpage must not keep its old timer firing
+  if (pagedContentTimer) { clearTimeout(pagedContentTimer); pagedContentTimer = null; }
+  PAGED_STATE.pageHtmls = null;
+  updatePreviewPageControls();
   if (webpageTimer) { clearTimeout(webpageTimer); webpageTimer = null; }
   if (boundaryTimer) { clearTimeout(boundaryTimer); boundaryTimer = null; }
   if (annoClockTimer) { clearInterval(annoClockTimer); annoClockTimer = null; }

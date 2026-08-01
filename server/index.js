@@ -9,6 +9,8 @@ const apiRouter = require('./routes/api');
 const uploadRouter = require('./routes/upload');
 const db = require('./db');
 const { pruneOldBlocks } = require('./schedule');
+const backup = require('./backup');
+const update = require('./update');
 
 // Past schedule blocks are dead weight in db.json — drop anything older than a week
 const pruned = pruneOldBlocks(7);
@@ -58,8 +60,10 @@ const tvHtml = require('fs').readFileSync(path.join(__dirname, 'tv.html'), 'utf8
 app.get('/tv/screen/:screenId', (req, res) => {
   res.send(tvHtml.replace('{{DISPLAY_ID}}', '').replace('{{SCREEN_ID}}', req.params.screenId));
 });
-app.get('/tv/:displayId', (req, res) => {
-  res.send(tvHtml.replace('{{DISPLAY_ID}}', req.params.displayId).replace('{{SCREEN_ID}}', ''));
+app.get('/tv/:tvNumber', (req, res) => {
+  const display = db.findAll('displays').find((d) => String(d.tv_number) === req.params.tvNumber);
+  if (!display) return res.status(404).send('No display with that TV number.');
+  res.send(tvHtml.replace('{{DISPLAY_ID}}', display.id).replace('{{SCREEN_ID}}', ''));
 });
 
 // Serve built React app in production
@@ -74,6 +78,13 @@ wsManager.init(server);
 
 // Start calendar polling
 startPolling();
+
+// Start automatic backup scheduler
+backup.startScheduler();
+
+// Start automatic update-check and auto-install schedulers
+update.startScheduler();
+update.startInstallScheduler();
 
 const PORT = process.env.PORT || 3001;
 server.listen(PORT, '0.0.0.0', () => {

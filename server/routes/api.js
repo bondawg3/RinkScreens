@@ -7,6 +7,12 @@ const { autoAssign } = require('../locker-assign');
 const { requireAuth, rotateJwtSecret, signToken, verifyToken } = require('../auth');
 const schedule = require('../schedule');
 const bcrypt = require('bcryptjs');
+const backup = require('../backup');
+const update = require('../update');
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
+const backupUpload = multer({ dest: require('os').tmpdir(), limits: { fileSize: 200 * 1024 * 1024 } });
 
 // True when the request carries a valid admin token (for endpoints that serve
 // both TVs and the admin panel with different visibility)
@@ -90,7 +96,7 @@ router.post('/auth/change-password', requireAuth, async (req, res) => {
 // Unauthenticated TV displays only need these; everything else requires a token
 const PUBLIC_SETTINGS = ['rink_name', 'logo_filename'];
 // Never returned or writable through the API
-const SECRET_SETTINGS = ['jwt_secret', 'admin_password_hash'];
+const SECRET_SETTINGS = ['jwt_secret', 'admin_password_hash', 'update_github_token'];
 
 router.get('/settings', (req, res) => {
   const settings = db.getSettings();
@@ -279,27 +285,27 @@ router.get('/displays', (req, res) => {
 });
 
 router.post('/displays', requireAuth, (req, res) => {
-  const { name, ip } = req.body;
-  if (!name || !ip) return res.status(400).json({ error: 'name and ip required' });
+  const { name, tv_number } = req.body;
+  if (!name || !tv_number) return res.status(400).json({ error: 'name and TV number required' });
   const dupName = findByNameCi('displays', name);
   if (dupName) return res.status(400).json({ error: `A display named "${dupName.name}" already exists.` });
-  const dupIp = db.findAll('displays').find((d) => d.ip === ip);
-  if (dupIp) return res.status(400).json({ error: `IP ${ip} is already used by "${dupIp.name}".` });
-  const row = db.insert('displays', { name, ip });
+  const dupNum = db.findAll('displays').find((d) => String(d.tv_number) === String(tv_number));
+  if (dupNum) return res.status(400).json({ error: `TV number ${tv_number} is already used by "${dupNum.name}".` });
+  const row = db.insert('displays', { name, tv_number });
   res.json({ id: row.id });
 });
 
 router.patch('/displays/:id', requireAuth, (req, res) => {
   const display = db.findById('displays', req.params.id);
   if (!display) return res.status(404).json({ error: 'not found' });
-  const { name, ip, screen_id } = req.body;
+  const { name, tv_number, screen_id } = req.body;
   const newName = name ?? display.name;
-  const newIp = ip ?? display.ip;
+  const newNum = tv_number ?? display.tv_number;
   const dupName = findByNameCi('displays', newName, display.id);
   if (dupName) return res.status(400).json({ error: `A display named "${dupName.name}" already exists.` });
-  const dupIp = db.findAll('displays').find((d) => d.id !== display.id && d.ip === newIp);
-  if (dupIp) return res.status(400).json({ error: `IP ${newIp} is already used by "${dupIp.name}".` });
-  const changes = { name: newName, ip: newIp };
+  const dupNum = db.findAll('displays').find((d) => d.id !== display.id && String(d.tv_number) === String(newNum));
+  if (dupNum) return res.status(400).json({ error: `TV number ${newNum} is already used by "${dupNum.name}".` });
+  const changes = { name: newName, tv_number: newNum };
   if ('screen_id' in req.body) changes.screen_id = screen_id ? Number(screen_id) : null;
   db.update('displays', req.params.id, changes);
   res.json({ ok: true });
@@ -643,7 +649,7 @@ router.get('/calendars', (req, res) => {
 });
 
 router.post('/calendars', requireAuth, async (req, res) => {
-  const { name, url, type, poll_interval_minutes = 5, team_order = 'away_home' } = req.body;
+  const { name, url, type, poll_interval_minutes = 5, team_order = 'home_away' } = req.body;
   if (!name || !url || !type) return res.status(400).json({ error: 'name, url, and type are required' });
 
   if (findByNameCi('calendars', name)) {
@@ -683,7 +689,7 @@ router.patch('/calendars/:id', requireAuth, async (req, res) => {
     name: name ?? cal.name,
     url: url ?? cal.url,
     poll_interval_minutes: poll_interval_minutes !== undefined ? Number(poll_interval_minutes) : cal.poll_interval_minutes,
-    team_order: team_order ?? cal.team_order ?? 'away_home',
+    team_order: team_order ?? cal.team_order ?? 'home_away',
     locker_sequence_id: newSeqId,
   });
   // Keep league in sync when sequence is explicitly set via calendar modal
@@ -949,6 +955,199 @@ router.patch('/teams/:id', requireAuth, (req, res) => {
 router.delete('/teams/:id', requireAuth, (req, res) => {
   db.remove('teams', req.params.id);
   res.json({ ok: true });
+});
+
+// ── Backups ────────────────────────────────────────────────────────────────────
+
+router.get('/backups', requireAuth, (req, res) => {
+  const settings = db.getSettings();
+  res.json({
+    backups: backup.listBackups(),
+    settings: {
+      backup_auto_enabled: settings.backup_auto_enabled !== 'false',
+      backup_interval_hours: settings.backup_interval_hours || '24',
+      backup_retention_count: settings.backup_retention_count || '14',
+      backup_dir: settings.backup_dir || '',
+      backup_dir_default: backup.DEFAULT_BACKUP_DIR,
+      backup_dir_effective: backup.getBackupDir(),
+      last_backup_at: settings.last_backup_at || null,
+    },
+  });
+});
+
+router.get('/backups/browse', requireAuth, (req, res) => {
+  const dirPath = req.query.path ? String(req.query.path) : '';
+  try {
+    if (!dirPath) return res.json({ path: '', parent: null, entries: backup.listRoots() });
+    const parent = path.dirname(dirPath);
+    res.json({ path: dirPath, parent: parent === dirPath ? null : parent, entries: backup.listDir(dirPath) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/backups/browse/mkdir', requireAuth, (req, res) => {
+  const { path: dirPath, name } = req.body;
+  try {
+    res.json({ path: backup.makeSubdir(dirPath, name) });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.put('/backups/settings', requireAuth, (req, res) => {
+  const { backup_auto_enabled, backup_interval_hours, backup_retention_count, backup_dir } = req.body;
+  const kv = {};
+  if (backup_auto_enabled !== undefined) kv.backup_auto_enabled = String(!!backup_auto_enabled);
+  if (backup_interval_hours !== undefined) {
+    const n = parseFloat(backup_interval_hours);
+    if (!Number.isFinite(n) || n <= 0) return res.status(400).json({ error: 'backup_interval_hours must be a positive number' });
+    kv.backup_interval_hours = String(n);
+  }
+  if (backup_retention_count !== undefined) {
+    const n = parseInt(backup_retention_count, 10);
+    if (!Number.isFinite(n) || n <= 0) return res.status(400).json({ error: 'backup_retention_count must be a positive integer' });
+    kv.backup_retention_count = String(n);
+  }
+  if (backup_dir !== undefined) {
+    const trimmed = (backup_dir || '').trim();
+    if (trimmed) {
+      try { backup.validateBackupDir(trimmed); }
+      catch (err) { return res.status(400).json({ error: `Backup location is not usable: ${err.message}` }); }
+    }
+    kv.backup_dir = trimmed;
+  }
+  db.setSettings(kv);
+  backup.startScheduler();
+  res.json({ ok: true });
+});
+
+router.post('/backups', requireAuth, (req, res) => {
+  try {
+    const filename = backup.createBackup('manual');
+    res.json({ ok: true, filename });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/backups/:filename', requireAuth, (req, res) => {
+  try {
+    backup.setPinned(req.params.filename, !!req.body.pinned);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.get('/backups/:filename/download', requireAuth, (req, res) => {
+  let filePath;
+  try { filePath = backup.getBackupPath(req.params.filename); }
+  catch (err) { return res.status(400).json({ error: err.message }); }
+  if (!filePath) return res.status(404).json({ error: 'not found' });
+  res.download(filePath, req.params.filename);
+});
+
+router.delete('/backups/:filename', requireAuth, (req, res) => {
+  try {
+    const removed = backup.deleteBackup(req.params.filename);
+    if (!removed) return res.status(404).json({ error: 'not found' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/backups/:filename/restore', requireAuth, (req, res) => {
+  let filePath;
+  try { filePath = backup.getBackupPath(req.params.filename); }
+  catch (err) { return res.status(400).json({ error: err.message }); }
+  if (!filePath) return res.status(404).json({ error: 'not found' });
+  try {
+    backup.restoreFromZip(filePath);
+    ws.broadcast({ type: 'refresh_data' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+router.post('/backups/restore-upload', requireAuth, backupUpload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'no file uploaded' });
+  try {
+    backup.restoreFromZip(req.file.path);
+    ws.broadcast({ type: 'refresh_data' });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  } finally {
+    fs.unlink(req.file.path, () => {});
+  }
+});
+
+// ── Updates ────────────────────────────────────────────────────────────────────
+
+router.get('/updates', requireAuth, (req, res) => {
+  res.json(update.getStatus());
+});
+
+router.post('/updates/check', requireAuth, async (req, res) => {
+  try {
+    res.json(await update.checkForUpdate());
+  } catch (err) {
+    db.setSetting('update_check_error', err.message);
+    res.status(400).json({ error: err.message });
+  }
+});
+
+function parseHhMm(value, fieldLabel) {
+  if (!/^\d{1,2}:\d{2}$/.test(value)) throw new Error(`${fieldLabel} must be a time in HH:MM (24-hour) format`);
+  const [h, m] = value.split(':').map(Number);
+  if (h < 0 || h > 23 || m < 0 || m > 59) throw new Error(`${fieldLabel} must be a valid 24-hour time`);
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
+router.put('/updates/settings', requireAuth, (req, res) => {
+  const {
+    update_check_enabled, update_check_mode, update_check_interval_hours, update_check_time,
+    update_auto_install_enabled, update_install_time,
+    update_github_token, update_github_repo,
+  } = req.body;
+  const kv = {};
+  if (update_check_enabled !== undefined) kv.update_check_enabled = String(!!update_check_enabled);
+  if (update_check_mode !== undefined) {
+    if (!['interval', 'daily'].includes(update_check_mode)) return res.status(400).json({ error: 'update_check_mode must be "interval" or "daily"' });
+    kv.update_check_mode = update_check_mode;
+  }
+  if (update_check_interval_hours !== undefined) {
+    const n = parseFloat(update_check_interval_hours);
+    if (!Number.isFinite(n) || n <= 0) return res.status(400).json({ error: 'update_check_interval_hours must be a positive number' });
+    kv.update_check_interval_hours = String(n);
+  }
+  if (update_check_time !== undefined) {
+    try { kv.update_check_time = parseHhMm(update_check_time, 'update_check_time'); }
+    catch (err) { return res.status(400).json({ error: err.message }); }
+  }
+  if (update_auto_install_enabled !== undefined) kv.update_auto_install_enabled = String(!!update_auto_install_enabled);
+  if (update_install_time !== undefined) {
+    try { kv.update_install_time = parseHhMm(update_install_time, 'update_install_time'); }
+    catch (err) { return res.status(400).json({ error: err.message }); }
+  }
+  if (update_github_token !== undefined) kv.update_github_token = update_github_token;
+  if (update_github_repo !== undefined) kv.update_github_repo = update_github_repo.trim();
+  db.setSettings(kv);
+  update.startScheduler();
+  update.startInstallScheduler();
+  res.json({ ok: true });
+});
+
+router.post('/updates/install', requireAuth, async (req, res) => {
+  try {
+    const result = await update.installUpdate();
+    res.json({ ok: true, ...result });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 module.exports = router;

@@ -38,7 +38,7 @@ export default function DisplaysTab() {
 
   function startEdit(display) {
     setEditing(display.id);
-    setEditData({ name: display.name, ip: display.ip });
+    setEditData({ name: display.name, tv_number: display.tv_number });
     setErr('');
   }
 
@@ -58,9 +58,12 @@ export default function DisplaysTab() {
             <div key={d.id} className={tStyles.card}>
               <Thumbnail screenId={assignedScreen?.id} />
               <div className={tStyles.cardBody}>
+                <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: 'var(--ice-blue)' }}>
+                  Display {d.tv_number}
+                </div>
                 <div className={tStyles.cardName}>{d.name}</div>
                 <div className={tStyles.cardMeta}>
-                  <span>{d.ip}</span>
+                  <span>{`${window.location.origin}/tv/${d.tv_number}`}</span>
                   <span className={d.online ? styles.online : styles.offline}>
                     {d.online ? '● Online' : '● Offline'}
                   </span>
@@ -85,7 +88,7 @@ export default function DisplaysTab() {
 
                 <div className={tStyles.cardActions}>
                   {assignedScreen && (
-                    <a href={`/tv/${d.id}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">📺</a>
+                    <a href={`/tv/${d.tv_number}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">📺</a>
                   )}
                   <button className={styles.btnGhost} onClick={() => navigate(`/admin/displays/${d.id}/schedule`)} title="Schedule">📅</button>
                   <button className={styles.btnGhost} onClick={() => startEdit(d)}>Edit</button>
@@ -134,8 +137,8 @@ export default function DisplaysTab() {
             <div className={tStyles.modalTitle}>Edit Display</div>
             <label className={styles.label}>Name</label>
             <input className={styles.input} value={editData.name} onChange={(e) => setEditData({ ...editData, name: e.target.value })} />
-            <label className={styles.label}>IP Address</label>
-            <input className={styles.input} value={editData.ip} onChange={(e) => setEditData({ ...editData, ip: e.target.value })} />
+            <label className={styles.label}>TV Number</label>
+            <input className={styles.input} type="number" min="1" value={editData.tv_number} onChange={(e) => setEditData({ ...editData, tv_number: e.target.value })} />
             {err && <span className={styles.error}>{err}</span>}
             <div className={tStyles.modalActions}>
               <button className={styles.btnGhost} onClick={() => setEditing(null)}>Cancel</button>

@@ -51,7 +51,7 @@ function CalendarModal({ type, existing, onClose, onSaved }) {
   const [intervalVal, setIntervalVal] = useState(
     String(initUnit === 'days' ? existingMins / (24 * 60) : existingMins)
   );
-  const [teamOrder, setTeamOrder] = useState(existing?.team_order ?? 'away_home');
+  const [teamOrder, setTeamOrder] = useState(existing?.team_order ?? 'home_away');
   const [seqId, setSeqId] = useState(existing?.locker_sequence_id ? String(existing.locker_sequence_id) : '');
   const { data: sequences } = useApi('/locker-sequences');
   const [error, setError] = useState('');

@@ -1,4 +1,4 @@
-# RinkScreens — v1.20.0
+# RinkScreens — v1.23.4
 
 Digital signage system for ice rinks. Pulls games from Google Calendar (iCal) and displays them on smart TVs around the facility. An admin panel on any local browser lets staff control what each screen shows and manage locker room assignments, pricing, and backgrounds.
 
@@ -21,7 +21,7 @@ Digital signage system for ice rinks. Pulls games from Google Calendar (iCal) an
    (Hockey)         (Public Skate)
 ```
 
-Each TV opens `http://[server-ip]:3001/tv/[displayId]` in its built-in browser (the display's id from the admin Displays tab). What the display renders is resolved through its schedule: an active schedule block's screen when one applies, otherwise the display's assigned screen. The server pushes updates via WebSocket so screens react instantly when admin changes anything — no manual refresh needed.
+Each TV opens `http://[server-ip]:3001/tv/[tvNumber]` in its built-in browser (the display's TV number, set in Settings > Displays and shown as its web address in the admin Displays tab). What the display renders is resolved through its schedule: an active schedule block's screen when one applies, otherwise the display's assigned screen. The server pushes updates via WebSocket so screens react instantly when admin changes anything — no manual refresh needed.
 
 ---
 
@@ -50,10 +50,11 @@ Navigate to `/admin` from any browser on the local network.
 Every screen card also has a duplicate button (⧉) next to Delete that creates a copy of the screen with the same settings, named "&lt;screen name&gt; - Copy".
 
 ### Displays tab
-- View all registered TV displays with live thumbnails of their assigned screen
+- View all registered TV displays, each titled "Display &lt;TV number&gt;", with live thumbnails of their assigned screen
+- Each display's web address (`/tv/[tvNumber]`) is shown in place of an IP address, since displays are no longer tied to a fixed network IP
 - Assign a screen to each display via dropdown (auto-saves)
 - **Available Screens** section shows all visible, unassigned screens with type label and current assignment
-- Preview link opens the TV display with the date navigation bar
+- Preview link opens the TV display with the date navigation bar, plus page navigation (‹ / ›) to step through every page a multi-page Hockey or Figure Skating screen produces, since preview doesn't auto-rotate pages
 
 ### Games tab
 - Lists all imported hockey games
@@ -87,7 +88,7 @@ Every screen card also has a duplicate button (⧉) next to Delete that creates 
 
 ### Figure Skating tab
 - Lists upcoming figure skating events grouped by day with week pagination
-- Per-tab Screens section: configure figure skating display screens with optional **two-column layout** (12 rows per column), **rotate pages** (cycles through all events at a set interval), or **flow with time** (shows only upcoming events, auto-updates every 5 minutes)
+- Per-tab Screens section: configure figure skating display screens with optional **two-column layout** (12 rows per column), **rotate pages** (cycles through all events, advancing once each page's sessions have actually ended, with `rotate_interval` as a minimum floor between flips), or **flow with time** (shows only upcoming events, auto-updates every 5 minutes)
 - Events sharing the same start time are consolidated: time shown once, all groups listed beneath
 
 ### Images tab
@@ -101,7 +102,9 @@ Settings is organized into sub-tabs:
 - **Calendars** — add/edit/delete iCal calendars (Hockey Games, Public Skates, Rink Events, Figure Skating) with poll interval and locker sequence overrides; **Last Sync** column shows success/failure status per calendar
 - **Pricing** — admission pricing tiers (label + subheading + price + sort order); each screen (Public Skate, Hockey, Rink Events, Figure Skating, Custom) has a **Show Pricing** checkbox plus a picker for which tiers to display on that screen
 - **Locker Rooms** — add/edit/delete rooms; define named **Locker Room Sequences** for auto-assignment
-- **Displays** — register physical TV devices (name + IP address)
+- **Displays** — register physical TV devices (name + TV number, which sets its `/tv/[tvNumber]` web address)
+- **Backups** — create, download, restore, or delete backups of `db.json` + uploaded files as a `.zip`; configure automatic backup interval and how many backups to retain; restoring a backup file from disk is also supported. See [Backups](#backups) below.
+- **Updates** — check GitHub for newer versions and install them with one click; configure the check schedule (interval or daily time) and optional unattended auto-install at a scheduled time. See [Automatic updates](#automatic-updates) below.
 - **Admin** — change the admin login password
 
 ### Leagues & Teams tab
@@ -154,7 +157,7 @@ Each display can be preset with what it shows through the day, up to a month ahe
 
 | Display type | What it shows |
 |---|---|
-| Hockey | Today's games with time, away vs. home team, locker rooms (toggleable) — optional admission pricing panel. Includes any non-game hockey calendar activity too (practices, stick & shoot, etc. — anything from a calendar typed "Hockey Games" that isn't flagged as a public skate). A day with more than 6 such events automatically splits into pages that rotate, earliest first, instead of cramming everything onto one screen; the rotation speed is configurable per screen (seconds or minutes), defaulting to 30 seconds |
+| Hockey | Today's games with time, away vs. home team, locker rooms (toggleable) — optional admission pricing panel. Includes any non-game hockey calendar activity too (practices, stick & shoot, etc. — anything from a calendar typed "Hockey Games" that isn't flagged as a public skate). Events from different calendars are always shown in true chronological order (a calendar's header can repeat later in the day if another calendar's event falls in between). A day with more than 5 such events automatically splits into pages — preferring the day's largest natural gap (e.g. an afternoon public skate) as the split point, falling back to fixed-size chunks when no clear gap exists — instead of cramming everything onto one screen. Pages rotate automatically once that page's events have actually ended, with `rotate_interval` as a minimum floor between flips |
 | Public Skate | Heading banner (screen name), upcoming public skate sessions — optional admission pricing panel |
 | Rink Events | Today's rink events in table format, "Schedule" subheading — optional admission pricing panel |
 | Figure Skating | Today's figure skating events in table format — optional admission pricing panel |
@@ -198,6 +201,28 @@ All data is stored in `data/db.json` — a flat JSON file, no database binary re
 
 Uploaded files are stored in `uploads/` (gitignored).
 
+### Backups
+
+The Settings → Backups tab zips `data/db.json` and everything in `uploads/` into `data/backups/backup-<timestamp>-<reason>.zip`. Backups can be created on demand ("Back Up Now"), downloaded, restored, or deleted from that tab, and a `.zip` from disk can be uploaded and restored directly.
+
+An automatic scheduler (on by default, every 24 hours) takes a "scheduled" backup on the configured interval and prunes old backups down to the configured retention count (default 14) — both are adjustable in the Backups tab. Restoring always takes a "pre-restore" safety backup of the current state first, so a bad restore can itself be undone.
+
+Any backup can be pinned via **Keep Permanently** — pinned backups are exempt from retention pruning (they don't count toward "Keep last N") and can't be deleted until unpinned.
+
+By default backups are saved to `data/backups`, but the Backups tab's **Backup location** can point them at any folder on the server machine (an external drive, a mapped network share, etc.) via "Choose Folder…", which browses the server's actual drives/folders (with a "+ New Folder" option) rather than a free-text path — the admin panel may be opened from a different machine than the server, so a native OS file picker wouldn't resolve to a usable server-side path. The chosen path is validated as writable before it's saved; if a configured folder later becomes unreachable, backups silently fall back to the default location instead of failing.
+
+### Automatic updates
+
+The Settings → Updates tab checks GitHub Releases for newer versions of RinkScreens and can install them in place. It only ever downloads and applies the `rinkscreens-update.zip` release asset, which contains code only (`server/`, `client/dist/`, `package.json`, `package-lock.json`, production `node_modules`) — never `data/` or `uploads/` — so installing an update cannot touch the rink's live data.
+
+**Check schedule** runs either on a fixed interval (default every 24 hours) or daily at a specific time; "Check Now" runs it on demand. When a newer version with an installable asset is found, an **Install Update** button appears — installing spawns a detached PowerShell helper (`scripts/release-assets/apply-update.ps1`) that waits for the server process to exit (the server now exits itself shortly after handing off), copies the new files over the install directory (never deleting anything, so `data/`/`uploads/` are untouched even though they're outside the update package), and restarts the app.
+
+**Automatically install updates** installs a newer version unattended, with no confirmation prompt, at a configured time of day — useful for scheduling installs for a quiet hour (e.g. 3 AM) rather than whenever a rink employee happens to click "Check Now". It runs its own check right before installing, independent of the regular check schedule, so it always installs whatever is actually latest.
+
+The repo is public, so no GitHub token or other credentials are required — checking and installing just work.
+
+To publish a new version for the rink PC to find, run `npm run publish-release` from the dev machine (requires the [GitHub CLI](https://cli.github.com/), already authenticated) — it builds the update package and creates/updates a GitHub Release tagged with the current `package.json` version.
+
 ---
 
 ## Testing
@@ -220,6 +245,23 @@ node server/reset-password.js
 ```
 
 This clears the stored password hash. The next visit to `/login` shows the first-run setup form to create a new password. No data is lost.
+
+---
+
+## Building an install package
+
+```powershell
+npm run package
+```
+
+Runs the test suite, builds the client, and stages a self-contained release
+zip in `release/rinkscreens-v<version>.zip` with production-only
+`node_modules`, the installer batch files (`INSTALL.md`), and the current
+`data/db.json` and `uploads/` folder — so unzipping produces a working install
+already loaded with the existing rink config, screens, and images rather than
+a blank first run. Since it bundles live data (including the admin password
+hash and JWT secret), only share the resulting zip with people who should
+have access to the current setup.
 
 ---
 

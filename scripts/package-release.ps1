@@ -36,6 +36,8 @@ Copy-Item "$root\package.json" "$stageDir\package.json"
 Copy-Item "$root\package-lock.json" "$stageDir\package-lock.json"
 Copy-Item "$root\README.md" "$stageDir\README.md"
 Copy-Item "$root\CHANGELOG.md" "$stageDir\CHANGELOG.md"
+Copy-Item "$root\data" "$stageDir\data" -Recurse
+Copy-Item "$root\uploads" "$stageDir\uploads" -Recurse
 
 Write-Host "--> Installing production dependencies into the release copy" -ForegroundColor Cyan
 Push-Location $stageDir

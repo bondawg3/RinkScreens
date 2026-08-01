@@ -6,7 +6,13 @@ import calStyles from './CalendarModal.module.css';
 import s from './SettingsPage.module.css';
 import CalendarsTab from './SettingsTab';
 
-const SUB_TABS = ['General', 'Calendars', 'Pricing', 'Locker Rooms', 'Displays', 'Admin'];
+const SUB_TABS = ['General', 'Calendars', 'Pricing', 'Locker Rooms', 'Displays', 'Backups', 'Updates', 'Admin'];
+
+function formatBytes(n) {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 // ── Locker Room row ────────────────────────────────────────────────────────────
 function LockerRoomRow({ room, onSaved, onDeleted }) {
@@ -63,13 +69,15 @@ function LockerRoomRow({ room, onSaved, onDeleted }) {
 function DisplayRow({ display, onSaved, onDeleted }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(display.name);
-  const [ip, setIp] = useState(display.ip);
+  const [tvNumber, setTvNumber] = useState(display.tv_number);
   const [error, setError] = useState('');
+
+  const webAddress = `${window.location.origin}/tv/${display.tv_number}`;
 
   async function save() {
     setError('');
     try {
-      await apiFetch(`/displays/${display.id}`, { method: 'PATCH', body: JSON.stringify({ name, ip }) });
+      await apiFetch(`/displays/${display.id}`, { method: 'PATCH', body: JSON.stringify({ name, tv_number: tvNumber }) });
       setEditing(false);
       onSaved();
     } catch (err) { setError(err.message); }
@@ -86,13 +94,13 @@ function DisplayRow({ display, onSaved, onDeleted }) {
       <tr>
         <td><input className={styles.input} value={name} onChange={(e) => setName(e.target.value)} autoFocus /></td>
         <td>
-          <input className={styles.input} value={ip} onChange={(e) => setIp(e.target.value)} />
+          <input className={styles.input} type="number" min="1" value={tvNumber} onChange={(e) => setTvNumber(e.target.value)} />
           {error && <div className={styles.error} style={{ marginTop: 4 }}>{error}</div>}
         </td>
         <td>
           <div className={styles.actions}>
             <button className={styles.btnPrimary} onClick={save}>Save</button>
-            <button className={styles.btnGhost} onClick={() => { setEditing(false); setName(display.name); setIp(display.ip); setError(''); }}>Cancel</button>
+            <button className={styles.btnGhost} onClick={() => { setEditing(false); setName(display.name); setTvNumber(display.tv_number); setError(''); }}>Cancel</button>
           </div>
         </td>
       </tr>
@@ -100,8 +108,11 @@ function DisplayRow({ display, onSaved, onDeleted }) {
   }
   return (
     <tr>
-      <td>{display.name}</td>
-      <td>{display.ip}</td>
+      <td>
+        <div style={{ fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', color: 'var(--ice-blue)' }}>Display {display.tv_number}</div>
+        {display.name}
+      </td>
+      <td><a href={webAddress} target="_blank" rel="noopener noreferrer">{webAddress}</a></td>
       <td>
         <div className={styles.actions}>
           <button className={styles.btnGhost} onClick={() => setEditing(true)}>Edit</button>
@@ -377,32 +388,32 @@ function LockerRoomsSection() {
 function DisplaysSection() {
   const { data: displays, reload: reloadDisplays } = useApi('/displays');
   const [newDispName, setNewDispName] = useState('');
-  const [newDispIp, setNewDispIp] = useState('');
+  const [newDispNum, setNewDispNum] = useState('');
   const [dispAddErr, setDispAddErr] = useState('');
 
   async function addDisplay(e) {
     e.preventDefault(); setDispAddErr('');
     try {
-      await apiFetch('/displays', { method: 'POST', body: JSON.stringify({ name: newDispName, ip: newDispIp }) });
-      setNewDispName(''); setNewDispIp(''); reloadDisplays();
+      await apiFetch('/displays', { method: 'POST', body: JSON.stringify({ name: newDispName, tv_number: newDispNum }) });
+      setNewDispName(''); setNewDispNum(''); reloadDisplays();
     } catch (err) { setDispAddErr(err.message); }
   }
 
   return (
     <>
       <h2 className={styles.heading}>Displays</h2>
-      <p className={styles.hint}>Register the TV devices on your network.</p>
+      <p className={styles.hint}>Register the TVs showing RinkScreens content. The TV number sets the web address used to load that display.</p>
       <form onSubmit={addDisplay} className={styles.addForm}>
         <input className={styles.input} value={newDispName} onChange={(e) => setNewDispName(e.target.value)}
           placeholder="Display name (e.g. Lobby TV)" required />
-        <input className={styles.input} value={newDispIp} onChange={(e) => setNewDispIp(e.target.value)}
-          placeholder="IP address (e.g. 192.168.1.50)" required />
-        <button className={styles.btnPrimary} type="submit" disabled={!newDispName.trim() || !newDispIp.trim()}>Add Display</button>
+        <input className={styles.input} type="number" min="1" value={newDispNum} onChange={(e) => setNewDispNum(e.target.value)}
+          placeholder="TV number (e.g. 1)" required />
+        <button className={styles.btnPrimary} type="submit" disabled={!newDispName.trim() || !String(newDispNum).trim()}>Add Display</button>
         {dispAddErr && <span className={styles.error}>{dispAddErr}</span>}
       </form>
       {displays && displays.length > 0 ? (
         <table className={styles.table}>
-          <thead><tr><th>Name</th><th>IP Address</th><th></th></tr></thead>
+          <thead><tr><th>Name</th><th>Web Address</th><th></th></tr></thead>
           <tbody>{displays.map((d) => (
             <DisplayRow key={d.id} display={d} onSaved={reloadDisplays} onDeleted={reloadDisplays} />
           ))}</tbody>
@@ -491,6 +502,462 @@ function PricingSection() {
   );
 }
 
+// Breadcrumb segments for a path, each with the cumulative path to jump to.
+// e.g. "C:\Backups\Rink" -> [{name:'C:', path:'C:\\'}, {name:'Backups', path:'C:\\Backups'}, {name:'Rink', path:'C:\\Backups\\Rink'}]
+function pathCrumbs(p) {
+  if (!p) return [];
+  const parts = p.split(/[\\/]/).filter(Boolean);
+  let acc = '';
+  return parts.map((name, i) => {
+    acc = i === 0 && /^[A-Za-z]:$/.test(name) ? `${name}\\` : `${acc}${acc.endsWith('\\') || acc.endsWith('/') ? '' : '\\'}${name}`;
+    return { name, path: acc };
+  });
+}
+
+// ── Folder picker modal ────────────────────────────────────────────────────────
+function FolderPickerModal({ initialPath, onClose, onSelect }) {
+  const [currentPath, setCurrentPath] = useState('');
+  const [entries, setEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [newFolder, setNewFolder] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+
+  async function load(p) {
+    setLoading(true); setError('');
+    try {
+      const q = p ? `?path=${encodeURIComponent(p)}` : '';
+      const res = await apiFetch(`/backups/browse${q}`);
+      setCurrentPath(res.path); setEntries(res.entries);
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
+  }
+
+  useEffect(() => { load(initialPath || ''); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function createFolder(e) {
+    e.preventDefault();
+    if (!newFolderName.trim()) return;
+    try {
+      await apiFetch('/backups/browse/mkdir', {
+        method: 'POST', body: JSON.stringify({ path: currentPath, name: newFolderName.trim() }),
+      });
+      setNewFolder(false); setNewFolderName('');
+      load(currentPath);
+    } catch (err) { setError(err.message); }
+  }
+
+  const crumbs = pathCrumbs(currentPath);
+
+  return (
+    <div className={calStyles.backdrop} onClick={onClose}>
+      <div className={calStyles.modal} style={{ maxWidth: 520 }} onClick={(e) => e.stopPropagation()}>
+        <div className={calStyles.modalHeader}>
+          <span>Choose Backup Folder</span>
+          <button className={calStyles.closeBtn} onClick={onClose}>✕</button>
+        </div>
+        <div className={calStyles.modalBody}>
+          <div className={s.crumbBar}>
+            <button type="button" className={s.crumb} onClick={() => load('')} disabled={loading}>💻 This PC</button>
+            {crumbs.map((c, i) => (
+              <React.Fragment key={c.path}>
+                <span className={s.crumbSep}>›</span>
+                <button type="button" className={s.crumb} onClick={() => load(c.path)}
+                  disabled={loading || i === crumbs.length - 1}>{c.name}</button>
+              </React.Fragment>
+            ))}
+          </div>
+          {error && <p className={styles.error}>{error}</p>}
+          <div className={s.folderList}>
+            {loading ? (
+              <p className={s.folderEmpty}>Loading…</p>
+            ) : entries.length > 0 ? (
+              entries.map((entry) => (
+                <div key={entry.path} className={s.folderRow} onDoubleClick={() => load(entry.path)}
+                  onClick={() => load(entry.path)}>
+                  <span className={s.folderIcon}>{currentPath ? '📁' : '💾'}</span>
+                  <span>{entry.name}</span>
+                </div>
+              ))
+            ) : (
+              <p className={s.folderEmpty}>{currentPath ? 'No subfolders.' : 'No drives found.'}</p>
+            )}
+          </div>
+
+          {currentPath && (
+            newFolder ? (
+              <form onSubmit={createFolder} className={s.newFolderRow}>
+                <input className={styles.input} value={newFolderName} onChange={(e) => setNewFolderName(e.target.value)}
+                  placeholder="New folder name" autoFocus />
+                <button type="submit" className={styles.btnGhost} disabled={!newFolderName.trim()}>Create</button>
+                <button type="button" className={styles.btnGhost} onClick={() => { setNewFolder(false); setNewFolderName(''); }}>Cancel</button>
+              </form>
+            ) : (
+              <button type="button" className={styles.btnGhost} style={{ marginTop: 8, alignSelf: 'flex-start' }} onClick={() => setNewFolder(true)}>+ New Folder</button>
+            )
+          )}
+        </div>
+        <div className={calStyles.modalFooter} style={{ padding: '0.5rem 1.25rem 1.25rem' }}>
+          <button className={styles.btnGhost} onClick={onClose}>Cancel</button>
+          <button className={styles.btnPrimary} disabled={!currentPath} onClick={() => onSelect(currentPath)}>
+            Select This Folder
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Backups section ─────────────────────────────────────────────────────────────
+function BackupsSection() {
+  const { data, reload } = useApi('/backups');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [autoEnabled, setAutoEnabled] = useState(true);
+  const [intervalHours, setIntervalHours] = useState('24');
+  const [retentionCount, setRetentionCount] = useState('14');
+  const [backupDir, setBackupDir] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const fileRef = useRef();
+
+  useEffect(() => {
+    if (!data) return;
+    setAutoEnabled(data.settings.backup_auto_enabled);
+    setIntervalHours(String(data.settings.backup_interval_hours));
+    setRetentionCount(String(data.settings.backup_retention_count));
+    setBackupDir(data.settings.backup_dir || '');
+  }, [data]);
+
+  async function saveScheduleSettings(e) {
+    e.preventDefault(); setError(''); setNotice('');
+    try {
+      await apiFetch('/backups/settings', {
+        method: 'PUT',
+        body: JSON.stringify({
+          backup_auto_enabled: autoEnabled,
+          backup_interval_hours: intervalHours,
+          backup_retention_count: retentionCount,
+          backup_dir: backupDir,
+        }),
+      });
+      setNotice('Settings saved.'); setTimeout(() => setNotice(''), 2000);
+      reload();
+    } catch (err) { setError(err.message); }
+  }
+
+  function resetBackupDir() { setBackupDir(''); }
+
+  async function createNow() {
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await apiFetch('/backups', { method: 'POST' });
+      setNotice('Backup created.'); setTimeout(() => setNotice(''), 2000);
+      reload();
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+
+  async function restore(filename) {
+    if (!confirm(`Restore "${filename}"? This replaces all current data and uploaded files. A safety backup of the current state will be made first.`)) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await apiFetch(`/backups/${encodeURIComponent(filename)}/restore`, { method: 'POST' });
+      setNotice('Restore complete.'); setTimeout(() => setNotice(''), 3000);
+      reload();
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+
+  async function togglePin(filename, pinned) {
+    setError('');
+    try {
+      await apiFetch(`/backups/${encodeURIComponent(filename)}`, { method: 'PATCH', body: JSON.stringify({ pinned }) });
+      reload();
+    } catch (err) { setError(err.message); }
+  }
+
+  async function removeBackup(filename) {
+    if (!confirm(`Delete backup "${filename}"?`)) return;
+    try {
+      await apiFetch(`/backups/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+      reload();
+    } catch (err) { setError(err.message); }
+  }
+
+  function download(filename) {
+    const token = getToken();
+    fetch(`/api/backups/${encodeURIComponent(filename)}/download`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((res) => res.blob())
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+      });
+  }
+
+  async function uploadAndRestore(e) {
+    const file = e.target.files[0]; if (!file) return;
+    if (!confirm(`Restore from "${file.name}"? This replaces all current data and uploaded files. A safety backup of the current state will be made first.`)) {
+      e.target.value = ''; return;
+    }
+    setBusy(true); setError(''); setNotice('');
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const res = await fetch('/api/backups/restore-upload', {
+        method: 'POST', body: fd, headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      setNotice('Restore complete.'); setTimeout(() => setNotice(''), 3000);
+      reload();
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); e.target.value = ''; }
+  }
+
+  const backups = data?.backups || [];
+
+  return (
+    <>
+      <h2 className={styles.heading}>Backups</h2>
+      <p className={styles.hint}>Backs up settings, screens, calendars, and uploaded files (logo/backgrounds) into a single downloadable .zip.</p>
+
+      <form onSubmit={saveScheduleSettings} className={styles.settingsForm}>
+        <div className={styles.field}>
+          <label className={styles.label}>
+            <input type="checkbox" checked={autoEnabled} onChange={(e) => setAutoEnabled(e.target.checked)} style={{ marginRight: 8 }} />
+            Automatic backups
+          </label>
+        </div>
+        <div className={styles.field}>
+          <label className={styles.label}>Interval (hours)</label>
+          <input className={styles.input} type="number" min="0.25" step="0.25" value={intervalHours}
+            onChange={(e) => setIntervalHours(e.target.value)} style={{ width: 120 }} disabled={!autoEnabled} />
+        </div>
+        <div className={styles.field}>
+          <label className={styles.label}>Keep last N backups</label>
+          <input className={styles.input} type="number" min="1" step="1" value={retentionCount}
+            onChange={(e) => setRetentionCount(e.target.value)} style={{ width: 120 }} />
+        </div>
+        <div className={styles.field}>
+          <label className={styles.label}>Backup location</label>
+          <p className={styles.hint} style={{ marginBottom: 0 }}>
+            Folder on the server machine — e.g. an external drive or network share. Leave unset to use the default.
+          </p>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <code style={{ flex: 1, minWidth: 200 }}>{backupDir || `${data?.settings?.backup_dir_default || 'data/backups'} (default)`}</code>
+            <button type="button" className={styles.btnGhost} onClick={() => setPickerOpen(true)}>Choose Folder…</button>
+            {backupDir && <button type="button" className={styles.btnGhost} onClick={resetBackupDir}>Use Default</button>}
+          </div>
+          {data?.settings?.backup_dir_effective && (
+            <p className={styles.hint}>Currently saving to: <code>{data.settings.backup_dir_effective}</code></p>
+          )}
+        </div>
+
+        {pickerOpen && (
+          <FolderPickerModal
+            initialPath={backupDir || data?.settings?.backup_dir_default}
+            onClose={() => setPickerOpen(false)}
+            onSelect={(p) => { setBackupDir(p); setPickerOpen(false); }}
+          />
+        )}
+        {data?.settings?.last_backup_at && (
+          <p className={styles.hint}>Last backup: {new Date(data.settings.last_backup_at).toLocaleString()}</p>
+        )}
+        <div className={styles.formFooter}>
+          <button className={styles.btnPrimary} type="submit">Save Settings</button>
+          {notice && <span className={styles.savedMsg}>{notice}</span>}
+        </div>
+      </form>
+
+      <div className={styles.rowBetween} style={{ marginTop: '2rem' }}>
+        <h2 className={styles.heading} style={{ marginBottom: 0 }}>Backup History</h2>
+        <div className={styles.actions}>
+          <button className={styles.btnGhost} onClick={() => fileRef.current.click()} disabled={busy}>Restore from File…</button>
+          <button className={styles.btnPrimary} onClick={createNow} disabled={busy}>Back Up Now</button>
+        </div>
+      </div>
+      <input ref={fileRef} type="file" accept=".zip" style={{ display: 'none' }} onChange={uploadAndRestore} />
+      {error && <p className={styles.error}>{error}</p>}
+
+      {backups.length > 0 ? (
+        <table className={styles.table}>
+          <thead><tr><th>File</th><th>Size</th><th>Created</th><th></th></tr></thead>
+          <tbody>
+            {backups.map((b) => (
+              <tr key={b.filename}>
+                <td style={{ wordBreak: 'break-all' }}>
+                  {b.filename}
+                  {b.pinned && <span style={{ marginLeft: 8, fontSize: '0.75rem', background: 'var(--ice-blue)', color: '#fff', borderRadius: 4, padding: '1px 6px' }}>📌 Kept</span>}
+                </td>
+                <td>{formatBytes(b.size)}</td>
+                <td>{new Date(b.created_at).toLocaleString()}</td>
+                <td>
+                  <div className={styles.actions}>
+                    <button className={styles.btnGhost} onClick={() => download(b.filename)} disabled={busy}>Download</button>
+                    <button className={styles.btnGhost} onClick={() => restore(b.filename)} disabled={busy}>Restore</button>
+                    <button className={styles.btnGhost} onClick={() => togglePin(b.filename, !b.pinned)} disabled={busy}>
+                      {b.pinned ? 'Unpin' : 'Keep Permanently'}
+                    </button>
+                    <button className={styles.btnDanger} onClick={() => removeBackup(b.filename)} disabled={busy || b.pinned}
+                      title={b.pinned ? 'Unpin this backup before deleting' : undefined}>Delete</button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      ) : <p className={styles.muted}>No backups yet.</p>}
+    </>
+  );
+}
+
+// ── Updates section ─────────────────────────────────────────────────────────────
+function UpdatesSection() {
+  const { data, reload } = useApi('/updates');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [autoEnabled, setAutoEnabled] = useState(true);
+  const [checkMode, setCheckMode] = useState('interval');
+  const [intervalHours, setIntervalHours] = useState('24');
+  const [checkTime, setCheckTime] = useState('03:00');
+  const [autoInstallEnabled, setAutoInstallEnabled] = useState(false);
+  const [installTime, setInstallTime] = useState('03:30');
+
+  useEffect(() => {
+    if (!data) return;
+    setAutoEnabled(data.auto_check_enabled);
+    setCheckMode(data.check_mode || 'interval');
+    setIntervalHours(String(data.check_interval_hours));
+    setCheckTime(data.check_time || '03:00');
+    setAutoInstallEnabled(data.auto_install_enabled);
+    setInstallTime(data.install_time || '03:30');
+  }, [data]);
+
+  async function saveSettings(e) {
+    e.preventDefault(); setError(''); setNotice('');
+    try {
+      const body = {
+        update_check_enabled: autoEnabled,
+        update_check_mode: checkMode,
+        update_check_interval_hours: intervalHours,
+        update_check_time: checkTime,
+        update_auto_install_enabled: autoInstallEnabled,
+        update_install_time: installTime,
+      };
+      await apiFetch('/updates/settings', { method: 'PUT', body: JSON.stringify(body) });
+      setNotice('Settings saved.'); setTimeout(() => setNotice(''), 2000);
+      reload();
+    } catch (err) { setError(err.message); }
+  }
+
+  async function checkNow() {
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await apiFetch('/updates/check', { method: 'POST' });
+      setNotice('Checked for updates.'); setTimeout(() => setNotice(''), 2000);
+      reload();
+    } catch (err) { setError(err.message); }
+    finally { setBusy(false); }
+  }
+
+  async function installNow() {
+    if (!confirm(`Install version ${data.latest_version}? RinkScreens will restart automatically once the update is applied (usually under a minute). Your data (screens, displays, calendars, uploads) is not affected.`)) return;
+    setBusy(true); setError(''); setNotice('');
+    try {
+      await apiFetch('/updates/install', { method: 'POST' });
+      setNotice('Installing update — the server will restart shortly. This page will stop responding for a minute or two.');
+    } catch (err) { setError(err.message); setBusy(false); }
+  }
+
+  return (
+    <>
+      <h2 className={styles.heading}>Updates</h2>
+      <p className={styles.hint}>Checks GitHub for a newer version of RinkScreens and installs it in place. Installing an update never touches your data, screens, displays, calendars, or uploaded files.</p>
+
+      {data && (
+        <div className={styles.settingsForm} style={{ marginBottom: '1.5rem' }}>
+          <p className={styles.hint} style={{ marginBottom: 4 }}>Current version: <strong>{data.current_version}</strong></p>
+          {data.latest_version && (
+            <p className={styles.hint} style={{ marginBottom: 4 }}>
+              Latest available: <strong>{data.latest_version}</strong>{' '}
+              {data.update_available ? <span style={{ color: 'var(--ice-blue)', fontWeight: 600 }}>— update available</span> : '— you are up to date'}
+            </p>
+          )}
+          {data.checked_at && <p className={styles.hint} style={{ marginBottom: 4 }}>Last checked: {new Date(data.checked_at).toLocaleString()}</p>}
+          {data.auto_check_enabled && data.next_check_at && (
+            <p className={styles.hint} style={{ marginBottom: 4 }}>Next check: {new Date(data.next_check_at).toLocaleString()}</p>
+          )}
+          {data.auto_install_enabled && data.next_install_at && (
+            <p className={styles.hint} style={{ marginBottom: 4 }}>Next auto-install check: {new Date(data.next_install_at).toLocaleString()}</p>
+          )}
+          {data.last_install_at && <p className={styles.hint} style={{ marginBottom: 4 }}>Last installed: {new Date(data.last_install_at).toLocaleString()}</p>}
+          {data.check_error && <p className={styles.error}>{data.check_error}</p>}
+          {data.update_available && data.release_notes && (
+            <pre style={{ whiteSpace: 'pre-wrap', fontSize: '0.85rem', background: 'var(--ice-light)', padding: '0.75rem', borderRadius: 6, marginTop: 8 }}>{data.release_notes}</pre>
+          )}
+          <div className={styles.actions} style={{ marginTop: 8 }}>
+            <button className={styles.btnGhost} onClick={checkNow} disabled={busy}>Check Now</button>
+            {data.update_available && (
+              <button className={styles.btnPrimary} onClick={installNow} disabled={busy}>Install Update</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      <form onSubmit={saveSettings} className={styles.settingsForm}>
+        <div className={styles.field}>
+          <label className={styles.label}>
+            <input type="checkbox" checked={autoEnabled} onChange={(e) => setAutoEnabled(e.target.checked)} style={{ marginRight: 8 }} />
+            Automatically check for updates
+          </label>
+        </div>
+        <div className={styles.field}>
+          <label className={styles.label}>Check schedule</label>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <select className={styles.select} value={checkMode} onChange={(e) => setCheckMode(e.target.value)}>
+              <option value="interval">Every few hours</option>
+              <option value="daily">Daily at a specific time</option>
+            </select>
+            {checkMode === 'interval' ? (
+              <select className={s.hoursSelect} value={intervalHours} onChange={(e) => setIntervalHours(e.target.value)}>
+                <option value="1">1h</option>
+                <option value="3">3h</option>
+                <option value="6">6h</option>
+                <option value="12">12h</option>
+                <option value="24">24h</option>
+                <option value="48">48h</option>
+              </select>
+            ) : (
+              <input className={styles.input} type="time" value={checkTime}
+                onChange={(e) => setCheckTime(e.target.value)} style={{ width: 140 }} />
+            )}
+          </div>
+        </div>
+        <div className={styles.field}>
+          <label className={styles.label}>
+            <input type="checkbox" checked={autoInstallEnabled} onChange={(e) => setAutoInstallEnabled(e.target.checked)} style={{ marginRight: 8 }} />
+            Automatically install updates
+          </label>
+          <p className={styles.hint} style={{ marginBottom: 0 }}>
+            At the time below, checks for a newer version and installs it right away if one is available — no confirmation prompt. The server restarts during install (usually under a minute), so pick a time when the TVs being briefly offline won't matter.
+          </p>
+          <input className={styles.input} type="time" value={installTime}
+            onChange={(e) => setInstallTime(e.target.value)} style={{ width: 140 }} />
+        </div>
+        {error && <p className={styles.error}>{error}</p>}
+        <div className={styles.formFooter}>
+          <button className={styles.btnPrimary} type="submit">Save Settings</button>
+          {notice && <span className={styles.savedMsg}>{notice}</span>}
+        </div>
+      </form>
+    </>
+  );
+}
+
 // ── Admin section ──────────────────────────────────────────────────────────────
 function AdminSection() {
   const [pwCurrent, setPwCurrent] = useState('');
@@ -566,6 +1033,8 @@ export default function SettingsPage() {
       {active === 'Pricing'      && <PricingSection />}
       {active === 'Locker Rooms' && <LockerRoomsSection />}
       {active === 'Displays'     && <DisplaysSection />}
+      {active === 'Backups'      && <BackupsSection />}
+      {active === 'Updates'      && <UpdatesSection />}
       {active === 'Admin'        && <AdminSection />}
     </div>
   );

@@ -33,3 +33,84 @@
   cursor: default;
   border-radius: 4px 4px 0 0;
 }
+
+/* ── Updates ──────────────────────────────────────────────────────────── */
+
+.hoursSelect {
+  width: 4.5rem;
+  padding: 0.4rem 0.3rem;
+  font-size: 0.9rem;
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 6px;
+  background: #fff;
+}
+
+/* ── Folder picker ────────────────────────────────────────────────────── */
+
+.crumbBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+  background: var(--ice-light);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 6px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.85rem;
+  min-height: 1.4em;
+}
+
+.crumb {
+  background: none;
+  border: none;
+  color: var(--ice-blue);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+}
+
+.crumb:hover { background: rgba(0,0,0,0.06); text-decoration: underline; }
+.crumb:disabled { color: var(--text); cursor: default; text-decoration: none; }
+.crumb:disabled:hover { background: none; }
+
+.crumbSep { color: var(--muted); font-size: 0.8rem; }
+
+.folderList {
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  background: #fff;
+}
+
+.folderRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  border-bottom: 1px solid var(--ice-light);
+  user-select: none;
+}
+
+.folderRow:last-child { border-bottom: none; }
+.folderRow:hover { background: var(--ice-light); }
+
+.folderIcon { font-size: 1rem; opacity: 0.85; flex-shrink: 0; }
+
+.folderEmpty {
+  padding: 1.5rem 0.85rem;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.newFolderRow {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.7rem;
+}

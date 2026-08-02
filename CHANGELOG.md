@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.23.22] — 2026-08-02
+
+### Fixed
+- **"Open vs Open" still showed on the custom Events screen for games with no parseable matchup** — the 1.23.21 fix only caught calendars whose Event Type is explicitly set to "Open"; a game on a regular Team-Order hockey calendar with no "vs" in its title (e.g. a Stick & Shoot listed directly on that calendar) got blank home/away teams, which display as "Open" via the same fallback but weren't matched by the fix. Now any game with no real team names shows its title instead, regardless of which calendar/event-mode it came from.
+
 ## [1.23.21] — 2026-08-02
 
 ### Fixed

@@ -1,6 +1,6 @@
 .layout {
   display: grid;
-  grid-template-columns: 1fr 380px;
+  grid-template-columns: 1fr 520px;
   gap: 2rem;
   width: 100%;
   align-items: start;
@@ -73,15 +73,15 @@
 }
 
 .priceLabel {
-  padding: 0.9rem 1.2rem;
-  font-size: 1.3rem;
+  padding: 1.3rem 1.4rem;
+  font-size: 1.7rem;
   font-weight: 600;
   color: var(--ice-dark);
 }
 
 .priceAmount {
-  padding: 0.9rem 1.2rem;
-  font-size: 1.5rem;
+  padding: 1.3rem 1.4rem;
+  font-size: 2rem;
   font-weight: 800;
   color: var(--ice-blue);
   text-align: right;

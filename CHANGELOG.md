@@ -2,6 +2,31 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.23.27] — 2026-08-02
+
+### Fixed
+- **Public Skate date column was stretching to fill leftover table width** — `width: 1%` (shrink-to-content) was on the wrong column; moved it from the time column to the date column so the date is only as wide as its text and the time column fills the rest.
+
+## [1.23.26] — 2026-08-02
+
+### Fixed
+- **Public Skate session times were right-justified** — the time column shrank to fit its content via `width: 1%`, which left the text right-aligned within the tight cell; now explicitly left-aligned.
+
+## [1.23.25] — 2026-08-02
+
+### Changed
+- **Public Skate session list now uses a real table layout** — date and time are separate columns so times line up regardless of how long each date's text is (previously a flex row let long dates push the time out of alignment).
+
+## [1.23.24] — 2026-08-02
+
+### Changed
+- **Larger session date/time text on the Public Skate display** — increased from 1.2em/1.4em to 1.6em/1.9em to better match the size of other event list text.
+
+## [1.23.23] — 2026-08-02
+
+### Changed
+- **Larger, wider admission pricing table on the Public Skate display** — price labels/amounts increased in size and the pricing column widened for better visibility on TV screens.
+
 ## [1.23.22] — 2026-08-02
 
 ### Fixed

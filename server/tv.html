@@ -1256,7 +1256,10 @@ function renderScreenConfig(screen) {
             for (var k = 0; k < items.length; k++) {
               var it = items[k];
               var timeStr = fmtTime(it.start_time);
-              if (it.kind === 'game' && showLockerRooms) {
+              var isOpenGame = it.kind === 'game' && it.home_team === 'Open' && it.away_team === 'Open' && it.title;
+              if (isOpenGame) {
+                tbody += buildEventRow(timeStr, esc(it.title));
+              } else if (it.kind === 'game' && showLockerRooms) {
                 var calName = calMap[String(it.calendar_id)] || '';
                 tbody += buildLockerGameRow(timeStr, esc(calName),
                   teamInfo(teamMap, it.home_team), teamInfo(teamMap, it.away_team),

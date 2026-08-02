@@ -1,4 +1,4 @@
-# RinkScreens — v1.23.20
+# RinkScreens — v1.23.21
 
 Digital signage system for ice rinks. Pulls games from Google Calendar (iCal) and displays them on smart TVs around the facility. An admin panel on any local browser lets staff control what each screen shows and manage locker room assignments, pricing, and backgrounds.
 
@@ -135,6 +135,8 @@ Events are imported if they start within the last 12 hours through the next 30 d
 | Calendar's Event Type is set to "Open" | Full raw title, even if it contains a colon | `Open` | `Open` |
 
 Each Hockey calendar has an **Event Type** setting: **Team Order** (the rules above parse home/away from the title) or **Open** (every event on that calendar gets `Open`/`Open` regardless of title, for calendars like practices or stick & shoot where there are no teams).
+
+On the combined "custom" Events TV screen, an Open-type game displays its title (e.g. "Stick & Shoot") instead of "Open vs Open". Hockey-specific screens (Game Board) still show the Away/Home columns as `Open`/`Open`.
 
 ### NCWHL calendar special rules
 Calendars with "NCWHL" in the name use a different parsing strategy:

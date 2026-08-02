@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.23.21] — 2026-08-02
+
+### Fixed
+- **Non-hockey TV displays showed "Open vs Open" for events like Stick & Shoot** — calendars set to "Open" event mode (pickup, practice, stick & shoot) have no real teams, so the combined "custom" Events screen now shows the event's title (e.g. "Stick & Shoot") instead of the placeholder team matchup. Hockey-specific screens (Game Board) are unchanged and still show Home/Away columns.
+
 ## [1.23.20] — 2026-08-01
 
 ### Fixed

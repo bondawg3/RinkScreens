@@ -525,7 +525,18 @@ function updatePreviewPageControls() {
 // In live mode, schedules the next page flip for whenever the current page's
 // last event actually ends (falling back to rotateIntervalSec if unknown),
 // with a small floor so back-to-back short pages don't flash by.
+//
+// Pages are built in start-time order, so the last page is always
+// chronologically last. Rotation must stop there instead of wrapping back to
+// page 0 — otherwise, once every page's games are in the past, each flip's
+// endTime is already behind "now", waitMs keeps flooring to the 3s minimum,
+// and the display cycles through all pages every few seconds forever (visible
+// as rapid bouncing). Wrapping only makes sense while the page we'd wrap to
+// hasn't happened yet, which never applies here once the day is fully spent.
 function scheduleNextPagedFlip(rotateIntervalSec) {
+  var n = PAGED_STATE.pageHtmls.length;
+  if (PAGED_STATE.pageIdx >= n - 1) return; // last page — hold until new data arrives via poll
+
   var intervalMs = (rotateIntervalSec || 30) * 1000;
   var endTime = PAGED_STATE.pageEndTimes ? PAGED_STATE.pageEndTimes[PAGED_STATE.pageIdx] : 0;
   var waitMs = intervalMs;
@@ -534,8 +545,7 @@ function scheduleNextPagedFlip(rotateIntervalSec) {
     if (waitMs < 3000) waitMs = 3000;
   }
   pagedContentTimer = setTimeout(function() {
-    var n = PAGED_STATE.pageHtmls.length;
-    showPagedIndex((PAGED_STATE.pageIdx + 1) % n);
+    showPagedIndex(PAGED_STATE.pageIdx + 1);
     scheduleNextPagedFlip(rotateIntervalSec);
   }, waitMs);
 }

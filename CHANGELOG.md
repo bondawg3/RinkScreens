@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.23.29] — 2026-08-02
+
+### Fixed
+- **Games/schedule screens still bounced rapidly between pages after the previous fix** — page rotation wrapped from the last page back to page 1 unconditionally. Once every page's games were in the past, each flip's scheduled end time was already behind "now", so the wait time kept flooring to 3 seconds and the display cycled through all pages every few seconds. Rotation now stops on the last (chronologically final) page instead of wrapping around, and only advances again once fresh data arrives from the next poll.
+
 ## [1.23.28] — 2026-08-02
 
 ### Fixed

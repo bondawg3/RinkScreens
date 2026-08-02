@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.23.28] — 2026-08-02
+
+### Fixed
+- **Games/schedule screens were bouncing back and forth between pages instead of only rotating when the last listed game ended** — the periodic 60-second background poll re-rendered the paged content from scratch every time, which always reset the display back to page 1 and restarted the rotation timer, even mid-rotation. Now a poll that produces the same pages leaves the current page and its in-flight rotation timer alone.
+
 ## [1.23.27] — 2026-08-02
 
 ### Fixed

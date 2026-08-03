@@ -248,9 +248,15 @@ async function installUpdate() {
   const st = new Date(Date.now() + 60_000);
   const startTime = `${String(st.getHours()).padStart(2, '0')}:${String(st.getMinutes()).padStart(2, '0')}`;
 
+  // /RU + /IT force "run only when this user is logged on" (interactive
+  // token), which needs no stored password — without it, schtasks' default
+  // logon type can require one, which fails with "Access is denied" on an
+  // account signed in via PIN/Windows Hello instead of a traditional password.
+  const runAsUser = process.env.USERNAME || '';
+
   execFileSync('schtasks', [
     '/Create', '/TN', UPDATE_TASK_NAME, '/TR', `"${wrapperPath}"`,
-    '/SC', 'ONCE', '/ST', startTime, '/F',
+    '/SC', 'ONCE', '/ST', startTime, '/RU', runAsUser, '/IT', '/F',
   ]);
   execFileSync('schtasks', ['/Run', '/TN', UPDATE_TASK_NAME]);
 

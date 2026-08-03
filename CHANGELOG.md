@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.23.33] — 2026-08-02
+
+### Fixed
+- **Installing an update failed with "Access is denied" on accounts signed in via PIN/Windows Hello** — the scheduled task the installer registers to apply the update didn't specify a logon type, so schtasks could default to one requiring a stored password. A PIN-only account has no such password to store, so task creation failed outright. The task is now explicitly created with "run only when this user is logged on" (`/RU` + `/IT`), which needs no stored password.
+
 ## [1.23.32] — 2026-08-02
 
 ### Changed

@@ -1065,10 +1065,13 @@ function fitTable() {
 
 // ── Load data ──────────────────────────────────────────────────────────────
 function loadScreen() {
-  // Stop timers from the previous render — a screen switched away from
-  // games/figure-skating rotation or a webpage must not keep its old timer firing
-  if (pagedContentTimer) { clearTimeout(pagedContentTimer); pagedContentTimer = null; }
-  PAGED_STATE.pageHtmls = null;
+  // Stop timers from the previous render — a screen switched away from a
+  // webpage must not keep its old refresh timer firing. games/figure-skating
+  // rotation state (PAGED_STATE, pagedContentTimer) is intentionally left
+  // alone here: renderPagedContent() re-derives it every poll and only resets
+  // when the pages actually changed, so clearing it unconditionally on every
+  // 60s poll would force a page-0 reset + immediate re-flip every time,
+  // which is exactly the bouncing this was supposed to fix.
   updatePreviewPageControls();
   if (webpageTimer) { clearTimeout(webpageTimer); webpageTimer = null; }
   if (boundaryTimer) { clearTimeout(boundaryTimer); boundaryTimer = null; }
@@ -1120,6 +1123,17 @@ function renderScreenConfig(screen) {
     contentEl.style.padding = '';
 
     var dtype = screen.display_type;
+
+    // games/figure_skating manage PAGED_STATE + pagedContentTimer themselves
+    // via renderPagedContent() (which only resets on an actual content
+    // change). Any other screen type doesn't use paged rotation at all, so
+    // clear it here — otherwise a stale flip could fire later and overwrite
+    // this screen's content with an old games/figure-skating page.
+    if (dtype !== 'games' && dtype !== 'figure_skating') {
+      if (pagedContentTimer) { clearTimeout(pagedContentTimer); pagedContentTimer = null; }
+      PAGED_STATE.pageHtmls = null;
+      updatePreviewPageControls();
+    }
 
     if (dtype === 'games') {
       getAll(['/api/games', '/api/calendars', '/api/leagues'], function(results) {

@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.23.30] — 2026-08-02
+
+### Fixed
+- **Found the actual cause of the games/schedule screen bouncing (v1.23.28/29 didn't fully fix it)** — `loadScreen()`, which runs on every 60-second poll, was unconditionally clearing the paged-rotation state (`PAGED_STATE.pageHtmls = null`) before every re-render, regardless of screen type. That defeated the "skip reset if pages are unchanged" guard added in v1.23.28, so every single poll still reset to page 1 and immediately re-flipped to the last page. That clear is now scoped to only run when switching to a screen type that isn't games/figure-skating, so paged rotation state survives repeated polls of the same screen. Verified live: zero unwanted page flips across multiple 60s poll cycles (previously flipped every cycle).
+
 ## [1.23.29] — 2026-08-02
 
 ### Fixed

@@ -819,58 +819,92 @@ function buildGamesRows(pageGames, calMap, teamMap, showLockerRooms) {
   return tbody;
 }
 
-// Games/practices/stick-&-shoot etc. for the day, grouped by calendar. Split
-// into pages at any natural gap in the schedule (e.g. an afternoon public
-// skate), falling back to a fixed chunk size when a page is still too big —
-// and those pages rotate automatically, timed to when each page's games end.
-var GAMES_PER_PAGE = 6;
-var GAMES_GAP_SPLIT_MS = 60 * 60 * 1000; // 60 minutes
+// Games/practices/stick-&-shoot etc. for the day, grouped by calendar — one
+// screen if the whole day fits within GAMES_PER_PAGE, otherwise split along
+// calendar boundaries (never mid-calendar, except a single block bigger than
+// the cap on its own, which is the only thing that gets chunked) and divided
+// into as few pages as the cap requires, sized as evenly as possible rather
+// than packing each page to the brim. Pages rotate automatically, timed to
+// when each page's games end.
+var GAMES_PER_PAGE = 5;
+
+// Fewest groups `chunks` can be cut into, in order, with no group exceeding
+// `threshold`. Used to test candidate thresholds during the balance search
+// below, and to do the final cut once the best threshold is found.
+function packGroupCount(chunks, threshold) {
+  var count = 1, size = 0;
+  for (var i = 0; i < chunks.length; i++) {
+    if (size + chunks[i].length > threshold) {
+      count++;
+      size = chunks[i].length;
+    } else {
+      size += chunks[i].length;
+    }
+  }
+  return count;
+}
 
 function splitGamesIntoPages(games) {
-  var splitIdxs = [];
-  for (var i = 0; i < games.length - 1; i++) {
-    var endCur = new Date(games[i].end_time || games[i].start_time).getTime();
-    var startNext = new Date(games[i + 1].start_time).getTime();
-    if (startNext - endCur >= GAMES_GAP_SPLIT_MS) splitIdxs.push(i + 1);
-  }
-
-  var pages = [];
-  if (splitIdxs.length) {
-    var start = 0;
-    for (var s = 0; s < splitIdxs.length; s++) {
-      pages.push(games.slice(start, splitIdxs[s]));
-      start = splitIdxs[s];
-    }
-    pages.push(games.slice(start));
-  } else {
-    pages = [games];
-  }
-
-  // Two (or more) consecutive small pages (<=2 games each) get merged into one
-  // page rather than each flashing by on its own screen.
-  var mergedPages = [];
-  for (var m = 0; m < pages.length; m++) {
-    var last = mergedPages.length ? mergedPages[mergedPages.length - 1] : null;
-    if (last && last.length <= 2 && pages[m].length <= 2) {
-      mergedPages[mergedPages.length - 1] = last.concat(pages[m]);
+  // Group consecutive games sharing the same calendar so a page never breaks
+  // up a calendar's block of games.
+  var groups = [];
+  for (var i = 0; i < games.length; i++) {
+    var key = games[i].calendar_id ? String(games[i].calendar_id) : '__none__';
+    var prev = groups.length ? groups[groups.length - 1] : null;
+    if (prev && prev.key === key) {
+      prev.games.push(games[i]);
     } else {
-      mergedPages.push(pages[m]);
+      groups.push({ key: key, games: [games[i]] });
     }
   }
 
-  // A page can still come out much bigger than GAMES_PER_PAGE (or no gap
-  // existed at all) — further split any oversized page by fixed count.
-  var finalPages = [];
-  for (var p = 0; p < mergedPages.length; p++) {
-    if (mergedPages[p].length > GAMES_PER_PAGE) {
-      for (var j = 0; j < mergedPages[p].length; j += GAMES_PER_PAGE) {
-        finalPages.push(mergedPages[p].slice(j, j + GAMES_PER_PAGE));
+  // A calendar block bigger than GAMES_PER_PAGE can't fit on one page even by
+  // itself — chunk it by fixed size so every group is packable below.
+  var chunks = [];
+  for (var g = 0; g < groups.length; g++) {
+    var gg = groups[g].games;
+    if (gg.length > GAMES_PER_PAGE) {
+      for (var c = 0; c < gg.length; c += GAMES_PER_PAGE) {
+        chunks.push(gg.slice(c, c + GAMES_PER_PAGE));
       }
     } else {
-      finalPages.push(mergedPages[p]);
+      chunks.push(gg);
     }
   }
-  return finalPages;
+  if (!chunks.length) return [];
+
+  // k = fewest pages the cap allows (can't do better than this). Binary
+  // search the smallest per-page size limit that still fits within k pages —
+  // that gives the most even split rather than always filling a page to the
+  // cap before starting the next one.
+  var total = 0, maxChunk = 0;
+  for (var m = 0; m < chunks.length; m++) {
+    total += chunks[m].length;
+    if (chunks[m].length > maxChunk) maxChunk = chunks[m].length;
+  }
+  var k = Math.ceil(total / GAMES_PER_PAGE);
+  var lo = maxChunk, hi = GAMES_PER_PAGE;
+  while (lo < hi) {
+    var mid = Math.floor((lo + hi) / 2);
+    if (packGroupCount(chunks, mid) <= k) hi = mid; else lo = mid + 1;
+  }
+  var threshold = lo;
+
+  // Cut using that threshold.
+  var pages = [];
+  var current = [];
+  var size = 0;
+  for (var p = 0; p < chunks.length; p++) {
+    if (current.length && size + chunks[p].length > threshold) {
+      pages.push(current);
+      current = [];
+      size = 0;
+    }
+    current = current.concat(chunks[p]);
+    size += chunks[p].length;
+  }
+  if (current.length) pages.push(current);
+  return pages;
 }
 
 function renderGames(screen, games, calMap, teamMap, prices, showLockerRooms) {
@@ -896,16 +930,19 @@ function renderGames(screen, games, calMap, teamMap, prices, showLockerRooms) {
 
   var pages = splitGamesIntoPages(games);
   var pageHtmls = pages.map(pageHtml);
-  var pageEndTimes = pages.map(function(pageGames) {
-    var maxEnd = 0;
+  // Flip 30 minutes after the last-starting game on the page begins, not
+  // when it ends — by the time the last game on a page is under way, the
+  // next page's games are the more useful thing on screen.
+  var pageFlipTimes = pages.map(function(pageGames) {
+    var maxStart = 0;
     for (var i = 0; i < pageGames.length; i++) {
-      var e = new Date(pageGames[i].end_time || pageGames[i].start_time).getTime();
-      if (e > maxEnd) maxEnd = e;
+      var s = new Date(pageGames[i].start_time).getTime();
+      if (s > maxStart) maxStart = s;
     }
-    return maxEnd;
+    return maxStart + 30 * 60 * 1000;
   });
 
-  renderPagedContent(bannerHtml, pageHtmls, pageEndTimes, screen.rotate_interval);
+  renderPagedContent(bannerHtml, pageHtmls, pageFlipTimes, screen.rotate_interval);
 }
 
 function renderSkate(sessions, prices, heading) {
@@ -1070,14 +1107,14 @@ function loadScreen() {
   // rotation state (PAGED_STATE, pagedContentTimer) is intentionally left
   // alone here: renderPagedContent() re-derives it every poll and only resets
   // when the pages actually changed, so clearing it unconditionally on every
-  // 60s poll would force a page-0 reset + immediate re-flip every time,
-  // which is exactly the bouncing this was supposed to fix.
+  // poll would force a page-0 reset + immediate re-flip every time, which is
+  // exactly the bouncing this was supposed to fix.
   updatePreviewPageControls();
   if (webpageTimer) { clearTimeout(webpageTimer); webpageTimer = null; }
   if (boundaryTimer) { clearTimeout(boundaryTimer); boundaryTimer = null; }
   if (annoClockTimer) { clearInterval(annoClockTimer); annoClockTimer = null; }
   if (reloadTimer) { clearInterval(reloadTimer); }
-  reloadTimer = setInterval(loadScreen, 60000);
+  reloadTimer = setInterval(loadScreen, 300000);
 
   if (DISPLAY_ID) {
     // Physical display: the server resolves the schedule to one screen config

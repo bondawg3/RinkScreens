@@ -2,6 +2,17 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.23.32] — 2026-08-02
+
+### Changed
+- **Games/schedule screens poll for new data every 5 minutes instead of every 60 seconds** — the periodic background re-fetch was more frequent than needed; a WebSocket push already triggers an immediate reload whenever a calendar sync actually finds changes, so the periodic poll is just a fallback and didn't need to run every minute.
+- **Games/schedule page rotation now flips 30 minutes after the last game on a page starts, not when it ends** — a page used to stay up until its last-listed game's end time, which could leave a mostly-over page on screen well after the next page's games were relevant. It now advances 30 minutes after that last game begins.
+
+## [1.23.31] — 2026-08-02
+
+### Changed
+- **Reworked how games/schedule screens split into pages** — pages now split strictly along calendar boundaries (never mid-calendar, e.g. never splitting a league's back-to-back games across two screens) instead of using a time-gap heuristic. A day is divided into the fewest screens the 5-game-per-page cap allows, sized as evenly as possible (e.g. 3 games / 4 games rather than always filling one page to the cap and leaving a small leftover on another). The only case a calendar's block of games gets split is when that single calendar has more than 5 games in a day, which is chunked into fixed pieces since it can't fit on one screen regardless.
+
 ## [1.23.30] — 2026-08-02
 
 ### Fixed

@@ -391,8 +391,9 @@ header {
 </div>
 <div id="tv-viewport">
   <div id="tv-canvas">
-    <div class="bg" id="bg"></div>
-    <div class="overlay"></div>
+    <div class="bg" id="bg-color"></div>
+    <div class="bg" id="bg-image"></div>
+    <div class="overlay" id="overlay"></div>
     <header>
       <span class="rink-name" id="rink-name">Ice Rink</span>
       <span class="date" id="date"></span>
@@ -421,6 +422,7 @@ var pagedContentTimer = null; // games/figure-skating page rotation (shared, see
 var reloadTimer = null;   // periodic full reload
 var webpageTimer = null;  // webpage iframe refresh
 var boundaryTimer = null; // one-shot re-fetch at the next schedule block boundary
+var rssRotateTimer = null; // RSS slide rotation
 // Shared state for multi-page content (games, figure skating). pageEndTimes[i]
 // is the ms timestamp when page i's last event ends, used to time live
 // rotation; in preview mode rotation is manual via the pb-page-nav controls.
@@ -507,6 +509,7 @@ function showPagedIndex(idx) {
   PAGED_STATE.pageIdx = idx;
   document.getElementById('content').innerHTML = PAGED_STATE.bannerHtml + PAGED_STATE.pageHtmls[idx];
   fitTable();
+  fitTextBoxes();
   updatePreviewPageControls();
 }
 
@@ -581,6 +584,40 @@ function renderPagedContent(bannerHtml, pageHtmls, pageEndTimes, rotateIntervalS
 
   if (pageHtmls.length > 1 && !IS_PREVIEW) {
     scheduleNextPagedFlip(rotateIntervalSec);
+  }
+}
+
+// RSS slides rotate on a fixed interval and loop back to slide 0 (unlike
+// games/figure-skating pages, which hold at the last page) — a feed screen
+// has no "last item of the day" to stop at.
+function scheduleNextRssFlip(rotateIntervalSec) {
+  var n = PAGED_STATE.pageHtmls.length;
+  if (n <= 1) return;
+  rssRotateTimer = setTimeout(function() {
+    showPagedIndex((PAGED_STATE.pageIdx + 1) % n);
+    scheduleNextRssFlip(rotateIntervalSec);
+  }, (rotateIntervalSec || 8) * 1000);
+}
+
+// Same "don't reset on an unchanged poll" guard as renderPagedContent (see
+// its comment) — periodic polling re-derives pageHtmls every ~5min even when
+// the feed hasn't changed, so only reset to slide 0 / restart the flip timer
+// when the content actually changed.
+function renderRssPages(pageHtmls, rotateIntervalSec) {
+  if (samePages(PAGED_STATE.pageHtmls, pageHtmls) && rssRotateTimer) {
+    PAGED_STATE.pageHtmls = pageHtmls;
+    updatePreviewPageControls();
+    return;
+  }
+
+  if (rssRotateTimer) { clearTimeout(rssRotateTimer); rssRotateTimer = null; }
+  PAGED_STATE.bannerHtml = '';
+  PAGED_STATE.pageEndTimes = null;
+  PAGED_STATE.pageHtmls = pageHtmls;
+  showPagedIndex(0);
+
+  if (pageHtmls.length > 1 && !IS_PREVIEW) {
+    scheduleNextRssFlip(rotateIntervalSec);
   }
 }
 
@@ -661,6 +698,225 @@ function esc(v) {
   return String(v == null ? '' : v)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function hexToRgba(hex, alphaPct) {
+  if (!hex) return 'transparent';
+  var h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map(function(c) { return c + c; }).join('');
+  var r = parseInt(h.substring(0, 2), 16) || 0;
+  var g = parseInt(h.substring(2, 4), 16) || 0;
+  var b = parseInt(h.substring(4, 6), 16) || 0;
+  var a = (alphaPct == null ? 100 : alphaPct) / 100;
+  return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+}
+
+// Each RSS template carries its own background (color + optional image),
+// independent of the other templates it cycles with — rendered as a full-
+// bleed layer prepended to that template's slide HTML, rather than the
+// screen-wide #bg-color/#bg-image layers used by other screen types.
+function renderTemplateBackground(tmpl) {
+  var html = '<div style="position:absolute;top:0;left:0;right:0;bottom:0;' +
+    'background-color:' + (tmpl.bgColor ? hexToRgba(tmpl.bgColor, tmpl.bgColorAlpha) : 'transparent') + ';"></div>';
+  if (tmpl.bgFilename) {
+    html += '<div style="position:absolute;top:0;left:0;right:0;bottom:0;' +
+      'background-image:url(/uploads/' + esc(tmpl.bgFilename) + ');background-size:cover;background-position:center;' +
+      'opacity:' + ((tmpl.bgOpacity != null ? tmpl.bgOpacity : 100) / 100) + ';"></div>';
+  }
+  return html;
+}
+
+// Builds absolutely-positioned slide markup from a canvas-editor elements
+// array (shared by the announcement and rss screen types — a "slide" is just
+// {elements}). tokenValues, when given, substitutes {{token}} in text
+// elements' text and swaps an image element's src when its filename is the
+// literal string "{{image}}" (rss item has no image), so the announcement
+// canvas editor can be reused verbatim for RSS layouts.
+function renderSlideElements(elements, tokenValues) {
+  function sub(str) {
+    if (!tokenValues) return str || '';
+    return String(str || '').replace(/\{\{(\w+)\}\}/g, function(m, key) {
+      return Object.prototype.hasOwnProperty.call(tokenValues, key) ? tokenValues[key] : '';
+    });
+  }
+  var html = '';
+  for (var ai = 0; ai < elements.length; ai++) {
+    var ae = elements[ai];
+    if (ae.type === 'text') {
+      if (ae.boxWidth && ae.boxHeight) {
+        // Bounding-box text: fixed frame, font-size auto-shrinks (via
+        // fitTextBoxes(), run after this HTML lands in the DOM) until the
+        // wrapped text fits — wrapping onto more lines first if the box is
+        // tall enough, shrinking further once wrapping alone isn't enough.
+        var boxJustify = ae.boxJustify === 'top' ? 'flex-start' : ae.boxJustify === 'bottom' ? 'flex-end' : 'center';
+        var boxPadding = Number(ae.boxPadding) || 0;
+        var boxOuterStyle = 'position:absolute;left:' + Number(ae.x) + '%;top:' + Number(ae.y) + '%;' +
+          'width:' + Number(ae.boxWidth) + '%;height:' + Number(ae.boxHeight) + '%;' +
+          'transform:translate(-50%,-50%);' +
+          'background:' + (ae.boxColor ? hexToRgba(ae.boxColor, ae.boxAlpha) : 'transparent') + ';' +
+          'box-sizing:border-box;padding:' + boxPadding + 'px;' +
+          'overflow:hidden;pointer-events:none;';
+        if (ae.lines && ae.lines.length) {
+          // Multiple independently-styled stacked lines (a "mail merge"
+          // composite — e.g. a bold title line, then a smaller date line
+          // below it). The whole stack shrinks together via one scale
+          // factor in fitTextBoxes(), preserving each line's size relative
+          // to the others, rather than each line fitting itself alone.
+          var linesHtml = '';
+          for (var li = 0; li < ae.lines.length; li++) {
+            var ln = ae.lines[li];
+            if (ln.type === 'rule') {
+              var ruleAlign = ln.align === 'left' ? 'flex-start' : ln.align === 'right' ? 'flex-end' : 'center';
+              linesHtml += '<div data-base-size="' + (ln.thickness || 4) + '" data-rule="1" style="' +
+                'width:' + (ln.widthPct != null ? ln.widthPct : 100) + '%;' +
+                'height:' + (ln.thickness || 4) + 'px;' +
+                'align-self:' + ruleAlign + ';' +
+                'background:' + esc(ln.color || '#fff') + ';flex-shrink:0;' +
+                '"></div>';
+            } else {
+              linesHtml += '<span data-base-size="' + (ln.size || 48) + '" style="' +
+                'color:' + esc(ln.color || '#fff') + ';' +
+                'font-family:' + esc(ln.font || 'Arial') + ',sans-serif;' +
+                'font-size:' + (ln.size || 48) + 'px;' +
+                'font-weight:' + (ln.bold ? 'bold' : 'normal') + ';' +
+                'text-align:' + esc(ln.align || 'left') + ';' +
+                'white-space:pre-wrap;overflow-wrap:break-word;line-height:1.2;width:100%;display:block;' +
+                '">' + esc(sub(ln.text)) + '</span>';
+            }
+          }
+          var lineSpacing = Number(ae.lineSpacing) || 0;
+          html += '<div class="slide-textbox" data-padding="' + boxPadding + '" style="' +
+            boxOuterStyle + 'display:flex;flex-direction:column;justify-content:' + boxJustify + ';' +
+            '"><div class="slide-textbox-stack" style="display:flex;flex-direction:column;gap:' + lineSpacing + 'px;">' + linesHtml + '</div></div>';
+        } else {
+          html += '<div class="slide-textbox" data-padding="' + boxPadding + '" style="' +
+            boxOuterStyle + 'display:flex;align-items:' + boxJustify + ';' +
+            '"><span class="slide-textbox-inner" data-base-size="' + (ae.size || 48) + '" style="' +
+            'color:' + esc(ae.color || '#fff') + ';' +
+            'font-family:' + esc(ae.font || 'Arial') + ',sans-serif;' +
+            'font-size:' + (ae.size || 48) + 'px;' +
+            'font-weight:' + (ae.bold ? 'bold' : 'normal') + ';' +
+            'text-align:' + esc(ae.align || 'left') + ';' +
+            'white-space:pre-wrap;overflow-wrap:break-word;line-height:1.2;width:100%;display:block;' +
+            '">' + esc(sub(ae.text)) + '</span></div>';
+        }
+      } else {
+        html += '<div style="' +
+          'position:absolute;left:' + Number(ae.x) + '%;top:' + Number(ae.y) + '%;' +
+          'transform:translate(-50%,-50%);' +
+          'width:max-content;' +
+          'color:' + esc(ae.color || '#fff') + ';' +
+          'font-family:' + esc(ae.font || 'Arial') + ',sans-serif;' +
+          'font-size:' + (ae.size || 48) + 'px;' +
+          'font-weight:' + (ae.bold ? 'bold' : 'normal') + ';' +
+          'text-align:' + esc(ae.align || 'left') + ';' +
+          'white-space:pre-wrap;line-height:1.2;pointer-events:none;' +
+          '">' + esc(sub(ae.text)) + '</div>';
+      }
+    } else if (ae.type === 'image') {
+      var isFeedImg = ae.filename === '{{image}}';
+      var src = isFeedImg
+        ? (tokenValues && tokenValues.image ? tokenValues.image : '')
+        : ('/uploads/' + esc(ae.filename));
+      if (!src) continue;
+      var w = Number(ae.width) || 25;
+      if (isFeedImg) {
+        // Feed images differ every rotation, so instead of stretching to fit
+        // they're cropped to a fixed box via object-fit:cover, anchored on a
+        // focal point (auto-detected server-side, or a manual override) so
+        // the interesting part of the image stays visible instead of an
+        // arbitrary center-crop.
+        var h = Number(ae.height) || Math.round(w * 60) / 100;
+        // 'cover' crops the image to fill the box (using the focal point);
+        // 'contain' scales the whole image down to fit inside the box
+        // instead, letterboxing rather than cropping anything away.
+        var fitMode = ae.fitMode === 'contain' ? 'contain' : 'cover';
+        var fx = ae.autoFocal === false ? (Number(ae.focalX) || 50) : (tokenValues && tokenValues.focalX != null ? tokenValues.focalX : 50);
+        var fy = ae.autoFocal === false ? (Number(ae.focalY) || 50) : (tokenValues && tokenValues.focalY != null ? tokenValues.focalY : 50);
+        var imgBorder = ae.borderWidth ? (Number(ae.borderWidth) + 'px solid ' + esc(ae.borderColor || '#fff')) : 'none';
+        html += '<div style="' +
+          'position:absolute;left:' + Number(ae.x) + '%;top:' + Number(ae.y) + '%;' +
+          'width:' + w + '%;height:' + h + '%;overflow:hidden;' +
+          'border:' + imgBorder + ';box-sizing:border-box;' +
+          'transform:translate(-50%,-50%);pointer-events:none;">' +
+          '<img src="' + esc(src) + '" style="width:100%;height:100%;object-fit:' + fitMode + ';' +
+          (fitMode === 'cover' ? ('object-position:' + fx + '% ' + fy + '%;') : '') +
+          'display:block;" alt="" />' +
+          '</div>';
+      } else {
+        var staticBorder = ae.borderWidth ? (Number(ae.borderWidth) + 'px solid ' + esc(ae.borderColor || '#fff')) : 'none';
+        html += '<img src="' + esc(src) + '" style="' +
+          'position:absolute;left:' + Number(ae.x) + '%;top:' + Number(ae.y) + '%;' +
+          'width:' + w + '%;box-sizing:border-box;border:' + staticBorder + ';' +
+          'transform:translate(-50%,-50%);pointer-events:none;" alt="" />';
+      }
+    } else if (ae.type === 'datetime') {
+      html += '<div class="anno-datetime" data-format="' + esc(ae.format || 'datetime') + '" data-seconds="' + (ae.showSeconds ? '1' : '0') + '" style="' +
+        'position:absolute;left:' + Number(ae.x) + '%;top:' + Number(ae.y) + '%;' +
+        'transform:translate(-50%,-50%);' +
+        'width:max-content;' +
+        'color:' + esc(ae.color || '#fff') + ';' +
+        'font-family:' + esc(ae.font || 'Arial') + ',sans-serif;' +
+        'font-size:' + (ae.size || 48) + 'px;' +
+        'font-weight:' + (ae.bold ? 'bold' : 'normal') + ';' +
+        'text-align:' + esc(ae.align || 'left') + ';' +
+        'white-space:pre;line-height:1.2;pointer-events:none;' +
+        '"></div>';
+    }
+  }
+  return html;
+}
+
+// Shrinks each bounding-box text element's font size until its (possibly
+// wrapped) content fits the box, or a floor is hit — run after any slide
+// HTML containing .slide-textbox elements is attached to the DOM, since it
+// needs real layout measurements (scrollWidth/scrollHeight).
+function fitTextBoxes() {
+  var boxes = document.getElementsByClassName('slide-textbox');
+  for (var i = 0; i < boxes.length; i++) {
+    var box = boxes[i];
+    var padding = Number(box.getAttribute('data-padding')) || 0;
+    // box.clientWidth/Height include the padding (box-sizing: border-box),
+    // so the space actually available to the content is that minus padding.
+    var availW = box.clientWidth - padding * 2;
+    var availH = box.clientHeight - padding * 2;
+
+    var stack = box.getElementsByClassName('slide-textbox-stack')[0];
+    if (stack) {
+      // Multi-line composite: shrink all lines together via one scale
+      // factor (applied to each line's own base size) so a title stays
+      // visually bigger than a subtitle even as both shrink, rather than
+      // each line independently fitting itself to the box.
+      var lineEls = stack.children;
+      var baseSizes = [];
+      for (var li = 0; li < lineEls.length; li++) baseSizes.push(Number(lineEls[li].getAttribute('data-base-size')) || 48);
+      var apply = function(scale) {
+        for (var k = 0; k < lineEls.length; k++) {
+          var val = Math.max(1, Math.round(baseSizes[k] * scale));
+          if (lineEls[k].getAttribute('data-rule')) lineEls[k].style.height = val + 'px';
+          else lineEls[k].style.fontSize = val + 'px';
+        }
+      };
+      var scale = 1;
+      apply(scale);
+      var minScale = 0.15;
+      while (scale > minScale && (stack.scrollHeight > availH || stack.scrollWidth > availW)) {
+        scale -= 0.02;
+        apply(scale);
+      }
+      continue;
+    }
+
+    var span = box.getElementsByClassName('slide-textbox-inner')[0];
+    if (!span) continue;
+    var size = Number(span.getAttribute('data-base-size')) || 48;
+    span.style.fontSize = size + 'px';
+    var minSize = 8;
+    while (size > minSize && (span.scrollHeight > availH || span.scrollWidth > availW)) {
+      size -= 2;
+      span.style.fontSize = size + 'px';
+    }
+  }
 }
 
 function fmtTime(iso) {
@@ -1104,11 +1360,12 @@ function fitTable() {
 function loadScreen() {
   // Stop timers from the previous render — a screen switched away from a
   // webpage must not keep its old refresh timer firing. games/figure-skating
-  // rotation state (PAGED_STATE, pagedContentTimer) is intentionally left
-  // alone here: renderPagedContent() re-derives it every poll and only resets
-  // when the pages actually changed, so clearing it unconditionally on every
-  // poll would force a page-0 reset + immediate re-flip every time, which is
-  // exactly the bouncing this was supposed to fix.
+  // rotation state (PAGED_STATE, pagedContentTimer) and rss rotation state
+  // (rssRotateTimer) are intentionally left alone here: their render paths
+  // re-derive pages every poll and only reset when the pages actually
+  // changed, so clearing the timer unconditionally on every poll would force
+  // a page-0 reset + immediate re-flip every time, which is exactly the
+  // bouncing this was supposed to fix.
   updatePreviewPageControls();
   if (webpageTimer) { clearTimeout(webpageTimer); webpageTimer = null; }
   if (boundaryTimer) { clearTimeout(boundaryTimer); boundaryTimer = null; }
@@ -1147,13 +1404,32 @@ function loadScreen() {
 }
 
 function renderScreenConfig(screen) {
-    // Background
-    var bgEl = document.getElementById('bg');
-    if (screen.bg_color) bgEl.style.backgroundColor = screen.bg_color;
-    if (screen.bg_filename) {
-      bgEl.style.backgroundImage = 'url(/uploads/' + screen.bg_filename + ')';
+    // Background — color and image are separate layers with independent
+    // transparency (bg_color_alpha / bg_opacity) so fading in a background
+    // image never washes out an otherwise-opaque background color.
+    var bgColorEl = document.getElementById('bg-color');
+    var bgImageEl = document.getElementById('bg-image');
+    if (screen.display_type === 'rss') {
+      // RSS backgrounds are per-template, not per-screen — each slide's HTML
+      // carries its own background layer (see renderTemplateBackground()),
+      // so the screen-wide layers underneath must stay empty or a stale
+      // color/image would show through on templates with no background set.
+      bgColorEl.style.backgroundColor = 'transparent';
+      bgImageEl.style.backgroundImage = 'none';
+    } else {
+      bgColorEl.style.backgroundColor = screen.bg_color ? hexToRgba(screen.bg_color, screen.bg_color_alpha != null ? screen.bg_color_alpha : 100) : 'transparent';
+      bgColorEl.style.opacity = 1;
+      bgImageEl.style.backgroundImage = screen.bg_filename ? 'url(/uploads/' + screen.bg_filename + ')' : 'none';
+      bgImageEl.style.opacity = (screen.bg_opacity != null ? screen.bg_opacity : 100) / 100;
     }
-    bgEl.style.opacity = (screen.bg_opacity != null ? screen.bg_opacity : 100) / 100;
+
+    // The global dark overlay (for text legibility over photo backgrounds on
+    // schedule-style screens) fights the canvas editor's own color choices on
+    // announcement/rss screens, where the admin already controls contrast
+    // directly — e.g. a pure white background would render visibly grey
+    // underneath the 30%-black overlay. Skip it for those types.
+    var overlayEl = document.getElementById('overlay');
+    overlayEl.style.display = (screen.display_type === 'announcement' || screen.display_type === 'rss') ? 'none' : '';
 
     // Undo the announcement layout overrides in case the type changed
     var contentEl = document.getElementById('content');
@@ -1166,7 +1442,7 @@ function renderScreenConfig(screen) {
     // change). Any other screen type doesn't use paged rotation at all, so
     // clear it here — otherwise a stale flip could fire later and overwrite
     // this screen's content with an old games/figure-skating page.
-    if (dtype !== 'games' && dtype !== 'figure_skating') {
+    if (dtype !== 'games' && dtype !== 'figure_skating' && dtype !== 'rss') {
       if (pagedContentTimer) { clearTimeout(pagedContentTimer); pagedContentTimer = null; }
       PAGED_STATE.pageHtmls = null;
       updatePreviewPageControls();
@@ -1365,44 +1641,92 @@ function renderScreenConfig(screen) {
         content.innerHTML = '<div class="empty"><p>No announcement content.</p></div>';
         return;
       }
-      var annoHtml = '';
-      for (var ai = 0; ai < annoData.elements.length; ai++) {
-        var ae = annoData.elements[ai];
-        if (ae.type === 'text') {
-          annoHtml += '<div style="' +
-            'position:absolute;left:' + Number(ae.x) + '%;top:' + Number(ae.y) + '%;' +
-            'transform:translate(-50%,-50%);' +
-            'width:max-content;' +
-            'color:' + esc(ae.color || '#fff') + ';' +
-            'font-family:' + esc(ae.font || 'Arial') + ',sans-serif;' +
-            'font-size:' + (ae.size || 48) + 'px;' +
-            'font-weight:' + (ae.bold ? 'bold' : 'normal') + ';' +
-            'text-align:' + esc(ae.align || 'left') + ';' +
-            'white-space:pre;line-height:1.2;pointer-events:none;' +
-            '">' + esc(ae.text || '') + '</div>';
-        } else if (ae.type === 'image') {
-          annoHtml += '<img src="/uploads/' + esc(ae.filename) + '" style="' +
-            'position:absolute;left:' + Number(ae.x) + '%;top:' + Number(ae.y) + '%;' +
-            'width:' + (Number(ae.width) || 25) + '%;' +
-            'transform:translate(-50%,-50%);pointer-events:none;" alt="" />';
-        } else if (ae.type === 'datetime') {
-          annoHtml += '<div class="anno-datetime" data-format="' + esc(ae.format || 'datetime') + '" data-seconds="' + (ae.showSeconds ? '1' : '0') + '" style="' +
-            'position:absolute;left:' + Number(ae.x) + '%;top:' + Number(ae.y) + '%;' +
-            'transform:translate(-50%,-50%);' +
-            'width:max-content;' +
-            'color:' + esc(ae.color || '#fff') + ';' +
-            'font-family:' + esc(ae.font || 'Arial') + ',sans-serif;' +
-            'font-size:' + (ae.size || 48) + 'px;' +
-            'font-weight:' + (ae.bold ? 'bold' : 'normal') + ';' +
-            'text-align:' + esc(ae.align || 'left') + ';' +
-            'white-space:pre;line-height:1.2;pointer-events:none;' +
-            '"></div>';
-        }
-      }
-      content.innerHTML = annoHtml;
+      content.innerHTML = renderSlideElements(annoData.elements);
+      fitTextBoxes();
       updateAnnoDateTimes();
       if (annoClockTimer) clearInterval(annoClockTimer);
       annoClockTimer = setInterval(updateAnnoDateTimes, 1000);
+
+    } else if (dtype === 'rss') {
+      var rssContent = document.getElementById('content');
+      rssContent.style.position = 'relative';
+      rssContent.style.padding = '0';
+      // Multiple templates (screen.rss_templates) cycle round-robin by item
+      // index, so consecutive slides don't all look identical; older screens
+      // saved before templates existed fall back to their single
+      // rss_slide_layout as a one-template list.
+      var templates = (screen.rss_templates && screen.rss_templates.length)
+        ? screen.rss_templates.filter(function(t) { return t && t.elements && t.elements.length; })
+        : (screen.rss_slide_layout && screen.rss_slide_layout.elements && screen.rss_slide_layout.elements.length
+            ? [{ elements: screen.rss_slide_layout.elements }]
+            : []);
+      // One or more source feeds; older screens saved before multi-feed
+      // support only have the singular rss_feed_id.
+      var feedIds = (screen.rss_feed_ids && screen.rss_feed_ids.length) ? screen.rss_feed_ids : (screen.rss_feed_id ? [screen.rss_feed_id] : []);
+      if (!feedIds.length || !templates.length) {
+        if (rssRotateTimer) { clearTimeout(rssRotateTimer); rssRotateTimer = null; }
+        PAGED_STATE.pageHtmls = null;
+        updatePreviewPageControls();
+        rssContent.innerHTML = '<div class="empty"><p>No RSS feed or slide layout configured.</p></div>';
+        return;
+      }
+      get('/api/rss-feeds', function(err2, feeds) {
+        if (err2 || !feeds) return;
+        var selected = feeds.filter(function(f) { return feedIds.indexOf(f.id) !== -1; });
+        var anyItems = selected.some(function(f) { return f.items && f.items.length; });
+        if (!selected.length || !anyItems) {
+          if (rssRotateTimer) { clearTimeout(rssRotateTimer); rssRotateTimer = null; }
+          PAGED_STATE.pageHtmls = null;
+          updatePreviewPageControls();
+          rssContent.innerHTML = '<div class="empty"><p>No items in ' + (selected.length > 1 ? 'these feeds' : 'this feed') + ' yet.</p></div>';
+          return;
+        }
+        var count = screen.rss_item_count || 10;
+        var items;
+        if (screen.rss_multi_mode === 'total') {
+          // Merge every selected feed's items into one pool, newest first,
+          // and take the top `count` overall — feeds compete by recency
+          // rather than each guaranteeing airtime.
+          var merged = [];
+          for (var mi = 0; mi < selected.length; mi++) merged = merged.concat(selected[mi].items || []);
+          merged.sort(function(a, b) {
+            var ta = a.pubDate ? new Date(a.pubDate).getTime() : 0;
+            var tb = b.pubDate ? new Date(b.pubDate).getTime() : 0;
+            return tb - ta;
+          });
+          items = merged.slice(0, count);
+        } else {
+          // Per-feed: up to `count` items from EACH feed, interleaved
+          // round-robin (feed1#1, feed2#1, feed3#1, feed1#2, ...) so the
+          // rotation mixes sources instead of exhausting one feed before
+          // ever showing the next.
+          var perFeed = selected.map(function(f) { return (f.items || []).slice(0, count); });
+          items = [];
+          var maxLen = 0;
+          for (var pi = 0; pi < perFeed.length; pi++) maxLen = Math.max(maxLen, perFeed[pi].length);
+          for (var row = 0; row < maxLen; row++) {
+            for (var col = 0; col < perFeed.length; col++) {
+              if (perFeed[col][row]) items.push(perFeed[col][row]);
+            }
+          }
+        }
+        // One "page" per feed item — reuses the same manual page-nav bar
+        // (pb-page-nav) that games/figure-skating previews use, so opening
+        // ?preview on an RSS screen lets you step through every slide that's
+        // currently in rotation instead of only seeing whichever one loaded.
+        var pageHtmls = items.map(function(item, idx) {
+          var tmpl = templates[idx % templates.length];
+          return renderTemplateBackground(tmpl) + renderSlideElements(tmpl.elements, {
+            title: item.title || '',
+            description: item.description || '',
+            pubDate: item.pubDate ? fmtTime(item.pubDate) : '',
+            image: item.image || '',
+            focalX: item.focal ? item.focal.x : 50,
+            focalY: item.focal ? item.focal.y : 50,
+          });
+        });
+        renderRssPages(pageHtmls, screen.rss_rotate_seconds);
+      });
     }
 }
 

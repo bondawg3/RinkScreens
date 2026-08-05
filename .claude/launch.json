@@ -13,6 +13,13 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "client:dev"],
       "port": 5173
+    },
+    {
+      "name": "rinkscreens-test",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["server/index.js"],
+      "env": { "PORT": "3002" },
+      "port": 3002
     }
   ]
 }

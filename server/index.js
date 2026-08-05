@@ -5,6 +5,7 @@ const cors = require('cors');
 
 const wsManager = require('./ws');
 const { startPolling } = require('./calendar');
+const rss = require('./rss');
 const apiRouter = require('./routes/api');
 const uploadRouter = require('./routes/upload');
 const db = require('./db');
@@ -78,6 +79,9 @@ wsManager.init(server);
 
 // Start calendar polling
 startPolling();
+
+// Start RSS feed polling
+rss.startPolling();
 
 // Start automatic backup scheduler
 backup.startScheduler();

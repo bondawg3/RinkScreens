@@ -1,20 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import adminStyles from './AdminTab.module.css';
 import tStyles from './ScreensTab.module.css';
 import s from './AnnouncementTab.module.css';
 import Thumbnail from './Thumbnail';
 import { useScreenCards, InUseBadge, EyeButton, EyeHint, DuplicateButton } from './screenCard';
-
-const FONTS = [
-  'Arial', 'Verdana', 'Trebuchet MS', 'Georgia',
-  'Times New Roman', 'Impact', 'Courier New', 'Palatino Linotype',
-  'Orbitron', 'Share Tech Mono', 'DS-Digital', 'DSEG14 Classic', 'DSEG7 Classic',
-];
-
-function makeId() {
-  return 'el-' + Math.random().toString(36).slice(2, 9);
-}
+import { FONTS, makeId, hexToRgba, AutoFitText, StackedBoxText, LinesEditor, Section, useUndo, ResizeHandles } from './SlideEditorShared';
 
 function formatDateTimePreview(format, showSeconds) {
   const now = new Date();
@@ -46,6 +37,7 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
   const [backgroundId, setBackgroundId] = useState(screen.background_id ?? '');
   const [bgOpacity, setBgOpacity] = useState(screen.bg_opacity ?? 100);
   const [bgColor, setBgColor] = useState(screen.bg_color || '');
+  const [bgColorAlpha, setBgColorAlpha] = useState(screen.bg_color_alpha ?? 100);
   const [selectedId, setSelectedId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
@@ -53,8 +45,9 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
   const canvasRef = useRef(null);
   const canvasOuterRef = useRef(null);
   const dragRef = useRef(null);
-  const elementsRef = useRef(elements);
-  useEffect(() => { elementsRef.current = elements; }, [elements]);
+
+  // Undo/redo (Ctrl+Z / Cmd+Z, Shift to redo) over the elements array
+  const pushHistory = useUndo(useCallback(() => elements, [elements]), setElements);
 
   // Scale font sizes to canvas width
   const [canvasWidth, setCanvasWidth] = useState(800);
@@ -96,6 +89,7 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
     e.preventDefault();
     e.stopPropagation();
     setSelectedId(el.id);
+    pushHistory();
     dragRef.current = { id: el.id, startMX: e.clientX, startMY: e.clientY, startX: el.x, startY: el.y };
   }
 
@@ -111,13 +105,15 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
     };
     const preset = presets[role] || presets.body;
     const el = { id: makeId(), type: 'text', ...preset, color: '#ffffff', font: 'Arial', align: 'center', x: 50 };
+    pushHistory();
     setElements(prev => [...prev, el]);
     setSelectedId(el.id);
   }
 
   function addImage(filename) {
     if (!filename) return;
-    const el = { id: makeId(), type: 'image', filename, width: 25, x: 50, y: 50 };
+    const el = { id: makeId(), type: 'image', filename, width: 25, x: 50, y: 50, borderWidth: 0, borderColor: '#ffffff' };
+    pushHistory();
     setElements(prev => [...prev, el]);
     setSelectedId(el.id);
   }
@@ -128,11 +124,13 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
       color: '#ffffff', font: 'DS-Digital', size: 48, bold: false, align: 'center',
       x: 50, y: 50,
     };
+    pushHistory();
     setElements(prev => [...prev, el]);
     setSelectedId(el.id);
   }
 
   function deleteEl(id) {
+    pushHistory();
     setElements(prev => prev.filter(el => el.id !== id));
     if (selectedId === id) setSelectedId(null);
   }
@@ -152,6 +150,7 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
       background_id: backgroundId || null,
       bg_opacity: bgOpacity,
       bg_color: bgColor || '',
+      bg_color_alpha: bgColorAlpha,
       announcement_data: { elements },
     };
     try {
@@ -175,6 +174,7 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
           value={name}
           onChange={e => setName(e.target.value)}
         />
+        <span style={{ color: 'rgba(255,255,255,0.35)', fontSize: '0.78rem' }}>Ctrl+Z to undo</span>
         {err && <span style={{ color: '#ff8080', fontSize: '0.85rem' }}>{err}</span>}
         <button className={adminStyles.btnGhost} onClick={onCancel} style={{ color: '#fff', borderColor: 'rgba(255,255,255,0.3)' }}>Cancel</button>
         <button className={adminStyles.btnPrimary} onClick={handleSave} disabled={saving}>
@@ -186,13 +186,13 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
       <div className={s.editorBody}>
         {/* Canvas column */}
         <div className={s.canvasCol}>
-          <div className={s.canvasOuter} ref={canvasOuterRef} style={{ backgroundColor: bgColor || '#0a2a42' }}>
+          <div className={s.canvasOuter} ref={canvasOuterRef} style={{ backgroundColor: bgColor ? hexToRgba(bgColor, bgColorAlpha) : '#0a2a42' }}>
             <div
               className={s.canvas}
               ref={canvasRef}
               onClick={e => { if (e.target === canvasRef.current) setSelectedId(null); }}
             >
-              {/* Background */}
+              {/* Background image (opacity independent of the color's own transparency) */}
               <div
                 className={s.canvasBg}
                 style={{
@@ -209,17 +209,30 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                   onMouseDown={e => startDrag(e, el)}
                 >
                   {el.type === 'text' ? (
-                    <span style={{
-                      color: el.color,
-                      fontFamily: el.font + ', sans-serif',
-                      fontSize: Math.round(el.size * scale) + 'px',
-                      fontWeight: el.bold ? 'bold' : 'normal',
-                      textAlign: el.align,
-                      whiteSpace: 'pre',
-                      display: 'block',
-                      lineHeight: 1.2,
-                      pointerEvents: 'none',
-                    }}>{el.text || ' '}</span>
+                    el.boxWidth && el.boxHeight ? (
+                      <div style={{
+                        position: 'relative',
+                        width: Math.round(el.boxWidth / 100 * canvasWidth) + 'px',
+                        height: Math.round(el.boxHeight / 100 * canvasWidth * 0.5625) + 'px',
+                      }}>
+                        {el.lines && el.lines.length ? <StackedBoxText el={el} scale={scale} /> : <AutoFitText el={el} scale={scale} />}
+                        {selectedId === el.id && (
+                          <ResizeHandles el={el} widthKey="boxWidth" heightKey="boxHeight" canvasRef={canvasRef} updateEl={updateEl} pushHistory={pushHistory} />
+                        )}
+                      </div>
+                    ) : (
+                      <span style={{
+                        color: el.color,
+                        fontFamily: el.font + ', sans-serif',
+                        fontSize: Math.round(el.size * scale) + 'px',
+                        fontWeight: el.bold ? 'bold' : 'normal',
+                        textAlign: el.align,
+                        whiteSpace: 'pre',
+                        display: 'block',
+                        lineHeight: 1.2,
+                        pointerEvents: 'none',
+                      }}>{el.text || ' '}</span>
+                    )
                   ) : el.type === 'datetime' ? (
                     <span style={{
                       color: el.color,
@@ -235,7 +248,12 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                   ) : (
                     <img
                       src={`/uploads/${el.filename}`}
-                      style={{ width: Math.round(el.width / 100 * canvasWidth) + 'px', display: 'block' }}
+                      style={{
+                        width: Math.round(el.width / 100 * canvasWidth) + 'px',
+                        display: 'block',
+                        boxSizing: 'border-box',
+                        border: el.borderWidth ? `${Math.round(el.borderWidth * scale)}px solid ${el.borderColor || '#fff'}` : 'none',
+                      }}
                       draggable={false}
                       alt=""
                     />
@@ -250,9 +268,7 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
         {/* Properties panel */}
         <div className={s.propsPanel}>
           {/* Background */}
-          <div className={s.propSection}>
-            <div className={s.propSectionTitle}>Background</div>
-
+          <Section title="Background">
             <div className={s.propLabel}>Color</div>
             <div className={s.colorSwatches}>
               {['#000000','#0d1b2a','#1a1a2e','#0a3d62','#154360','#1a5276',
@@ -278,21 +294,26 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                 className={s.propInput}
                 placeholder="#000000"
                 value={bgColor}
-                onChange={e => {
-                  const v = e.target.value;
-                  setBgColor(v);
-                }}
+                onChange={e => setBgColor(e.target.value)}
                 style={{ fontFamily: 'monospace', flex: 1 }}
               />
               {bgColor && (
                 <button className={s.deleteBtnDark} onClick={() => setBgColor('')} title="Clear color">✕</button>
               )}
             </div>
+            <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Color Transparency — {bgColorAlpha}%</div>
+            <input
+              type="range" min="0" max="100" step="5"
+              value={bgColorAlpha}
+              onChange={e => setBgColorAlpha(Number(e.target.value))}
+              style={{ width: '100%' }}
+            />
 
             <select
               className={s.propSelect}
               value={backgroundId}
               onChange={e => setBackgroundId(e.target.value)}
+              style={{ marginTop: '0.4rem' }}
             >
               <option value="">None</option>
               {bgImages.map(b => (
@@ -301,7 +322,7 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
             </select>
             {backgroundId && (
               <>
-                <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Opacity — {bgOpacity}%</div>
+                <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Image Opacity — {bgOpacity}%</div>
                 <input
                   type="range" min="0" max="100" step="5"
                   value={bgOpacity}
@@ -310,11 +331,10 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                 />
               </>
             )}
-          </div>
+          </Section>
 
           {/* Add elements */}
-          <div className={s.propSection}>
-            <div className={s.propSectionTitle}>Add Element</div>
+          <Section title="Add Element">
             <div className={s.addBtns}>
               <button className={s.addBtn} onClick={() => addText('heading')}>+ Heading</button>
               <button className={s.addBtn} onClick={() => addText('body')}>+ Body</button>
@@ -334,94 +354,206 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                 ))}
               </select>
             </div>
-          </div>
+          </Section>
 
           {/* Selected element properties */}
           {selectedEl ? (
-            <div className={s.propSection}>
-              <div className={s.propSectionTitle}>
-                <span>{selectedEl.type === 'text' ? 'Text' : selectedEl.type === 'datetime' ? 'Date/Time' : 'Image'}</span>
-                <button className={s.deleteBtnDark} onClick={() => deleteEl(selectedId)}>Remove</button>
-              </div>
-
+            <Section
+              title={selectedEl.type === 'text' ? 'Text' : selectedEl.type === 'datetime' ? 'Date/Time' : 'Image'}
+              extra={<button className={s.deleteBtnDark} onClick={() => deleteEl(selectedId)}>Remove</button>}
+            >
               {selectedEl.type === 'text' && (
                 <>
-                  <div>
-                    <div className={s.propLabel}>Text</div>
-                    <textarea
-                      className={s.propTextarea}
-                      value={selectedEl.text}
-                      onChange={e => updateEl(selectedId, { text: e.target.value })}
-                    />
-                  </div>
-
-                  <div>
-                    <div className={s.propLabel}>Font</div>
-                    <select
-                      className={s.propSelect}
-                      value={selectedEl.font}
-                      onChange={e => updateEl(selectedId, { font: e.target.value })}
-                    >
-                      {FONTS.map(f => (
-                        <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <div className={s.propLabel}>Size — {selectedEl.size}px</div>
-                    <div className={s.propRow}>
-                      <input
-                        type="range" min="12" max="200" step="4"
-                        value={selectedEl.size}
-                        onChange={e => updateEl(selectedId, { size: Number(e.target.value) })}
-                      />
-                      <input
-                        className={s.numInput}
-                        type="number" min="4" max="400"
-                        value={selectedEl.size}
-                        onChange={e => updateEl(selectedId, { size: Number(e.target.value) })}
-                      />
-                    </div>
-                  </div>
-
-                  <div className={s.propRow}>
-                    <div>
-                      <div className={s.propLabel}>Color</div>
-                      <input
-                        type="color"
-                        className={s.colorInput}
-                        value={selectedEl.color}
-                        onChange={e => updateEl(selectedId, { color: e.target.value })}
-                      />
-                    </div>
-                    <div>
-                      <div className={s.propLabel}>Bold</div>
-                      <label className={s.checkRow}>
-                        <input
-                          type="checkbox"
-                          checked={selectedEl.bold}
-                          onChange={e => updateEl(selectedId, { bold: e.target.checked })}
+                  {!(selectedEl.boxWidth && selectedEl.boxHeight && selectedEl.lines && selectedEl.lines.length) && (
+                    <>
+                      <div>
+                        <div className={s.propLabel}>Text</div>
+                        <textarea
+                          className={s.propTextarea}
+                          value={selectedEl.text}
+                          onChange={e => updateEl(selectedId, { text: e.target.value })}
                         />
-                        Bold
-                      </label>
-                    </div>
-                  </div>
+                      </div>
+
+                      <div>
+                        <div className={s.propLabel}>Font</div>
+                        <select
+                          className={s.propSelect}
+                          value={selectedEl.font}
+                          onChange={e => updateEl(selectedId, { font: e.target.value })}
+                        >
+                          {FONTS.map(f => (
+                            <option key={f} value={f} style={{ fontFamily: f }}>{f}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <div className={s.propLabel}>Size — {selectedEl.size}px{selectedEl.boxWidth && selectedEl.boxHeight ? ' (max)' : ''}</div>
+                        <div className={s.propRow}>
+                          <input
+                            type="range" min="12" max="200" step="4"
+                            value={selectedEl.size}
+                            onChange={e => updateEl(selectedId, { size: Number(e.target.value) })}
+                          />
+                          <input
+                            className={s.numInput}
+                            type="number" min="4" max="400"
+                            value={selectedEl.size}
+                            onChange={e => updateEl(selectedId, { size: Number(e.target.value) })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className={s.propRow}>
+                        <div>
+                          <div className={s.propLabel}>Color</div>
+                          <input
+                            type="color"
+                            className={s.colorInput}
+                            value={selectedEl.color}
+                            onChange={e => updateEl(selectedId, { color: e.target.value })}
+                          />
+                        </div>
+                        <div>
+                          <div className={s.propLabel}>Bold</div>
+                          <label className={s.checkRow}>
+                            <input
+                              type="checkbox"
+                              checked={selectedEl.bold}
+                              onChange={e => updateEl(selectedId, { bold: e.target.checked })}
+                            />
+                            Bold
+                          </label>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className={s.propLabel}>Align</div>
+                        <div className={s.alignToggle}>
+                          {['left', 'center', 'right'].map(a => (
+                            <button
+                              key={a}
+                              type="button"
+                              className={selectedEl.align === a ? s.alignActive : s.alignBtn}
+                              onClick={() => updateEl(selectedId, { align: a })}
+                            >
+                              {a === 'left' ? '⇤' : a === 'center' ? '⇔' : '⇥'}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
+                  )}
 
                   <div>
-                    <div className={s.propLabel}>Align</div>
-                    <div className={s.alignToggle}>
-                      {['left', 'center', 'right'].map(a => (
-                        <button
-                          key={a}
-                          type="button"
-                          className={selectedEl.align === a ? s.alignActive : s.alignBtn}
-                          onClick={() => updateEl(selectedId, { align: a })}
-                        >
-                          {a === 'left' ? '⇤' : a === 'center' ? '⇔' : '⇥'}
-                        </button>
-                      ))}
-                    </div>
+                    <label className={s.checkRow}>
+                      <input
+                        type="checkbox"
+                        checked={!!(selectedEl.boxWidth && selectedEl.boxHeight)}
+                        onChange={e => updateEl(selectedId, e.target.checked
+                          ? { boxWidth: selectedEl.boxWidth || 40, boxHeight: selectedEl.boxHeight || 20 }
+                          : { boxWidth: undefined, boxHeight: undefined })}
+                      />
+                      Bounding box (auto-fit text)
+                    </label>
+                    {selectedEl.boxWidth && selectedEl.boxHeight && (
+                      <div style={{ marginTop: '0.4rem' }}>
+                        <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>
+                          Size above is a max — it shrinks (and wraps, if the box is tall enough) to fit.
+                          Drag the yellow handles on the canvas to resize.
+                        </div>
+                        <div className={s.propLabel}>Box Width — {selectedEl.boxWidth}%</div>
+                        <div className={s.propRow}>
+                          <input
+                            type="range" min="5" max="100" step="5"
+                            value={selectedEl.boxWidth}
+                            onChange={e => updateEl(selectedId, { boxWidth: Number(e.target.value) })}
+                          />
+                        </div>
+                        <div className={s.propLabel}>Box Height — {selectedEl.boxHeight}%</div>
+                        <div className={s.propRow}>
+                          <input
+                            type="range" min="5" max="100" step="5"
+                            value={selectedEl.boxHeight}
+                            onChange={e => updateEl(selectedId, { boxHeight: Number(e.target.value) })}
+                          />
+                        </div>
+                        <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Vertical Alignment</div>
+                        <div className={s.alignToggle}>
+                          {[['top', '⤒'], ['middle', '↕'], ['bottom', '⤓']].map(([v, icon]) => (
+                            <button
+                              key={v}
+                              type="button"
+                              className={(selectedEl.boxJustify || 'middle') === v ? s.alignActive : s.alignBtn}
+                              onClick={() => updateEl(selectedId, { boxJustify: v })}
+                            >
+                              {icon}
+                            </button>
+                          ))}
+                        </div>
+                        <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Padding — {selectedEl.boxPadding || 0}px</div>
+                        <div className={s.propRow}>
+                          <input
+                            type="range" min="0" max="100" step="2"
+                            value={selectedEl.boxPadding || 0}
+                            onChange={e => updateEl(selectedId, { boxPadding: Number(e.target.value) })}
+                          />
+                        </div>
+                        <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Box Background Color</div>
+                        <div className={s.propRow}>
+                          <input
+                            type="color"
+                            className={s.colorInput}
+                            value={selectedEl.boxColor || '#000000'}
+                            onChange={e => updateEl(selectedId, { boxColor: e.target.value })}
+                          />
+                          {selectedEl.boxColor && (
+                            <button className={s.deleteBtnDark} onClick={() => updateEl(selectedId, { boxColor: undefined })} title="Clear">✕</button>
+                          )}
+                        </div>
+                        {selectedEl.boxColor && (
+                          <>
+                            <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Box Color Opacity — {selectedEl.boxAlpha ?? 100}%</div>
+                            <input
+                              type="range" min="0" max="100" step="5"
+                              value={selectedEl.boxAlpha ?? 100}
+                              onChange={e => updateEl(selectedId, { boxAlpha: Number(e.target.value) })}
+                              style={{ width: '100%' }}
+                            />
+                          </>
+                        )}
+
+                        <label className={s.checkRow} style={{ marginTop: '0.4rem' }}>
+                          <input
+                            type="checkbox"
+                            checked={!!(selectedEl.lines && selectedEl.lines.length)}
+                            onChange={e => updateEl(selectedId, e.target.checked
+                              ? { lines: (selectedEl.lines && selectedEl.lines.length) ? selectedEl.lines : [
+                                  { id: makeId(), text: selectedEl.text || '', font: selectedEl.font || 'Arial', size: selectedEl.size || 36, color: selectedEl.color || '#ffffff', bold: !!selectedEl.bold, align: selectedEl.align || 'center' },
+                                ] }
+                              : { lines: undefined })}
+                          />
+                          Use multiple styled lines (mail-merge)
+                        </label>
+                        {selectedEl.lines && selectedEl.lines.length ? (
+                          <div style={{ marginTop: '0.4rem' }}>
+                            <div className={s.propLabel} style={{ marginBottom: '0.3rem' }}>
+                              Each line has its own font/size/color/alignment. The whole stack shrinks together to fit the box.
+                            </div>
+                            <div className={s.propLabel}>Line Spacing — {selectedEl.lineSpacing || 0}px</div>
+                            <div className={s.propRow} style={{ marginBottom: '0.3rem' }}>
+                              <input
+                                type="range" min="0" max="60" step="1"
+                                value={selectedEl.lineSpacing || 0}
+                                onChange={e => updateEl(selectedId, { lineSpacing: Number(e.target.value) })}
+                              />
+                            </div>
+                            <LinesEditor lines={selectedEl.lines} onChange={next => updateEl(selectedId, { lines: next })} />
+                          </div>
+                        ) : null}
+                      </div>
+                    )}
                   </div>
                 </>
               )}
@@ -552,6 +684,27 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                       </span>
                     </div>
                   </div>
+                  <div>
+                    <div className={s.propLabel}>Border Width — {selectedEl.borderWidth || 0}px</div>
+                    <div className={s.propRow}>
+                      <input
+                        type="range" min="0" max="20" step="1"
+                        value={selectedEl.borderWidth || 0}
+                        onChange={e => updateEl(selectedId, { borderWidth: Number(e.target.value) })}
+                      />
+                    </div>
+                  </div>
+                  {!!selectedEl.borderWidth && (
+                    <div>
+                      <div className={s.propLabel}>Border Color</div>
+                      <input
+                        type="color"
+                        className={s.colorInput}
+                        value={selectedEl.borderColor || '#ffffff'}
+                        onChange={e => updateEl(selectedId, { borderColor: e.target.value })}
+                      />
+                    </div>
+                  )}
                 </>
               )}
 
@@ -573,7 +726,7 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                   />
                 </div>
               </div>
-            </div>
+            </Section>
           ) : (
             <div style={{ padding: '1rem', color: 'rgba(255,255,255,0.35)', fontSize: '0.85rem', textAlign: 'center' }}>
               Click an element on the canvas to edit its properties, or add a new element above.

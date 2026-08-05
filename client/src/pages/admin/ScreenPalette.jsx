@@ -13,6 +13,7 @@ export const SCREEN_TYPES = [
   { value: 'skate', label: 'Public Skate' },
   { value: 'webpage', label: 'Webpage' },
   { value: 'announcement', label: 'Announcements' },
+  { value: 'rss', label: 'RSS Feed' },
   { value: 'custom', label: 'Custom' },
 ];
 

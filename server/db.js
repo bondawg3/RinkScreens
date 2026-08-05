@@ -36,7 +36,8 @@ const DEFAULTS = {
   leagues: [],
   teams: [],
   display_schedules: [],
-  _seq: { screens: 1, displays: 1, backgrounds: 1, activities: 1, skate_prices: 1, calendars: 1, locker_rooms: 1, locker_sequences: 1, leagues: 1, teams: 1, display_schedules: 1 },
+  rss_feeds: [],
+  _seq: { screens: 1, displays: 1, backgrounds: 1, activities: 1, skate_prices: 1, calendars: 1, locker_rooms: 1, locker_sequences: 1, leagues: 1, teams: 1, display_schedules: 1, rss_feeds: 1 },
 };
 
 // Renamed from "games" once the table grew to hold hockey games, rink events,

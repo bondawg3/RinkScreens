@@ -3,6 +3,7 @@ const router = express.Router();
 const db = require('../db');
 const ws = require('../ws');
 const { triggerRefresh, triggerCalendarRefresh, parseTitle, syncCalendar, scheduleCalendar, cancelCalendar } = require('../calendar');
+const { fetchAndParseFeed, scheduleFeed, cancelFeed, triggerFeedRefresh } = require('../rss');
 const { autoAssign } = require('../locker-assign');
 const { requireAuth, rotateJwtSecret, signToken, verifyToken } = require('../auth');
 const schedule = require('../schedule');
@@ -158,6 +159,7 @@ function serializeScreen(s, bgMap) {
     ...s,
     calendar_ids: parseCalendarIds(s.calendar_ids),
     bg_opacity: s.bg_opacity ?? 100,
+    bg_color_alpha: s.bg_color_alpha ?? 100,
     visible: s.visible !== false,
     two_column: !!s.two_column,
     overflow_mode: s.overflow_mode || 'none',
@@ -169,6 +171,13 @@ function serializeScreen(s, bgMap) {
     bg_filename: s.background_id ? bgMap[s.background_id]?.filename : null,
     bg_label: s.background_id ? bgMap[s.background_id]?.label : null,
     announcement_data: s.announcement_data ? (() => { try { return JSON.parse(s.announcement_data); } catch { return null; } })() : null,
+    rss_feed_id: s.rss_feed_id ?? null,
+    rss_feed_ids: s.rss_feed_ids ? (() => { try { return JSON.parse(s.rss_feed_ids); } catch { return null; } })() : (s.rss_feed_id ? [s.rss_feed_id] : []),
+    rss_multi_mode: s.rss_multi_mode || 'per_feed',
+    rss_item_count: s.rss_item_count ?? 10,
+    rss_rotate_seconds: s.rss_rotate_seconds ?? 8,
+    rss_slide_layout: s.rss_slide_layout ? (() => { try { return JSON.parse(s.rss_slide_layout); } catch { return null; } })() : null,
+    rss_templates: s.rss_templates ? (() => { try { return JSON.parse(s.rss_templates); } catch { return null; } })() : null,
   };
 }
 
@@ -207,18 +216,18 @@ router.get('/screens', (req, res) => {
 });
 
 router.post('/screens', requireAuth, (req, res) => {
-  const { name, ip = '', display_type = 'games', webpage_url = '', webpage_width = 100, webpage_zoom = 100, webpage_refresh = 0, calendar_ids, bg_opacity = 100, background_id, announcement_data, bg_color = '', show_pricing = false, show_locker_rooms = true, pricing_ids } = req.body;
+  const { name, ip = '', display_type = 'games', webpage_url = '', webpage_width = 100, webpage_zoom = 100, webpage_refresh = 0, calendar_ids, bg_opacity = 100, bg_color_alpha = 100, background_id, announcement_data, bg_color = '', show_pricing = false, show_locker_rooms = true, pricing_ids, rss_feed_id, rss_feed_ids, rss_multi_mode, rss_slide_layout, rss_templates, rss_item_count, rss_rotate_seconds } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   const calIds = parseCalendarIds(calendar_ids);
   const priceIds = parseCalendarIds(pricing_ids);
-  const row = db.insert('screens', { name, ip, display_type, background_id: background_id || null, webpage_url, webpage_width: Number(webpage_width), webpage_zoom: Number(webpage_zoom), webpage_refresh: Number(webpage_refresh), calendar_ids: calIds ? JSON.stringify(calIds) : null, bg_opacity: Number(bg_opacity), announcement_data: announcement_data ? JSON.stringify(announcement_data) : null, bg_color: bg_color || '', show_pricing: !!show_pricing, show_locker_rooms: !!show_locker_rooms, pricing_ids: priceIds ? JSON.stringify(priceIds) : null });
+  const row = db.insert('screens', { name, ip, display_type, background_id: background_id || null, webpage_url, webpage_width: Number(webpage_width), webpage_zoom: Number(webpage_zoom), webpage_refresh: Number(webpage_refresh), calendar_ids: calIds ? JSON.stringify(calIds) : null, bg_opacity: Number(bg_opacity), bg_color_alpha: Number(bg_color_alpha), announcement_data: announcement_data ? JSON.stringify(announcement_data) : null, bg_color: bg_color || '', show_pricing: !!show_pricing, show_locker_rooms: !!show_locker_rooms, pricing_ids: priceIds ? JSON.stringify(priceIds) : null, rss_feed_id: rss_feed_id || (Array.isArray(rss_feed_ids) && rss_feed_ids[0]) || null, rss_feed_ids: rss_feed_ids ? JSON.stringify(rss_feed_ids) : null, rss_multi_mode: rss_multi_mode || 'per_feed', rss_slide_layout: rss_slide_layout ? JSON.stringify(rss_slide_layout) : null, rss_templates: rss_templates ? JSON.stringify(rss_templates) : null, rss_item_count: rss_item_count !== undefined ? Number(rss_item_count) : 10, rss_rotate_seconds: rss_rotate_seconds !== undefined ? Number(rss_rotate_seconds) : 8 });
   res.json({ id: row.id });
 });
 
 router.patch('/screens/:id', requireAuth, (req, res) => {
   const screen = db.findById('screens', req.params.id);
   if (!screen) return res.status(404).json({ error: 'not found' });
-  const { name, ip, display_type, background_id, webpage_url, webpage_width, webpage_zoom, webpage_refresh, calendar_ids, bg_opacity, announcement_data, bg_color, visible, show_pricing, show_locker_rooms, pricing_ids } = req.body;
+  const { name, ip, display_type, background_id, webpage_url, webpage_width, webpage_zoom, webpage_refresh, calendar_ids, bg_opacity, bg_color_alpha, announcement_data, bg_color, visible, show_pricing, show_locker_rooms, pricing_ids, rss_feed_id, rss_feed_ids, rss_multi_mode, rss_slide_layout, rss_templates, rss_item_count, rss_rotate_seconds } = req.body;
   const calIds = calendar_ids !== undefined ? parseCalendarIds(calendar_ids) : parseCalendarIds(screen.calendar_ids);
   const priceIds = pricing_ids !== undefined ? parseCalendarIds(pricing_ids) : parseCalendarIds(screen.pricing_ids);
   db.update('screens', req.params.id, {
@@ -232,6 +241,7 @@ router.patch('/screens/:id', requireAuth, (req, res) => {
     webpage_refresh: webpage_refresh !== undefined ? Number(webpage_refresh) : (screen.webpage_refresh || 0),
     calendar_ids: calIds ? JSON.stringify(calIds) : null,
     bg_opacity: bg_opacity !== undefined ? Number(bg_opacity) : (screen.bg_opacity ?? 100),
+    bg_color_alpha: bg_color_alpha !== undefined ? Number(bg_color_alpha) : (screen.bg_color_alpha ?? 100),
     announcement_data: announcement_data !== undefined ? JSON.stringify(announcement_data) : (screen.announcement_data || null),
     bg_color: bg_color !== undefined ? (bg_color || '') : (screen.bg_color || ''),
     visible: visible !== undefined ? visible !== false : (screen.visible !== false),
@@ -242,6 +252,13 @@ router.patch('/screens/:id', requireAuth, (req, res) => {
     show_pricing: show_pricing !== undefined ? !!show_pricing : !!screen.show_pricing,
     show_locker_rooms: show_locker_rooms !== undefined ? !!show_locker_rooms : (screen.show_locker_rooms !== false),
     pricing_ids: priceIds ? JSON.stringify(priceIds) : null,
+    rss_feed_id: rss_feed_id !== undefined ? (rss_feed_id || null) : (rss_feed_ids !== undefined ? ((rss_feed_ids && rss_feed_ids[0]) || null) : (screen.rss_feed_id || null)),
+    rss_feed_ids: rss_feed_ids !== undefined ? JSON.stringify(rss_feed_ids) : (screen.rss_feed_ids || null),
+    rss_multi_mode: rss_multi_mode !== undefined ? rss_multi_mode : (screen.rss_multi_mode || 'per_feed'),
+    rss_slide_layout: rss_slide_layout !== undefined ? JSON.stringify(rss_slide_layout) : (screen.rss_slide_layout || null),
+    rss_templates: rss_templates !== undefined ? JSON.stringify(rss_templates) : (screen.rss_templates || null),
+    rss_item_count: rss_item_count !== undefined ? Number(rss_item_count) : (screen.rss_item_count ?? 10),
+    rss_rotate_seconds: rss_rotate_seconds !== undefined ? Number(rss_rotate_seconds) : (screen.rss_rotate_seconds ?? 8),
   });
   notifyScreen(req.params.id, 'reload');
   res.json({ ok: true });
@@ -503,12 +520,14 @@ router.patch('/games/:id', requireAuth, (req, res) => {
   if (!game) return res.status(404).json({ error: 'not found' });
   const { home_team, away_team, home_locker, away_locker } = req.body;
   const lockerChanged = home_locker !== undefined || away_locker !== undefined;
+  const teamsChanged = home_team !== undefined || away_team !== undefined;
   db.update('activities', req.params.id, {
     home_team: home_team ?? game.home_team,
     away_team: away_team ?? game.away_team,
     home_locker: home_locker ?? game.home_locker,
     away_locker: away_locker ?? game.away_locker,
     lr_auto_assigned: lockerChanged ? 0 : (game.lr_auto_assigned || 0),
+    teams_manually_set: teamsChanged ? 1 : (game.teams_manually_set || 0),
   });
   ws.broadcast({ type: 'refresh_data' });
   res.json({ ok: true });
@@ -557,7 +576,7 @@ router.post('/games/reparse', requireAuth, (req, res) => {
     for (const game of games) {
       const cal = calMap[game.calendar_id] || {};
       const { title, away_team, home_team } = parseTitle(game.raw_title || game.title || '', cal);
-      tx.update('activities', game.id, { title, away_team, home_team });
+      tx.update('activities', game.id, { title, away_team, home_team, teams_manually_set: 0 });
       count++;
     }
     return count;
@@ -725,6 +744,83 @@ router.delete('/calendars/:id', requireAuth, (req, res) => {
   });
   ws.broadcast({ type: 'refresh_data' });
   res.json({ ok: true, removed_games: removedGames });
+});
+
+// ── RSS Feeds ─────────────────────────────────────────────────────────────────
+
+router.get('/rss-feeds', (req, res) => {
+  // TVs only need id/name/items to render slides; admin also gets sync status
+  const feeds = db.findAll('rss_feeds', 'created_at');
+  if (!isAdminRequest(req)) {
+    return res.json(feeds.map((f) => ({ id: f.id, name: f.name, items: f.items || [] })));
+  }
+  res.json(feeds.map((f) => ({
+    ...f,
+    items: f.items || [],
+    last_sync_at: f.last_sync_at || null,
+    last_sync_error: f.last_sync_error || null,
+  })));
+});
+
+router.post('/rss-feeds', requireAuth, async (req, res) => {
+  const { name, url, poll_interval_minutes = 15 } = req.body;
+  if (!name || !url) return res.status(400).json({ error: 'name and url are required' });
+
+  if (findByNameCi('rss_feeds', name)) {
+    return res.status(400).json({ error: `A feed named "${name}" already exists. Please use a different name.` });
+  }
+  if (db.findAll('rss_feeds').find((f) => f.url === url)) {
+    return res.status(400).json({ error: 'This feed URL is already in use by another feed.' });
+  }
+
+  const row = db.insert('rss_feeds', { name, url, poll_interval_minutes: Number(poll_interval_minutes), items: [] });
+  fetchAndParseFeed(row).then(() => ws.broadcast({ type: 'refresh_data' })).catch(() => {});
+  scheduleFeed(row);
+  res.json({ id: row.id });
+});
+
+router.patch('/rss-feeds/:id', requireAuth, async (req, res) => {
+  const feed = db.findById('rss_feeds', req.params.id);
+  if (!feed) return res.status(404).json({ error: 'not found' });
+
+  const { name, url, poll_interval_minutes } = req.body;
+
+  if (name && name.toLowerCase() !== feed.name.toLowerCase() && findByNameCi('rss_feeds', name, feed.id)) {
+    return res.status(400).json({ error: `A feed named "${name}" already exists.` });
+  }
+  if (url && url !== feed.url) {
+    if (db.findAll('rss_feeds').find((f) => f.id !== feed.id && f.url === url)) {
+      return res.status(400).json({ error: 'This feed URL is already in use by another feed.' });
+    }
+  }
+
+  db.update('rss_feeds', req.params.id, {
+    name: name ?? feed.name,
+    url: url ?? feed.url,
+    poll_interval_minutes: poll_interval_minutes !== undefined ? Number(poll_interval_minutes) : feed.poll_interval_minutes,
+  });
+  // Apply a new poll interval or URL immediately instead of after the next fire
+  if (poll_interval_minutes !== undefined || (url && url !== feed.url)) {
+    scheduleFeed(db.findById('rss_feeds', req.params.id));
+  }
+  res.json({ ok: true });
+});
+
+router.delete('/rss-feeds/:id', requireAuth, (req, res) => {
+  const feedId = Number(req.params.id);
+  cancelFeed(feedId);
+  db.remove('rss_feeds', feedId);
+  ws.broadcast({ type: 'refresh_data' });
+  res.json({ ok: true });
+});
+
+router.post('/rss-feeds/:id/sync', requireAuth, async (req, res) => {
+  try {
+    await triggerFeedRefresh(req.params.id);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // ── Public Skate Sessions ─────────────────────────────────────────────────────

@@ -12,6 +12,7 @@ const tabs = [
   { to: 'skate', label: 'Public Skate' },
   { to: 'webpage', label: 'Webpage' },
   { to: 'announcements', label: 'Announcements' },
+  { to: 'rss', label: 'RSS Feed' },
   { to: 'custom', label: 'Custom' },
   { to: 'leagues', label: 'Leagues' },
   { to: 'backgrounds', label: 'Images' },

@@ -2,6 +2,44 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.25.0] — 2026-08-05
+
+### Added
+- **RSS screens can now pull from multiple feeds at once** — the Feeds section is a checklist instead of a single dropdown. With more than one feed selected, choose **Per Feed** (N items from each, interleaved round-robin so the rotation mixes sources instead of exhausting one feed before the next) or **Total (by date)** (merge every selected feed's items into one pool and keep only the N most recent overall).
+- **RSS screens can cycle through multiple slide templates** — a tab bar above the canvas lets you build several distinct layouts (rename, duplicate, delete); feed item *N* renders with template *N mod (template count)*, so consecutive slides don't all look identical. Undo correctly restores whichever template was active when a change was made.
+- **Backgrounds are now per-template** for RSS (color + transparency, or an image + its own opacity) instead of one background for the whole screen — each generated slide carries its own background layer, so it travels with the slide through paging/rotation automatically.
+- **Text elements can hold multiple independently-styled stacked lines** ("mail merge" composite) — e.g. a bold title line, a divider, and a smaller date line below it, each with its own font/size/color/alignment; the whole stack shrinks together via one proportional scale factor so a title stays visually bigger than a subtitle as both shrink. Includes a **horizontal divider line type** (color/thickness/width%/alignment) and a **Line Spacing** control.
+- **Bounding-box text elements gained vertical justification (top/middle/bottom) and internal padding**, plus **drag-to-resize handles** on the canvas (corner/edge, anchored on the opposite side) instead of only slider inputs.
+- **Text boxes can have their own background color** (with independent opacity) and **images can have a configurable border** (width + color).
+- **Feed images support a "Fit Whole Image" mode** (`object-fit: contain`, letterboxed) as an alternative to the default crop-to-fill, for when you want to guarantee nothing is cropped out.
+- **Undo/redo (Ctrl+Z / Cmd+Z, Shift to redo)** in both the Announcements and RSS canvas editors, scoped to canvas gestures (add/move/resize/delete, property edits) — native text-field undo still works while typing.
+- **Collapsible properties-panel sections** (chevron toggle) in both editors, since the panel gets long with all the new per-element controls.
+
+### Fixed
+- **A pure white background could render visibly grey** — a global 30%-black overlay (meant to keep photo backgrounds legible behind games/schedule tables) was darkening every screen type uniformly, including Announcements/RSS canvases where the admin already controls contrast directly. The overlay is now skipped for those two types; games/schedule keep it. A background color transparency slider is also now always visible (previously hidden unless a background image was set) so it can be adjusted directly instead of relying on an image-opacity value that didn't apply to solid colors.
+
+## [1.24.3] — 2026-08-04
+
+### Added
+- **Text elements in the Announcements and RSS canvas editors can now be given a bounding box with auto-fit sizing** — enable "Bounding box (auto-fit text)" on a text element to set a fixed width/height frame; the configured size acts as a maximum that shrinks (wrapping onto more lines first if the box is tall enough, then shrinking further once wrapping alone doesn't help) until the text fits, instead of overflowing or needing to be sized by hand for every piece of content. Especially useful for RSS `{{description}}` text, where article length varies per item — the default RSS layout now uses a bounding box for both title and description.
+
+## [1.24.2] — 2026-08-04
+
+### Added
+- **RSS feed items with no embedded image now fall back to the article's Open Graph image** — the server fetches the linked article page and reads its `og:image` meta tag when a feed entry has no enclosure/media image of its own, so blog-style feeds that only embed images in prose still get one for the slide layout.
+- **Feed images are now auto-cropped to the slide layout's image box instead of being letterboxed by width alone** — a lightweight server-side saliency scan picks a focal point (the most visually "busy" part of the image) for each item's image, cached across polls, and the slide crops to that point via `object-fit: cover`. The RSS editor's image element now has a Height field (turning it into a fixed crop box) plus an "Auto-detect focal point" toggle with manual Focal X/Y overrides.
+- **RSS screens now support the same `?preview` manual page-nav as games/schedule screens** — opening a screen's preview link lets you step through every item currently in rotation with the existing prev/next controls instead of only seeing whichever slide happened to load.
+
+## [1.24.1] — 2026-08-04
+
+### Fixed
+- **Games/schedule screens could get stuck showing stale team names after a calendar corrected them** — once a game's `home_team`/`away_team` had any truthy value, the calendar sync treated it as permanent and never re-parsed the title again, even after the source calendar published the real matchup (e.g. a game first synced with a placeholder title, then updated with real team names later). Team names are now only preserved across syncs when an admin has actually edited them by hand in the Games tab (tracked via a new `teams_manually_set` flag, set on manual PATCH edits and cleared by Reparse) — otherwise sync always re-derives team names from the latest title, matching how locker room numbers already distinguish manual from auto-assigned values.
+
+## [1.24.0] — 2026-08-03
+
+### Added
+- **New RSS Feed screen type** — configure one or more RSS/Atom feed URLs (polled and cached server-side on a per-feed interval), then build a slide layout using the same drag-and-drop canvas editor as Announcements, with text/image elements bound to feed fields (`{{title}}`, `{{description}}`, `{{pubDate}}`, or a feed-image element) instead of static content. The screen cycles through the feed's latest items on a configurable per-slide interval.
+
 ## [1.23.33] — 2026-08-02
 
 ### Fixed

@@ -1,4 +1,4 @@
-# RinkScreens — v1.23.33
+# RinkScreens — v1.24.1
 
 Digital signage system for ice rinks. Pulls games from Google Calendar (iCal) and displays them on smart TVs around the facility. An admin panel on any local browser lets staff control what each screen shows and manage locker room assignments, pricing, and backgrounds.
 
@@ -75,12 +75,27 @@ Every screen card also has a duplicate button (⧉) next to Delete that creates 
 - Resync button forces an immediate iframe reload on the live TV
 
 ### Announcements tab
-- Full-screen canvas editor: drag text, image, and date/time elements freely
+- Full-screen canvas editor: drag text, image, and date/time elements freely; Ctrl+Z / Cmd+Z (Shift to redo) undoes canvas gestures and property edits
 - Text controls: font, size, color, bold, alignment
+- Text elements can optionally be given a bounding box ("Bounding box (auto-fit text)") — the configured size becomes a maximum that auto-shrinks (wrapping onto more lines first if the box is tall enough) until the text fits the box; drag the yellow corner/edge handles on the canvas to resize instead of only using the sliders
+- Bounding-box text supports vertical justification (top/middle/bottom), internal padding, and its own background color/opacity
+- A bounding-box text element can hold multiple independently-styled **stacked lines** (a "mail merge" composite) instead of one uniform block — each line has its own font/size/color/alignment, plus a **horizontal divider line** type (color/thickness/width%) and configurable line spacing; the whole stack shrinks together so relative sizing is preserved
+- Images support a configurable border (width + color)
 - Date/Time element: shows date & time, date only, or time only, updating live on the TV; optional "Show seconds"; same font/size/color/bold/alignment controls as text
 - Font picker includes "Orbitron", "Share Tech Mono", "DS-Digital", "DSEG7 Classic", and "DSEG14 Classic" (segmented LCD looks, self-hosted) for a digital-watchface feel — DS-Digital is the default for new Date/Time elements
-- Background: color picker (presets + custom hex) and background image with opacity
+- Background: color picker (presets + custom hex, with its own transparency slider) and background image with independent opacity
 - Images tab (formerly Backgrounds) splits uploads into **Background** and **General** types; inline label editing with ✏ / ✓ / ✕
+
+### RSS Feed tab
+- Add one or more RSS/Atom feed URLs; each feed is polled and cached server-side on its own configurable interval (default 15 min), with a manual "sync now" button and sync-error status per feed
+- **A screen can pull from multiple feeds at once** — select as many as you want, then choose **Per Feed** (N items from each, interleaved so the rotation mixes sources) or **Total (by date)** (merge all selected feeds' items and keep only the N most recent overall)
+- **A screen can cycle through multiple slide templates** — build several distinct layouts in a tab bar above the canvas (rename/duplicate/delete); feed items rotate through them round-robin so consecutive slides don't all look identical, and each template has its own background (color/transparency, or image + opacity)
+- Same drag-and-drop canvas editor as Announcements (including undo, resize handles, bounding-box text with stacked lines/dividers, and image borders), but text elements bind to feed fields via `{{title}}`, `{{description}}`, and `{{pubDate}}` tokens, and a dedicated image element pulls each item's feed image
+- Text elements support the same bounding-box auto-fit sizing as Announcements — the default layout uses it for title/description since article length varies per item
+- Items with no embedded image fall back to the linked article's Open Graph (`og:image`) thumbnail
+- The feed-image element crops to a fixed box (width % × height %) via `object-fit: cover` by default — a server-side focal point (auto-detected per item, cached across polls) keeps the interesting part of the image visible, or pin a manual Focal X/Y instead. Switch to **Fit Whole Image** (`object-fit: contain`) to letterbox instead of cropping.
+- Configure how many of the feed's latest items to cycle through and how many seconds each slide stays up
+- Open a screen's `?preview` link to manually step through every slide currently in rotation with the same page-nav controls used by games/figure-skating previews
 
 ### Custom tab
 - Create screens that pull from any combination of calendars across all types

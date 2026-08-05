@@ -14,6 +14,7 @@ import FigureSkatingTab from './pages/admin/FigureSkatingTab';
 import LeaguesTab from './pages/admin/LeaguesTab';
 import WebpageTab from './pages/admin/WebpageTab';
 import AnnouncementTab from './pages/admin/AnnouncementTab';
+import RssTab from './pages/admin/RssTab';
 import CustomTab from './pages/admin/CustomTab';
 import TvPreviewTab from './pages/admin/TvPreviewTab';
 import { getToken } from './hooks/useApi';
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="skate" element={<SkateTab />} />
           <Route path="webpage" element={<WebpageTab />} />
           <Route path="announcements" element={<AnnouncementTab />} />
+          <Route path="rss" element={<RssTab />} />
           <Route path="custom" element={<CustomTab />} />
           <Route path="backgrounds" element={<BackgroundsTab />} />
           <Route path="settings" element={<SettingsPage />} />

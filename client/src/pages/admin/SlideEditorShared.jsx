@@ -11,6 +11,27 @@ export function makeId() {
   return 'el-' + Math.random().toString(36).slice(2, 9);
 }
 
+// Returns a React style object applying an image element's border to one
+// side (or all sides) — borderSide is 'all' (default), 'top', 'bottom',
+// 'left', or 'right'. `scale` converts the stored px value to the editor
+// canvas's current on-screen scale (server/tv.html applies it unscaled).
+export function borderStyle(el, scale) {
+  if (!el.borderWidth) return {};
+  const val = `${Math.round(el.borderWidth * scale)}px solid ${el.borderColor || '#fff'}`;
+  const side = el.borderSide && el.borderSide !== 'all' ? el.borderSide : null;
+  if (!side) return { border: val };
+  const prop = 'border' + side[0].toUpperCase() + side.slice(1);
+  return { [prop]: val };
+}
+
+export const BORDER_SIDES = [
+  { value: 'all', label: 'All' },
+  { value: 'top', label: 'Top' },
+  { value: 'bottom', label: 'Bottom' },
+  { value: 'left', label: 'Left' },
+  { value: 'right', label: 'Right' },
+];
+
 export function hexToRgba(hex, alphaPct) {
   if (!hex) return 'transparent';
   let h = hex.replace('#', '');
@@ -59,6 +80,7 @@ export function AutoFitText({ el, scale }) {
       alignItems: JUSTIFY_MAP[el.boxJustify] || 'center',
       overflow: 'hidden', boxSizing: 'border-box', padding: paddingPx + 'px',
       background: el.boxColor ? hexToRgba(el.boxColor, el.boxAlpha) : 'transparent',
+      borderRadius: Math.round((el.boxRadius || 0) * scale) + 'px',
     }}>
       <span ref={spanRef} style={{
         color: el.color,
@@ -123,6 +145,7 @@ export function StackedBoxText({ el, scale }) {
       justifyContent: JUSTIFY_MAP[el.boxJustify] || 'center',
       overflow: 'hidden', boxSizing: 'border-box', padding: paddingPx + 'px',
       background: el.boxColor ? hexToRgba(el.boxColor, el.boxAlpha) : 'transparent',
+      borderRadius: Math.round((el.boxRadius || 0) * scale) + 'px',
     }}>
       <div ref={stackRef} style={{ display: 'flex', flexDirection: 'column', gap: Math.round((el.lineSpacing || 0) * scale) + 'px' }}>
         {lines.map((ln, i) => ln.type === 'rule' ? (
@@ -454,6 +477,66 @@ export function ResizeHandles({ el, widthKey, heightKey, canvasRef, updateEl, pu
           />
         );
       })}
+    </>
+  );
+}
+
+// For elements with only a width (no independent height — a plain image or
+// logo that scales proportionally, no cropping involved): drag a side handle
+// to change width, anchored on the opposite side, rather than the 8-point
+// width+height box resize ResizeHandles does for crop-style elements.
+function computeWidthResize(handle, startEl, dxPx, canvasWidthPx) {
+  const dxPct = dxPx / canvasWidthPx * 100;
+  let left = startEl.x - startEl.w / 2, right = startEl.x + startEl.w / 2;
+  if (handle === 'w') left += dxPct;
+  else right += dxPct;
+  const minW = 2;
+  if (right - left < minW) { if (handle === 'w') left = right - minW; else right = left + minW; }
+  return {
+    x: Math.round(((left + right) / 2) * 10) / 10,
+    w: Math.round((right - left) * 10) / 10,
+  };
+}
+
+export function WidthResizeHandles({ el, widthKey = 'width', canvasRef, updateEl, pushHistory }) {
+  function startResize(e, handle) {
+    e.preventDefault();
+    e.stopPropagation();
+    pushHistory();
+    const startMX = e.clientX;
+    const startEl = { x: el.x, w: el[widthKey] };
+    function onMove(ev) {
+      if (!canvasRef.current) return;
+      const rect = canvasRef.current.getBoundingClientRect();
+      const next = computeWidthResize(handle, startEl, ev.clientX - startMX, rect.width);
+      updateEl(el.id, { x: next.x, [widthKey]: next.w });
+    }
+    function onUp() {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }
+
+  return (
+    <>
+      {['w', 'e'].map(h => (
+        <div
+          key={h}
+          onMouseDown={e => startResize(e, h)}
+          style={{
+            position: 'absolute',
+            left: (h === 'w' ? 0 : 100) + '%', top: '50%',
+            width: '10px', height: '10px',
+            marginLeft: '-5px', marginTop: '-5px',
+            background: '#ffe600', border: '1px solid #000',
+            borderRadius: '2px',
+            cursor: 'ew-resize',
+            zIndex: 2,
+          }}
+        />
+      ))}
     </>
   );
 }

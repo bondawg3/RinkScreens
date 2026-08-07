@@ -2,6 +2,24 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.26.0] — 2026-08-07
+
+### Added
+- **Per-feed logos** — each RSS feed can have a logo, either uploaded or linked by URL, edited inline from the Feeds table. A new "+ Logo" element in the slide editor's Add Element menu places a chosen feed's logo as a resizable, movable, borderable image (drag-to-resize like any other image, no cropping).
+- **Feed-matched logos** — a logo element only renders on slides whose article actually came from that logo's feed. Placing one logo per selected feed at the same spot lets the right one appear automatically as the rotation cycles through sources, instead of every logo showing on every slide.
+- **Templates can be pinned to a specific feed** — a "Template Assignment" section lets you dedicate a template to one feed to keep a consistent color scheme/branding for that source; pinned templates are never used for any other feed's articles. Unpinned templates form a rotation pool used for everything else, and the rotation only advances on pool items so pinned slides don't skew it. Each template tab shows a 📌/🔁 badge (plus the pinned feed's name) so it's clear at a glance which templates are dedicated vs. rotating.
+- **Header divider line** — an optional line separating the rink name/clock header from the content below, configurable per Announcement screen or per RSS template (not globally), with adjustable width and color.
+- **Bounding-box text gained a corner-radius slider** and its background-color opacity slider is now always visible (previously hidden until a box color was set).
+- **Feed editing** — feeds can now be edited in place (name, URL, poll interval) from the Feeds table, not just synced or deleted.
+
+### Fixed
+- **Dragging an element on any RSS template other than the first silently updated template 1 instead of the one on screen** — the drag-handling effect had captured a stale closure from the very first render and never picked up which template was actually active.
+- **The RSS editor's canvas could overflow below the visible viewport** once the template tab bar pushed it down — the canvas now measures its actual available space and sizes itself to the largest 16:9 box that fits, instead of sizing purely from width.
+- **A screen's "N feeds selected" count could stay inflated after a feed was deleted** — deleting a feed now also strips it from every screen's saved selection; previously the reference lingered forever since nothing ever cleaned it up.
+
+### Changed
+- Widened the slide editor's properties panel (280px → 440px) and removed the static color-swatch presets from Background sections (the color picker covers the same ground) to make room for the growing list of per-element controls.
+
 ## [1.25.0] — 2026-08-05
 
 ### Added

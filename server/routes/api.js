@@ -160,6 +160,8 @@ function serializeScreen(s, bgMap) {
     calendar_ids: parseCalendarIds(s.calendar_ids),
     bg_opacity: s.bg_opacity ?? 100,
     bg_color_alpha: s.bg_color_alpha ?? 100,
+    header_line_width: s.header_line_width ?? 0,
+    header_line_color: s.header_line_color || '#000000',
     visible: s.visible !== false,
     two_column: !!s.two_column,
     overflow_mode: s.overflow_mode || 'none',
@@ -216,18 +218,18 @@ router.get('/screens', (req, res) => {
 });
 
 router.post('/screens', requireAuth, (req, res) => {
-  const { name, ip = '', display_type = 'games', webpage_url = '', webpage_width = 100, webpage_zoom = 100, webpage_refresh = 0, calendar_ids, bg_opacity = 100, bg_color_alpha = 100, background_id, announcement_data, bg_color = '', show_pricing = false, show_locker_rooms = true, pricing_ids, rss_feed_id, rss_feed_ids, rss_multi_mode, rss_slide_layout, rss_templates, rss_item_count, rss_rotate_seconds } = req.body;
+  const { name, ip = '', display_type = 'games', webpage_url = '', webpage_width = 100, webpage_zoom = 100, webpage_refresh = 0, calendar_ids, bg_opacity = 100, bg_color_alpha = 100, background_id, announcement_data, bg_color = '', header_line_width = 0, header_line_color = '#000000', show_pricing = false, show_locker_rooms = true, pricing_ids, rss_feed_id, rss_feed_ids, rss_multi_mode, rss_slide_layout, rss_templates, rss_item_count, rss_rotate_seconds } = req.body;
   if (!name) return res.status(400).json({ error: 'name required' });
   const calIds = parseCalendarIds(calendar_ids);
   const priceIds = parseCalendarIds(pricing_ids);
-  const row = db.insert('screens', { name, ip, display_type, background_id: background_id || null, webpage_url, webpage_width: Number(webpage_width), webpage_zoom: Number(webpage_zoom), webpage_refresh: Number(webpage_refresh), calendar_ids: calIds ? JSON.stringify(calIds) : null, bg_opacity: Number(bg_opacity), bg_color_alpha: Number(bg_color_alpha), announcement_data: announcement_data ? JSON.stringify(announcement_data) : null, bg_color: bg_color || '', show_pricing: !!show_pricing, show_locker_rooms: !!show_locker_rooms, pricing_ids: priceIds ? JSON.stringify(priceIds) : null, rss_feed_id: rss_feed_id || (Array.isArray(rss_feed_ids) && rss_feed_ids[0]) || null, rss_feed_ids: rss_feed_ids ? JSON.stringify(rss_feed_ids) : null, rss_multi_mode: rss_multi_mode || 'per_feed', rss_slide_layout: rss_slide_layout ? JSON.stringify(rss_slide_layout) : null, rss_templates: rss_templates ? JSON.stringify(rss_templates) : null, rss_item_count: rss_item_count !== undefined ? Number(rss_item_count) : 10, rss_rotate_seconds: rss_rotate_seconds !== undefined ? Number(rss_rotate_seconds) : 8 });
+  const row = db.insert('screens', { name, ip, display_type, background_id: background_id || null, webpage_url, webpage_width: Number(webpage_width), webpage_zoom: Number(webpage_zoom), webpage_refresh: Number(webpage_refresh), calendar_ids: calIds ? JSON.stringify(calIds) : null, bg_opacity: Number(bg_opacity), bg_color_alpha: Number(bg_color_alpha), announcement_data: announcement_data ? JSON.stringify(announcement_data) : null, bg_color: bg_color || '', header_line_width: Number(header_line_width), header_line_color: header_line_color || '#000000', show_pricing: !!show_pricing, show_locker_rooms: !!show_locker_rooms, pricing_ids: priceIds ? JSON.stringify(priceIds) : null, rss_feed_id: rss_feed_id || (Array.isArray(rss_feed_ids) && rss_feed_ids[0]) || null, rss_feed_ids: rss_feed_ids ? JSON.stringify(rss_feed_ids) : null, rss_multi_mode: rss_multi_mode || 'per_feed', rss_slide_layout: rss_slide_layout ? JSON.stringify(rss_slide_layout) : null, rss_templates: rss_templates ? JSON.stringify(rss_templates) : null, rss_item_count: rss_item_count !== undefined ? Number(rss_item_count) : 10, rss_rotate_seconds: rss_rotate_seconds !== undefined ? Number(rss_rotate_seconds) : 8 });
   res.json({ id: row.id });
 });
 
 router.patch('/screens/:id', requireAuth, (req, res) => {
   const screen = db.findById('screens', req.params.id);
   if (!screen) return res.status(404).json({ error: 'not found' });
-  const { name, ip, display_type, background_id, webpage_url, webpage_width, webpage_zoom, webpage_refresh, calendar_ids, bg_opacity, bg_color_alpha, announcement_data, bg_color, visible, show_pricing, show_locker_rooms, pricing_ids, rss_feed_id, rss_feed_ids, rss_multi_mode, rss_slide_layout, rss_templates, rss_item_count, rss_rotate_seconds } = req.body;
+  const { name, ip, display_type, background_id, webpage_url, webpage_width, webpage_zoom, webpage_refresh, calendar_ids, bg_opacity, bg_color_alpha, announcement_data, bg_color, header_line_width, header_line_color, visible, show_pricing, show_locker_rooms, pricing_ids, rss_feed_id, rss_feed_ids, rss_multi_mode, rss_slide_layout, rss_templates, rss_item_count, rss_rotate_seconds } = req.body;
   const calIds = calendar_ids !== undefined ? parseCalendarIds(calendar_ids) : parseCalendarIds(screen.calendar_ids);
   const priceIds = pricing_ids !== undefined ? parseCalendarIds(pricing_ids) : parseCalendarIds(screen.pricing_ids);
   db.update('screens', req.params.id, {
@@ -244,6 +246,8 @@ router.patch('/screens/:id', requireAuth, (req, res) => {
     bg_color_alpha: bg_color_alpha !== undefined ? Number(bg_color_alpha) : (screen.bg_color_alpha ?? 100),
     announcement_data: announcement_data !== undefined ? JSON.stringify(announcement_data) : (screen.announcement_data || null),
     bg_color: bg_color !== undefined ? (bg_color || '') : (screen.bg_color || ''),
+    header_line_width: header_line_width !== undefined ? Number(header_line_width) : (screen.header_line_width ?? 0),
+    header_line_color: header_line_color !== undefined ? (header_line_color || '#000000') : (screen.header_line_color || '#000000'),
     visible: visible !== undefined ? visible !== false : (screen.visible !== false),
     two_column: 'two_column' in req.body ? !!req.body.two_column : !!screen.two_column,
     overflow_mode: req.body.overflow_mode ?? screen.overflow_mode ?? 'none',
@@ -748,17 +752,25 @@ router.delete('/calendars/:id', requireAuth, (req, res) => {
 
 // ── RSS Feeds ─────────────────────────────────────────────────────────────────
 
+// An uploaded logo takes precedence over a linked one — the editor's toggle
+// only ever sets one at a time, but this keeps a stale link from resurfacing
+// if an upload's write raced ahead of the field being cleared.
+function feedLogoSrc(f) {
+  return f.logo_filename ? `/uploads/${f.logo_filename}` : (f.logo_url || '');
+}
+
 router.get('/rss-feeds', (req, res) => {
-  // TVs only need id/name/items to render slides; admin also gets sync status
+  // TVs only need id/name/items/logo to render slides; admin also gets sync status and the raw logo fields for editing
   const feeds = db.findAll('rss_feeds', 'created_at');
   if (!isAdminRequest(req)) {
-    return res.json(feeds.map((f) => ({ id: f.id, name: f.name, items: f.items || [] })));
+    return res.json(feeds.map((f) => ({ id: f.id, name: f.name, items: f.items || [], logo_src: feedLogoSrc(f) })));
   }
   res.json(feeds.map((f) => ({
     ...f,
     items: f.items || [],
     last_sync_at: f.last_sync_at || null,
     last_sync_error: f.last_sync_error || null,
+    logo_src: feedLogoSrc(f),
   })));
 });
 
@@ -783,7 +795,7 @@ router.patch('/rss-feeds/:id', requireAuth, async (req, res) => {
   const feed = db.findById('rss_feeds', req.params.id);
   if (!feed) return res.status(404).json({ error: 'not found' });
 
-  const { name, url, poll_interval_minutes } = req.body;
+  const { name, url, poll_interval_minutes, logo_url } = req.body;
 
   if (name && name.toLowerCase() !== feed.name.toLowerCase() && findByNameCi('rss_feeds', name, feed.id)) {
     return res.status(400).json({ error: `A feed named "${name}" already exists.` });
@@ -794,11 +806,23 @@ router.patch('/rss-feeds/:id', requireAuth, async (req, res) => {
     }
   }
 
-  db.update('rss_feeds', req.params.id, {
+  const changes = {
     name: name ?? feed.name,
     url: url ?? feed.url,
     poll_interval_minutes: poll_interval_minutes !== undefined ? Number(poll_interval_minutes) : feed.poll_interval_minutes,
-  });
+  };
+  // Linking a logo URL supersedes an uploaded one — clean up the old file
+  // (the reverse, uploading over a linked logo, is handled by the upload
+  // route itself so both paths agree on "only one logo source at a time").
+  if (logo_url !== undefined) {
+    changes.logo_url = logo_url || '';
+    if (logo_url && feed.logo_filename) {
+      try { fs.unlinkSync(path.join(__dirname, '..', '..', 'uploads', feed.logo_filename)); } catch (_) {}
+      changes.logo_filename = '';
+    }
+  }
+
+  db.update('rss_feeds', req.params.id, changes);
   // Apply a new poll interval or URL immediately instead of after the next fire
   if (poll_interval_minutes !== undefined || (url && url !== feed.url)) {
     scheduleFeed(db.findById('rss_feeds', req.params.id));
@@ -806,10 +830,37 @@ router.patch('/rss-feeds/:id', requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+router.delete('/rss-feeds/:id/logo', requireAuth, (req, res) => {
+  const feed = db.findById('rss_feeds', req.params.id);
+  if (!feed) return res.status(404).json({ error: 'not found' });
+  if (feed.logo_filename) {
+    try { fs.unlinkSync(path.join(__dirname, '..', '..', 'uploads', feed.logo_filename)); } catch (_) {}
+  }
+  db.update('rss_feeds', req.params.id, { logo_filename: '', logo_url: '' });
+  res.json({ ok: true });
+});
+
 router.delete('/rss-feeds/:id', requireAuth, (req, res) => {
   const feedId = Number(req.params.id);
   cancelFeed(feedId);
-  db.remove('rss_feeds', feedId);
+  db.transaction((tx) => {
+    tx.remove('rss_feeds', feedId);
+    // Drop the deleted feed from any RSS screen that referenced it — left
+    // uncleaned, a screen's rss_feed_ids would keep counting it as
+    // "selected" (and rss_feed_id could keep pointing at a feed that no
+    // longer exists) even though it can never appear in the feed list again.
+    const rssScreens = tx.findAll('screens').filter((s) => s.display_type === 'rss');
+    for (const scr of rssScreens) {
+      let ids = [];
+      try { ids = scr.rss_feed_ids ? JSON.parse(scr.rss_feed_ids) : []; } catch { ids = []; }
+      if (!ids.includes(feedId) && scr.rss_feed_id !== feedId) continue;
+      const nextIds = ids.filter((id) => id !== feedId);
+      tx.update('screens', scr.id, {
+        rss_feed_ids: JSON.stringify(nextIds),
+        rss_feed_id: scr.rss_feed_id === feedId ? (nextIds[0] || null) : scr.rss_feed_id,
+      });
+    }
+  });
   ws.broadcast({ type: 'refresh_data' });
   res.json({ ok: true });
 });

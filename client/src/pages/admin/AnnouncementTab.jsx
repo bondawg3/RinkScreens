@@ -5,7 +5,7 @@ import tStyles from './ScreensTab.module.css';
 import s from './AnnouncementTab.module.css';
 import Thumbnail from './Thumbnail';
 import { useScreenCards, InUseBadge, EyeButton, EyeHint, DuplicateButton } from './screenCard';
-import { FONTS, makeId, hexToRgba, AutoFitText, StackedBoxText, LinesEditor, Section, useUndo, ResizeHandles } from './SlideEditorShared';
+import { FONTS, makeId, hexToRgba, AutoFitText, StackedBoxText, LinesEditor, Section, useUndo, ResizeHandles, borderStyle, BORDER_SIDES } from './SlideEditorShared';
 
 function formatDateTimePreview(format, showSeconds) {
   const now = new Date();
@@ -38,26 +38,40 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
   const [bgOpacity, setBgOpacity] = useState(screen.bg_opacity ?? 100);
   const [bgColor, setBgColor] = useState(screen.bg_color || '');
   const [bgColorAlpha, setBgColorAlpha] = useState(screen.bg_color_alpha ?? 100);
+  const [headerLineWidth, setHeaderLineWidth] = useState(screen.header_line_width ?? 0);
+  const [headerLineColor, setHeaderLineColor] = useState(screen.header_line_color || '#000000');
   const [selectedId, setSelectedId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState('');
 
   const canvasRef = useRef(null);
   const canvasOuterRef = useRef(null);
+  const canvasFitRef = useRef(null);
   const dragRef = useRef(null);
 
   // Undo/redo (Ctrl+Z / Cmd+Z, Shift to redo) over the elements array
   const pushHistory = useUndo(useCallback(() => elements, [elements]), setElements);
 
-  // Scale font sizes to canvas width
+  // Canvas is sized to the largest 16:9 box that fits inside canvasFit (the
+  // flexible area below the header/toolbar rows), so it shrinks to stay
+  // fully visible instead of overflowing when other rows above it grow.
   const [canvasWidth, setCanvasWidth] = useState(800);
+  const [canvasHeight, setCanvasHeight] = useState(450);
   useEffect(() => {
-    if (!canvasOuterRef.current) return;
-    setCanvasWidth(canvasOuterRef.current.offsetWidth);
-    const obs = new ResizeObserver(() => {
-      if (canvasOuterRef.current) setCanvasWidth(canvasOuterRef.current.offsetWidth);
-    });
-    obs.observe(canvasOuterRef.current);
+    if (!canvasFitRef.current) return;
+    function measure() {
+      const el = canvasFitRef.current;
+      if (!el) return;
+      const availW = el.clientWidth;
+      const availH = el.clientHeight;
+      let w = availW, h = w * 9 / 16;
+      if (h > availH) { h = availH; w = h * 16 / 9; }
+      setCanvasWidth(Math.round(w));
+      setCanvasHeight(Math.round(h));
+    }
+    measure();
+    const obs = new ResizeObserver(measure);
+    obs.observe(canvasFitRef.current);
     return () => obs.disconnect();
   }, []);
   const scale = canvasWidth / 1920;
@@ -151,6 +165,8 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
       bg_opacity: bgOpacity,
       bg_color: bgColor || '',
       bg_color_alpha: bgColorAlpha,
+      header_line_width: headerLineWidth,
+      header_line_color: headerLineColor,
       announcement_data: { elements },
     };
     try {
@@ -186,7 +202,8 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
       <div className={s.editorBody}>
         {/* Canvas column */}
         <div className={s.canvasCol}>
-          <div className={s.canvasOuter} ref={canvasOuterRef} style={{ backgroundColor: bgColor ? hexToRgba(bgColor, bgColorAlpha) : '#0a2a42' }}>
+          <div className={s.canvasFit} ref={canvasFitRef}>
+          <div className={s.canvasOuter} ref={canvasOuterRef} style={{ width: canvasWidth + 'px', height: canvasHeight + 'px', backgroundColor: bgColor ? hexToRgba(bgColor, bgColorAlpha) : '#0a2a42' }}>
             <div
               className={s.canvas}
               ref={canvasRef}
@@ -252,7 +269,7 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                         width: Math.round(el.width / 100 * canvasWidth) + 'px',
                         display: 'block',
                         boxSizing: 'border-box',
-                        border: el.borderWidth ? `${Math.round(el.borderWidth * scale)}px solid ${el.borderColor || '#fff'}` : 'none',
+                        ...borderStyle(el, scale),
                       }}
                       draggable={false}
                       alt=""
@@ -262,6 +279,7 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
               ))}
             </div>
           </div>
+          </div>
 
         </div>
 
@@ -270,20 +288,7 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
           {/* Background */}
           <Section title="Background">
             <div className={s.propLabel}>Color</div>
-            <div className={s.colorSwatches}>
-              {['#000000','#0d1b2a','#1a1a2e','#0a3d62','#154360','#1a5276',
-                '#4a235a','#6c3483','#78281f','#922b21','#1e8449','#1b4f72',
-                '#7d6608','#784212','#424242','#ffffff'].map(c => (
-                <button
-                  key={c}
-                  className={s.swatch + (bgColor === c ? ' ' + s.swatchActive : '')}
-                  style={{ backgroundColor: c }}
-                  onClick={() => setBgColor(c)}
-                  title={c}
-                />
-              ))}
-            </div>
-            <div className={s.propRow} style={{ marginTop: '0.4rem' }}>
+            <div className={s.propRow}>
               <input
                 type="color"
                 className={s.colorInput}
@@ -331,6 +336,29 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                 />
               </>
             )}
+          </Section>
+
+          <Section title="Header Divider">
+            <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>
+              An optional line under the rink name/clock header, above this screen's content. Width 0 hides it.
+            </div>
+            <div className={s.propLabel}>Width — {headerLineWidth}px</div>
+            <div className={s.propRow}>
+              <input
+                type="range" min="0" max="20" step="1"
+                value={headerLineWidth}
+                onChange={e => setHeaderLineWidth(Number(e.target.value))}
+              />
+              {headerLineWidth > 0 && (
+                <input
+                  type="color"
+                  className={s.colorInput}
+                  value={headerLineColor}
+                  onChange={e => setHeaderLineColor(e.target.value)}
+                  title="Line color"
+                />
+              )}
+            </div>
           </Section>
 
           {/* Add elements */}
@@ -500,6 +528,14 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                             onChange={e => updateEl(selectedId, { boxPadding: Number(e.target.value) })}
                           />
                         </div>
+                        <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Corner Radius — {selectedEl.boxRadius || 0}px</div>
+                        <div className={s.propRow}>
+                          <input
+                            type="range" min="0" max="100" step="2"
+                            value={selectedEl.boxRadius || 0}
+                            onChange={e => updateEl(selectedId, { boxRadius: Number(e.target.value) })}
+                          />
+                        </div>
                         <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Box Background Color</div>
                         <div className={s.propRow}>
                           <input
@@ -512,17 +548,13 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                             <button className={s.deleteBtnDark} onClick={() => updateEl(selectedId, { boxColor: undefined })} title="Clear">✕</button>
                           )}
                         </div>
-                        {selectedEl.boxColor && (
-                          <>
-                            <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Box Color Opacity — {selectedEl.boxAlpha ?? 100}%</div>
-                            <input
-                              type="range" min="0" max="100" step="5"
-                              value={selectedEl.boxAlpha ?? 100}
-                              onChange={e => updateEl(selectedId, { boxAlpha: Number(e.target.value) })}
-                              style={{ width: '100%' }}
-                            />
-                          </>
-                        )}
+                        <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Box Color Opacity — {selectedEl.boxAlpha ?? 100}%</div>
+                        <input
+                          type="range" min="0" max="100" step="5"
+                          value={selectedEl.boxAlpha ?? 100}
+                          onChange={e => updateEl(selectedId, { boxAlpha: Number(e.target.value) })}
+                          style={{ width: '100%' }}
+                        />
 
                         <label className={s.checkRow} style={{ marginTop: '0.4rem' }}>
                           <input
@@ -695,15 +727,32 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                     </div>
                   </div>
                   {!!selectedEl.borderWidth && (
-                    <div>
-                      <div className={s.propLabel}>Border Color</div>
-                      <input
-                        type="color"
-                        className={s.colorInput}
-                        value={selectedEl.borderColor || '#ffffff'}
-                        onChange={e => updateEl(selectedId, { borderColor: e.target.value })}
-                      />
-                    </div>
+                    <>
+                      <div>
+                        <div className={s.propLabel}>Border Color</div>
+                        <input
+                          type="color"
+                          className={s.colorInput}
+                          value={selectedEl.borderColor || '#ffffff'}
+                          onChange={e => updateEl(selectedId, { borderColor: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <div className={s.propLabel}>Border Side</div>
+                        <div className={s.alignToggle} style={{ width: '100%', flexWrap: 'wrap' }}>
+                          {BORDER_SIDES.map(({ value, label }) => (
+                            <button
+                              key={value}
+                              type="button"
+                              className={(selectedEl.borderSide || 'all') === value ? s.alignActive : s.alignBtn}
+                              onClick={() => updateEl(selectedId, { borderSide: value })}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
                   )}
                 </>
               )}

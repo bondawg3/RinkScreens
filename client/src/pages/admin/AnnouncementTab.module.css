@@ -56,10 +56,21 @@
   gap: 0.75rem;
 }
 
+/* Sized in JS (see canvasWidth/canvasHeight) to the largest 16:9 box that
+   fits the remaining space below the template tabs/hint row — the old
+   width-only padding-top aspect trick didn't know about that row eating
+   vertical space, so the canvas could grow taller than the viewport. */
+.canvasFit {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
 .canvasOuter {
   position: relative;
-  width: 100%;
-  padding-top: 56.25%;
   background: #0a2a42;
   border-radius: 8px;
   overflow: hidden;
@@ -135,7 +146,7 @@
 
 /* ── Properties panel ── */
 .propsPanel {
-  width: 280px;
+  width: 440px;
   flex-shrink: 0;
   background: #12122a;
   border-left: 1px solid rgba(255,255,255,0.1);

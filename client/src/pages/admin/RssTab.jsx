@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { useApi, apiFetch } from '../../hooks/useApi';
+import { useApi, apiFetch, getToken } from '../../hooks/useApi';
 import adminStyles from './AdminTab.module.css';
 import tStyles from './ScreensTab.module.css';
 import s from './AnnouncementTab.module.css';
 import Thumbnail from './Thumbnail';
 import { useScreenCards, InUseBadge, EyeButton, EyeHint, DuplicateButton } from './screenCard';
-import { FONTS, makeId, hexToRgba, AutoFitText, StackedBoxText, LinesEditor, Section, useUndo, ResizeHandles } from './SlideEditorShared';
+import { FONTS, makeId, hexToRgba, AutoFitText, StackedBoxText, LinesEditor, Section, useUndo, ResizeHandles, WidthResizeHandles, borderStyle, BORDER_SIDES } from './SlideEditorShared';
 
 const TOKENS = [
   { key: 'title', label: 'Title' },
@@ -22,6 +22,151 @@ function defaultElements() {
 }
 
 // ── Feed management ──────────────────────────────────────────────────────────
+function FeedLogoEditor({ feed, onChanged }) {
+  const [mode, setMode] = useState(feed.logo_url ? 'link' : 'upload');
+  const [linkUrl, setLinkUrl] = useState(feed.logo_url || '');
+  const [uploading, setUploading] = useState(false);
+  const [err, setErr] = useState('');
+  const fileRef = useRef();
+
+  async function upload(e) {
+    const file = e.target.files[0]; if (!file) return;
+    setUploading(true); setErr('');
+    try {
+      const fd = new FormData(); fd.append('file', file);
+      const res = await fetch(`/api/rss-feeds/${feed.id}/logo`, {
+        method: 'POST', body: fd, headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      onChanged();
+    } catch (ex) { setErr(ex.message); }
+    finally { setUploading(false); e.target.value = ''; }
+  }
+
+  async function saveLink() {
+    setErr('');
+    try {
+      await apiFetch(`/rss-feeds/${feed.id}`, { method: 'PATCH', body: JSON.stringify({ logo_url: linkUrl.trim() }) });
+      onChanged();
+    } catch (ex) { setErr(ex.message); }
+  }
+
+  async function removeLogo() {
+    setErr('');
+    try {
+      await apiFetch(`/rss-feeds/${feed.id}/logo`, { method: 'DELETE' });
+      setLinkUrl('');
+      onChanged();
+    } catch (ex) { setErr(ex.message); }
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+      {feed.logo_src && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <img src={feed.logo_src} alt="" style={{ maxHeight: '32px', maxWidth: '80px', objectFit: 'contain', background: '#fff', borderRadius: '3px' }} />
+          <button type="button" className={adminStyles.btnGhost} onClick={removeLogo}>Remove</button>
+        </div>
+      )}
+      <div className={adminStyles.actions}>
+        <button type="button" className={mode === 'upload' ? adminStyles.btnPrimary : adminStyles.btnGhost} onClick={() => setMode('upload')}>Upload</button>
+        <button type="button" className={mode === 'link' ? adminStyles.btnPrimary : adminStyles.btnGhost} onClick={() => setMode('link')}>Link</button>
+      </div>
+      {mode === 'upload' ? (
+        <>
+          <button type="button" className={adminStyles.btnGhost} onClick={() => fileRef.current.click()} disabled={uploading}>
+            {uploading ? 'Uploading…' : 'Choose Image…'}
+          </button>
+          <input ref={fileRef} type="file" accept=".jpg,.jpeg,.png,.gif,.webp,.svg" style={{ display: 'none' }} onChange={upload} />
+        </>
+      ) : (
+        <div className={adminStyles.actions}>
+          <input className={adminStyles.input} placeholder="https://example.com/logo.png" value={linkUrl} onChange={e => setLinkUrl(e.target.value)} style={{ minWidth: '200px' }} />
+          <button type="button" className={adminStyles.btnGhost} onClick={saveLink} disabled={!linkUrl.trim()}>Save</button>
+        </div>
+      )}
+      {err && <span style={{ color: '#ff8080', fontSize: '0.8rem' }}>{err}</span>}
+    </div>
+  );
+}
+
+function FeedRow({ feed, onSaved, onDeleted, onSynced }) {
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(feed.name);
+  const [url, setUrl] = useState(feed.url);
+  const [pollMinutes, setPollMinutes] = useState(feed.poll_interval_minutes);
+  const [err, setErr] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function save() {
+    if (!name.trim() || !url.trim()) { setErr('Name and URL are required.'); return; }
+    setSaving(true);
+    setErr('');
+    try {
+      await apiFetch(`/rss-feeds/${feed.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: name.trim(), url: url.trim(), poll_interval_minutes: Number(pollMinutes) }),
+      });
+      setEditing(false);
+      onSaved();
+    } catch (ex) { setErr(ex.message); }
+    setSaving(false);
+  }
+
+  function cancel() {
+    setName(feed.name); setUrl(feed.url); setPollMinutes(feed.poll_interval_minutes);
+    setErr(''); setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <tr>
+        <td><input className={adminStyles.input} value={name} onChange={e => setName(e.target.value)} autoFocus /></td>
+        <td><input className={adminStyles.input} value={url} onChange={e => setUrl(e.target.value)} style={{ minWidth: '220px' }} /></td>
+        <td>
+          <input
+            className={adminStyles.input}
+            type="number" min="1" style={{ width: '70px' }}
+            value={pollMinutes}
+            onChange={e => setPollMinutes(e.target.value)}
+          />
+        </td>
+        <td><FeedLogoEditor feed={feed} onChanged={onSaved} /></td>
+        <td colSpan={2}>{err && <span style={{ color: '#ff8080', fontSize: '0.85rem' }}>{err}</span>}</td>
+        <td className={adminStyles.actions}>
+          <button className={adminStyles.btnPrimary} onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+          <button className={adminStyles.btnGhost} onClick={cancel}>Cancel</button>
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr>
+      <td>{feed.name}</td>
+      <td style={{ maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{feed.url}</td>
+      <td>{feed.poll_interval_minutes}</td>
+      <td>
+        {feed.logo_src
+          ? <img src={feed.logo_src} alt="" style={{ maxHeight: '28px', maxWidth: '60px', objectFit: 'contain', background: '#fff', borderRadius: '3px' }} />
+          : <span className={adminStyles.muted}>—</span>}
+      </td>
+      <td>{(feed.items || []).length}</td>
+      <td>
+        {feed.last_sync_error
+          ? <span style={{ color: '#ff8080' }} title={feed.last_sync_error}>Error</span>
+          : feed.last_sync_at ? <span style={{ color: '#7fd88f' }}>OK</span> : <span>Pending…</span>}
+      </td>
+      <td className={adminStyles.actions}>
+        <button className={adminStyles.btnGhost} onClick={() => onSynced(feed.id)} title="Sync now">↻</button>
+        <button className={adminStyles.btnGhost} onClick={() => setEditing(true)} title="Edit">✎</button>
+        <button className={adminStyles.btnDanger} onClick={() => onDeleted(feed.id)} title="Delete">🗑</button>
+      </td>
+    </tr>
+  );
+}
+
 function FeedManager({ feeds, reload }) {
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
@@ -61,28 +206,14 @@ function FeedManager({ feeds, reload }) {
       <h3 className={adminStyles.subheading}>Feeds</h3>
       <table className={adminStyles.table}>
         <thead>
-          <tr><th>Name</th><th>URL</th><th>Poll (min)</th><th>Items</th><th>Status</th><th></th></tr>
+          <tr><th>Name</th><th>URL</th><th>Poll (min)</th><th>Logo</th><th>Items</th><th>Status</th><th></th></tr>
         </thead>
         <tbody>
           {(feeds || []).map((f) => (
-            <tr key={f.id}>
-              <td>{f.name}</td>
-              <td style={{ maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{f.url}</td>
-              <td>{f.poll_interval_minutes}</td>
-              <td>{(f.items || []).length}</td>
-              <td>
-                {f.last_sync_error
-                  ? <span style={{ color: '#ff8080' }} title={f.last_sync_error}>Error</span>
-                  : f.last_sync_at ? <span style={{ color: '#7fd88f' }}>OK</span> : <span>Pending…</span>}
-              </td>
-              <td>
-                <button className={adminStyles.btnGhost} onClick={() => syncFeed(f.id)} title="Sync now">↻</button>
-                <button className={adminStyles.btnDanger} onClick={() => deleteFeed(f.id)} title="Delete">🗑</button>
-              </td>
-            </tr>
+            <FeedRow key={f.id} feed={f} onSaved={reload} onDeleted={deleteFeed} onSynced={syncFeed} />
           ))}
           {(!feeds || feeds.length === 0) && (
-            <tr><td colSpan={6} className={adminStyles.muted}>No feeds yet.</td></tr>
+            <tr><td colSpan={7} className={adminStyles.muted}>No feeds yet.</td></tr>
           )}
         </tbody>
       </table>
@@ -121,6 +252,7 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
       id: makeId(), name: 'Template 1', elements: legacyElements,
       bgColor: screen.bg_color || '', bgColorAlpha: screen.bg_color_alpha ?? 100,
       bgFilename: screen.bg_filename || '', bgLabel: screen.bg_label || '', bgOpacity: screen.bg_opacity ?? 100,
+      headerLineWidth: screen.header_line_width ?? 0, headerLineColor: screen.header_line_color || '#000000',
     }];
   });
   const [activeTemplateIdx, setActiveTemplateIdx] = useState(0);
@@ -138,7 +270,15 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
   // takes N items from each (interleaved so the rotation mixes sources)
   // while "total by date" merges every selected feed's items and keeps only
   // the N most recent overall.
-  const [feedIds, setFeedIds] = useState(() => screen.rss_feed_ids?.length ? screen.rss_feed_ids : (screen.rss_feed_id ? [screen.rss_feed_id] : []));
+  const [feedIds, setFeedIds] = useState(() => {
+    const raw = screen.rss_feed_ids?.length ? screen.rss_feed_ids : (screen.rss_feed_id ? [screen.rss_feed_id] : []);
+    // A screen saved before feed deletion cleaned up references (or one
+    // deleted through some other path) can still list an id for a feed that
+    // no longer exists — drop those so "N selected" matches the checkboxes
+    // actually shown, and the stale id doesn't linger into the next save.
+    const validIds = new Set((feeds || []).map((f) => f.id));
+    return raw.filter((id) => validIds.has(id));
+  });
   const [multiMode, setMultiMode] = useState(screen.rss_multi_mode || 'per_feed');
   const [itemCount, setItemCount] = useState(screen.rss_item_count ?? 10);
   const [rotateSeconds, setRotateSeconds] = useState(screen.rss_rotate_seconds ?? 8);
@@ -148,6 +288,7 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
 
   const canvasRef = useRef(null);
   const canvasOuterRef = useRef(null);
+  const canvasFitRef = useRef(null);
   const dragRef = useRef(null);
 
   // Snapshots the whole templates array + which one is active, not just the
@@ -159,14 +300,27 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
     useCallback((snap) => { setActiveTemplateIdx(snap.idx); setTemplates(snap.templates); }, [])
   );
 
+  // Canvas is sized to the largest 16:9 box that fits inside canvasFit (the
+  // flexible area below the template tabs/hint row), so it shrinks to stay
+  // fully visible instead of overflowing the viewport as more templates or
+  // longer hint text push the tabs row taller.
   const [canvasWidth, setCanvasWidth] = useState(800);
+  const [canvasHeight, setCanvasHeight] = useState(450);
   useEffect(() => {
-    if (!canvasOuterRef.current) return;
-    setCanvasWidth(canvasOuterRef.current.offsetWidth);
-    const obs = new ResizeObserver(() => {
-      if (canvasOuterRef.current) setCanvasWidth(canvasOuterRef.current.offsetWidth);
-    });
-    obs.observe(canvasOuterRef.current);
+    if (!canvasFitRef.current) return;
+    function measure() {
+      const el = canvasFitRef.current;
+      if (!el) return;
+      const availW = el.clientWidth;
+      const availH = el.clientHeight;
+      let w = availW, h = w * 9 / 16;
+      if (h > availH) { h = availH; w = h * 16 / 9; }
+      setCanvasWidth(Math.round(w));
+      setCanvasHeight(Math.round(h));
+    }
+    measure();
+    const obs = new ResizeObserver(measure);
+    obs.observe(canvasFitRef.current);
     return () => obs.disconnect();
   }, []);
   const scale = canvasWidth / 1920;
@@ -191,7 +345,14 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
     };
-  }, []);
+    // setElements closes over activeTemplateIdx (it writes into
+    // templates[activeTemplateIdx]) — with an empty dep array this effect
+    // would keep the very first render's closure forever, so dragging on
+    // any template but the first silently updated template 1's data instead
+    // of the one on screen (looked like the element just wouldn't move).
+    // activeTemplateIdx only changes between drag gestures, never during
+    // one, so re-subscribing on it can't drop an in-progress drag.
+  }, [activeTemplateIdx]);
 
   function startDrag(e, el) {
     e.preventDefault();
@@ -222,6 +383,14 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
   function addStaticImage(filename) {
     if (!filename) return;
     const el = { id: makeId(), type: 'image', filename, width: 25, x: 50, y: 50, borderWidth: 0, borderColor: '#ffffff' };
+    pushHistory();
+    setElements(prev => [...prev, el]);
+    setSelectedId(el.id);
+  }
+
+  function addLogo(feedId) {
+    if (!feedId) return;
+    const el = { id: makeId(), type: 'image', logoFeedId: Number(feedId), width: 20, x: 50, y: 50, borderWidth: 0, borderColor: '#ffffff' };
     pushHistory();
     setElements(prev => [...prev, el]);
     setSelectedId(el.id);
@@ -276,6 +445,10 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
   const selectedEl = elements.find(e => e.id === selectedId) || null;
   const bgImages = (backgrounds || []).filter(b => (b.image_type || 'background') === 'background');
   const generalImages = (backgrounds || []).filter(b => b.image_type === 'general');
+  // Only offer logos for feeds actually selected as a content source for
+  // this screen — a logo for a feed you're not pulling from wouldn't mean
+  // much on this slide set.
+  const feedsWithLogos = (feeds || []).filter(f => feedIds.includes(f.id) && f.logo_src);
 
   function toggleFeed(id) {
     setFeedIds(prev => prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]);
@@ -327,43 +500,57 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
       <div className={s.editorBody}>
         <div className={s.canvasCol}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
-            {templates.map((t, idx) => (
-              <div
-                key={t.id || idx}
-                onClick={() => selectTemplate(idx)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: '0.3rem',
-                  padding: '0.3rem 0.6rem', borderRadius: '6px', cursor: 'pointer',
-                  background: idx === activeTemplateIdx ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)',
-                  border: idx === activeTemplateIdx ? '1px solid rgba(255,255,255,0.4)' : '1px solid transparent',
-                }}
-              >
-                <input
-                  value={t.name}
-                  onChange={e => renameTemplate(idx, e.target.value)}
-                  onClick={e => e.stopPropagation()}
+            {templates.map((t, idx) => {
+              const dedicatedFeed = t.assignedFeedId ? (feeds || []).find(f => f.id === t.assignedFeedId) : null;
+              return (
+                <div
+                  key={t.id || idx}
+                  onClick={() => selectTemplate(idx)}
                   style={{
-                    background: 'transparent', border: 'none', color: '#fff', fontSize: '0.85rem',
-                    fontWeight: idx === activeTemplateIdx ? 700 : 400, width: Math.max(60, t.name.length * 7) + 'px',
+                    display: 'flex', alignItems: 'center', gap: '0.3rem',
+                    padding: '0.3rem 0.6rem', borderRadius: '6px', cursor: 'pointer',
+                    background: idx === activeTemplateIdx ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)',
+                    border: idx === activeTemplateIdx ? '1px solid rgba(255,255,255,0.4)' : '1px solid transparent',
                   }}
-                />
-                <button type="button" className={s.deleteBtnDark} onClick={e => { e.stopPropagation(); duplicateTemplate(idx); }} title="Duplicate template">⧉</button>
-                {templates.length > 1 && (
-                  <button type="button" className={s.deleteBtnDark} onClick={e => { e.stopPropagation(); deleteTemplate(idx); }} title="Delete template">✕</button>
-                )}
-              </div>
-            ))}
+                >
+                  <span
+                    title={dedicatedFeed ? `Dedicated to ${dedicatedFeed.name} — never used for the rotation pool` : 'Part of the rotation pool'}
+                    style={{ fontSize: '0.78rem' }}
+                  >
+                    {dedicatedFeed ? '📌' : '🔁'}
+                  </span>
+                  <input
+                    value={t.name}
+                    onChange={e => renameTemplate(idx, e.target.value)}
+                    onClick={e => e.stopPropagation()}
+                    style={{
+                      background: 'transparent', border: 'none', color: '#fff', fontSize: '0.85rem',
+                      fontWeight: idx === activeTemplateIdx ? 700 : 400, width: Math.max(60, t.name.length * 7) + 'px',
+                    }}
+                  />
+                  {dedicatedFeed && (
+                    <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.5)' }}>({dedicatedFeed.name})</span>
+                  )}
+                  <button type="button" className={s.deleteBtnDark} onClick={e => { e.stopPropagation(); duplicateTemplate(idx); }} title="Duplicate template">⧉</button>
+                  {templates.length > 1 && (
+                    <button type="button" className={s.deleteBtnDark} onClick={e => { e.stopPropagation(); deleteTemplate(idx); }} title="Delete template">✕</button>
+                  )}
+                </div>
+              );
+            })}
             <button type="button" className={adminStyles.btnGhost} onClick={addTemplate} style={{ color: '#fff', borderColor: 'rgba(255,255,255,0.3)' }}>
               + Add Template
             </button>
           </div>
           {templates.length > 1 && (
             <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.78rem' }}>
-              Feed items cycle through these templates in order (item 1 → {templates[0]?.name}, item 2 → {templates[1]?.name}
-              {templates.length > 2 ? `, …, item ${templates.length} → ${templates[templates.length - 1]?.name}, then back to ${templates[0]?.name}` : ', then back'}) — breaks up the visual instead of repeating one layout every slide.
+              🔁 rotation-pool templates cycle for any item whose feed isn't pinned to a 📌 dedicated template — a pinned
+              template is always used for its feed's articles and never appears for anyone else's. Set a template's pin in
+              its "Template Assignment" section below.
             </div>
           )}
-          <div className={s.canvasOuter} ref={canvasOuterRef} style={{ backgroundColor: activeTemplate.bgColor ? hexToRgba(activeTemplate.bgColor, activeTemplate.bgColorAlpha) : '#0a2a42' }}>
+          <div className={s.canvasFit} ref={canvasFitRef}>
+          <div className={s.canvasOuter} ref={canvasOuterRef} style={{ width: canvasWidth + 'px', height: canvasHeight + 'px', backgroundColor: activeTemplate.bgColor ? hexToRgba(activeTemplate.bgColor, activeTemplate.bgColorAlpha) : '#0a2a42' }}>
             <div
               className={s.canvas}
               ref={canvasRef}
@@ -413,9 +600,8 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                       position: 'relative',
                       width: Math.round(el.width / 100 * canvasWidth) + 'px',
                       height: Math.round((el.height || el.width * 0.6) / 100 * canvasWidth * 0.5625) + 'px',
-                      border: el.borderWidth
-                        ? `${Math.round(el.borderWidth * scale)}px solid ${el.borderColor || '#fff'}`
-                        : '2px dashed rgba(255,255,255,0.4)',
+                      border: el.borderWidth ? undefined : '2px dashed rgba(255,255,255,0.4)',
+                      ...borderStyle(el, scale),
                       boxSizing: 'border-box',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem',
@@ -434,6 +620,23 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                         <ResizeHandles el={el} widthKey="width" heightKey="height" canvasRef={canvasRef} updateEl={updateEl} pushHistory={pushHistory} />
                       )}
                     </div>
+                  ) : el.logoFeedId ? (
+                    <div style={{ position: 'relative', display: 'inline-block' }}>
+                      <img
+                        src={(feeds || []).find(f => f.id === el.logoFeedId)?.logo_src || ''}
+                        style={{
+                          width: Math.round(el.width / 100 * canvasWidth) + 'px',
+                          display: 'block',
+                          boxSizing: 'border-box',
+                          ...borderStyle(el, scale),
+                        }}
+                        draggable={false}
+                        alt=""
+                      />
+                      {selectedId === el.id && (
+                        <WidthResizeHandles el={el} widthKey="width" canvasRef={canvasRef} updateEl={updateEl} pushHistory={pushHistory} />
+                      )}
+                    </div>
                   ) : (
                     <img
                       src={`/uploads/${el.filename}`}
@@ -441,7 +644,7 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                         width: Math.round(el.width / 100 * canvasWidth) + 'px',
                         display: 'block',
                         boxSizing: 'border-box',
-                        border: el.borderWidth ? `${Math.round(el.borderWidth * scale)}px solid ${el.borderColor || '#fff'}` : 'none',
+                        ...borderStyle(el, scale),
                       }}
                       draggable={false}
                       alt=""
@@ -450,6 +653,7 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                 </div>
               ))}
             </div>
+          </div>
           </div>
         </div>
 
@@ -483,41 +687,51 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
               </>
             )}
 
-            <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>
-              {feedIds.length > 1 && multiMode === 'total' ? 'Total items to cycle through' : feedIds.length > 1 ? 'Items per feed' : 'Items to cycle through'}
+            <div className={s.propRow} style={{ marginTop: '0.4rem' }}>
+              <div style={{ flex: 1 }}>
+                <div className={s.propLabel}>Seconds per slide</div>
+                <input
+                  className={s.numInput}
+                  type="number" min="2" max="120"
+                  value={rotateSeconds}
+                  onChange={e => setRotateSeconds(Number(e.target.value))}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div className={s.propLabel}>
+                  {feedIds.length > 1 && multiMode === 'total' ? 'Total items' : feedIds.length > 1 ? 'Items/feed' : 'Items to cycle'}
+                </div>
+                <input
+                  className={s.numInput}
+                  type="number" min="1" max="50"
+                  value={itemCount}
+                  onChange={e => setItemCount(Number(e.target.value))}
+                />
+              </div>
             </div>
-            <input
-              className={s.numInput}
-              type="number" min="1" max="50"
-              value={itemCount}
-              onChange={e => setItemCount(Number(e.target.value))}
-            />
+          </Section>
 
-            <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Seconds per slide</div>
-            <input
-              className={s.numInput}
-              type="number" min="2" max="120"
-              value={rotateSeconds}
-              onChange={e => setRotateSeconds(Number(e.target.value))}
-            />
+          <Section title={`Template Assignment — ${activeTemplate.name || 'Template'}`}>
+            <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>
+              Pin this template to one feed to keep a consistent look (color scheme, logo) for that
+              source — pinned templates are never used for any other feed's articles. Leave as
+              "Rotate" to have it cycle for whichever feeds aren't pinned elsewhere.
+            </div>
+            <select
+              className={s.propSelect}
+              value={activeTemplate.assignedFeedId || ''}
+              onChange={e => updateTemplate({ assignedFeedId: e.target.value ? Number(e.target.value) : undefined })}
+            >
+              <option value="">🔁 Rotate (default)</option>
+              {(feeds || []).filter(f => feedIds.includes(f.id)).map(f => (
+                <option key={f.id} value={f.id}>📌 {f.name}</option>
+              ))}
+            </select>
           </Section>
 
           <Section title={`Background — ${activeTemplate.name || 'Template'}`}>
             <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>Each template has its own background.</div>
-            <div className={s.colorSwatches}>
-              {['#000000','#0d1b2a','#1a1a2e','#0a3d62','#154360','#1a5276',
-                '#4a235a','#6c3483','#78281f','#922b21','#1e8449','#1b4f72',
-                '#7d6608','#784212','#424242','#ffffff'].map(c => (
-                <button
-                  key={c}
-                  className={s.swatch + (activeTemplate.bgColor === c ? ' ' + s.swatchActive : '')}
-                  style={{ backgroundColor: c }}
-                  onClick={() => updateTemplate({ bgColor: c })}
-                  title={c}
-                />
-              ))}
-            </div>
-            <div className={s.propRow} style={{ marginTop: '0.4rem' }}>
+            <div className={s.propRow}>
               <input
                 type="color"
                 className={s.colorInput}
@@ -567,6 +781,29 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
             )}
           </Section>
 
+          <Section title={`Header Divider — ${activeTemplate.name || 'Template'}`}>
+            <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>
+              An optional line under the rink name/clock header, shown while this template's slide is on screen. Width 0 hides it.
+            </div>
+            <div className={s.propLabel}>Width — {activeTemplate.headerLineWidth || 0}px</div>
+            <div className={s.propRow}>
+              <input
+                type="range" min="0" max="20" step="1"
+                value={activeTemplate.headerLineWidth || 0}
+                onChange={e => updateTemplate({ headerLineWidth: Number(e.target.value) })}
+              />
+              {(activeTemplate.headerLineWidth || 0) > 0 && (
+                <input
+                  type="color"
+                  className={s.colorInput}
+                  value={activeTemplate.headerLineColor || '#000000'}
+                  onChange={e => updateTemplate({ headerLineColor: e.target.value })}
+                  title="Line color"
+                />
+              )}
+            </div>
+          </Section>
+
           <Section title="Add Element">
             <div className={s.addBtns}>
               <button className={s.addBtn} onClick={addText}>+ Text</button>
@@ -583,11 +820,22 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                 {generalImages.map(b => <option key={b.id} value={b.filename}>{b.label}</option>)}
               </select>
             </div>
+            <div style={{ marginTop: '0.25rem' }}>
+              <select
+                className={s.propSelect}
+                defaultValue=""
+                onChange={e => { addLogo(e.target.value); e.target.value = ''; }}
+              >
+                <option value="" disabled>+ Logo…</option>
+                {feedsWithLogos.length === 0 && <option disabled>— No logos on selected feeds —</option>}
+                {feedsWithLogos.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+            </div>
           </Section>
 
           {selectedEl ? (
             <Section
-              title={selectedEl.type === 'text' ? 'Text' : selectedEl.filename === '{{image}}' ? 'Feed Image' : 'Image'}
+              title={selectedEl.type === 'text' ? 'Text' : selectedEl.filename === '{{image}}' ? 'Feed Image' : selectedEl.logoFeedId ? 'Feed Logo' : 'Image'}
               extra={<button className={s.deleteBtnDark} onClick={() => deleteEl(selectedId)}>Remove</button>}
             >
               {selectedEl.type === 'text' && (
@@ -735,6 +983,14 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                             onChange={e => updateEl(selectedId, { boxPadding: Number(e.target.value) })}
                           />
                         </div>
+                        <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Corner Radius — {selectedEl.boxRadius || 0}px</div>
+                        <div className={s.propRow}>
+                          <input
+                            type="range" min="0" max="100" step="2"
+                            value={selectedEl.boxRadius || 0}
+                            onChange={e => updateEl(selectedId, { boxRadius: Number(e.target.value) })}
+                          />
+                        </div>
                         <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Box Background Color</div>
                         <div className={s.propRow}>
                           <input
@@ -747,17 +1003,13 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                             <button className={s.deleteBtnDark} onClick={() => updateEl(selectedId, { boxColor: undefined })} title="Clear">✕</button>
                           )}
                         </div>
-                        {selectedEl.boxColor && (
-                          <>
-                            <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Box Color Opacity — {selectedEl.boxAlpha ?? 100}%</div>
-                            <input
-                              type="range" min="0" max="100" step="5"
-                              value={selectedEl.boxAlpha ?? 100}
-                              onChange={e => updateEl(selectedId, { boxAlpha: Number(e.target.value) })}
-                              style={{ width: '100%' }}
-                            />
-                          </>
-                        )}
+                        <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Box Color Opacity — {selectedEl.boxAlpha ?? 100}%</div>
+                        <input
+                          type="range" min="0" max="100" step="5"
+                          value={selectedEl.boxAlpha ?? 100}
+                          onChange={e => updateEl(selectedId, { boxAlpha: Number(e.target.value) })}
+                          style={{ width: '100%' }}
+                        />
 
                         <label className={s.checkRow} style={{ marginTop: '0.4rem' }}>
                           <input
@@ -796,6 +1048,22 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
 
               {selectedEl.type === 'image' && (
                 <div>
+                  {selectedEl.logoFeedId && (
+                    <>
+                      <div className={s.propLabel}>Feed Logo</div>
+                      <select
+                        className={s.propSelect}
+                        value={selectedEl.logoFeedId}
+                        onChange={e => updateEl(selectedId, { logoFeedId: Number(e.target.value) })}
+                      >
+                        {feedsWithLogos.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                      </select>
+                      <div className={s.propLabel} style={{ marginBottom: '0.4rem' }}>
+                        Only shows when the slide's article is from this feed — add one logo per feed
+                        at the same spot to have the right one appear automatically as slides rotate.
+                      </div>
+                    </>
+                  )}
                   <div className={s.propLabel}>Width — {selectedEl.width}%</div>
                   <div className={s.propRow}>
                     <input
@@ -889,15 +1157,32 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                     />
                   </div>
                   {!!selectedEl.borderWidth && (
-                    <div>
-                      <div className={s.propLabel}>Border Color</div>
-                      <input
-                        type="color"
-                        className={s.colorInput}
-                        value={selectedEl.borderColor || '#ffffff'}
-                        onChange={e => updateEl(selectedId, { borderColor: e.target.value })}
-                      />
-                    </div>
+                    <>
+                      <div>
+                        <div className={s.propLabel}>Border Color</div>
+                        <input
+                          type="color"
+                          className={s.colorInput}
+                          value={selectedEl.borderColor || '#ffffff'}
+                          onChange={e => updateEl(selectedId, { borderColor: e.target.value })}
+                        />
+                      </div>
+                      <div>
+                        <div className={s.propLabel}>Border Side</div>
+                        <div className={s.alignToggle} style={{ width: '100%', flexWrap: 'wrap' }}>
+                          {BORDER_SIDES.map(({ value, label }) => (
+                            <button
+                              key={value}
+                              type="button"
+                              className={(selectedEl.borderSide || 'all') === value ? s.alignActive : s.alignBtn}
+                              onClick={() => updateEl(selectedId, { borderSide: value })}
+                            >
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </>
                   )}
                 </div>
               )}

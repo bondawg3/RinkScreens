@@ -72,4 +72,34 @@ router.post('/logo', requireAuth, logoUpload.single('file'), (req, res) => {
   res.json({ filename: req.file.filename });
 });
 
+const feedLogoStorage = multer.diskStorage({
+  destination: UPLOAD_DIR,
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    cb(null, `feedlogo_${Date.now()}${ext}`);
+  },
+});
+
+const feedLogoUpload = multer({
+  storage: feedLogoStorage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: imageFilter(['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg']),
+});
+
+// An uploaded logo supersedes a linked one — clears logo_url so the two
+// sources (upload vs. link) never disagree about which one is "the" logo.
+router.post('/rss-feeds/:id/logo', requireAuth, feedLogoUpload.single('file'), (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'no valid image file' });
+  const feed = db.findById('rss_feeds', req.params.id);
+  if (!feed) {
+    try { fs.unlinkSync(req.file.path); } catch (_) {}
+    return res.status(404).json({ error: 'not found' });
+  }
+  if (feed.logo_filename) {
+    try { fs.unlinkSync(path.join(UPLOAD_DIR, feed.logo_filename)); } catch (_) {}
+  }
+  db.update('rss_feeds', req.params.id, { logo_filename: req.file.filename, logo_url: '' });
+  res.json({ filename: req.file.filename });
+});
+
 module.exports = router;

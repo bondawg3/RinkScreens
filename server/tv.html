@@ -394,7 +394,7 @@ header {
     <div class="bg" id="bg-color"></div>
     <div class="bg" id="bg-image"></div>
     <div class="overlay" id="overlay"></div>
-    <header>
+    <header id="tv-header">
       <span class="rink-name" id="rink-name">Ice Rink</span>
       <span class="date" id="date"></span>
       <span class="clock" id="clock"></span>
@@ -508,6 +508,10 @@ function byStartTime(a, b) { return new Date(a.start_time) - new Date(b.start_ti
 function showPagedIndex(idx) {
   PAGED_STATE.pageIdx = idx;
   document.getElementById('content').innerHTML = PAGED_STATE.bannerHtml + PAGED_STATE.pageHtmls[idx];
+  if (PAGED_STATE.headerLines) {
+    var hl = PAGED_STATE.headerLines[idx] || {};
+    applyHeaderBorder(hl.width, hl.color);
+  }
   fitTable();
   fitTextBoxes();
   updatePreviewPageControls();
@@ -700,6 +704,15 @@ function esc(v) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// Returns a CSS style fragment applying a border to one side (or all sides)
+// of an image element, e.g. "border-top:3px solid #fff;" — borderSide is
+// 'all' (default), 'top', 'bottom', 'left', or 'right'.
+function imageBorderStyle(ae) {
+  if (!ae.borderWidth) return '';
+  var rule = ae.borderSide && ae.borderSide !== 'all' ? ('border-' + ae.borderSide) : 'border';
+  return rule + ':' + Number(ae.borderWidth) + 'px solid ' + esc(ae.borderColor || '#fff') + ';';
+}
+
 function hexToRgba(hex, alphaPct) {
   if (!hex) return 'transparent';
   var h = hex.replace('#', '');
@@ -709,6 +722,16 @@ function hexToRgba(hex, alphaPct) {
   var b = parseInt(h.substring(4, 6), 16) || 0;
   var a = (alphaPct == null ? 100 : alphaPct) / 100;
   return 'rgba(' + r + ',' + g + ',' + b + ',' + a + ')';
+}
+
+// A divider line under the header bar (separating rink name/clock from the
+// content below) is configured per Announcement screen, or per RSS template
+// (see PAGED_STATE.headerLines) — not globally, so it can vary per screen or
+// even per slide.
+function applyHeaderBorder(width, color) {
+  var headerEl = document.getElementById('tv-header');
+  var w = Number(width) || 0;
+  headerEl.style.borderBottom = w > 0 ? (w + 'px solid ' + (color || '#000000')) : 'none';
 }
 
 // Each RSS template carries its own background (color + optional image),
@@ -754,6 +777,7 @@ function renderSlideElements(elements, tokenValues) {
           'width:' + Number(ae.boxWidth) + '%;height:' + Number(ae.boxHeight) + '%;' +
           'transform:translate(-50%,-50%);' +
           'background:' + (ae.boxColor ? hexToRgba(ae.boxColor, ae.boxAlpha) : 'transparent') + ';' +
+          'border-radius:' + (Number(ae.boxRadius) || 0) + 'px;' +
           'box-sizing:border-box;padding:' + boxPadding + 'px;' +
           'overflow:hidden;pointer-events:none;';
         if (ae.lines && ae.lines.length) {
@@ -815,9 +839,21 @@ function renderSlideElements(elements, tokenValues) {
       }
     } else if (ae.type === 'image') {
       var isFeedImg = ae.filename === '{{image}}';
+      // A logo is tied to one selected feed (not the rotating item), and
+      // resolved from a lookup built once per screen load rather than
+      // per-item — see tokenValues.feedLogos in the rss branch below.
+      var isLogo = !!ae.logoFeedId;
+      // If the current item's source feed is known and doesn't match this
+      // logo's feed, skip it entirely — lets an admin place one logo per
+      // selected feed on the same template (e.g. all at the same spot) and
+      // have only the one matching the article actually showing appear,
+      // instead of every logo rendering on every slide regardless of source.
+      if (isLogo && tokenValues && tokenValues.itemFeedId != null && Number(ae.logoFeedId) !== Number(tokenValues.itemFeedId)) continue;
       var src = isFeedImg
         ? (tokenValues && tokenValues.image ? tokenValues.image : '')
-        : ('/uploads/' + esc(ae.filename));
+        : isLogo
+          ? (tokenValues && tokenValues.feedLogos ? (tokenValues.feedLogos[ae.logoFeedId] || '') : '')
+          : ('/uploads/' + esc(ae.filename));
       if (!src) continue;
       var w = Number(ae.width) || 25;
       if (isFeedImg) {
@@ -833,21 +869,19 @@ function renderSlideElements(elements, tokenValues) {
         var fitMode = ae.fitMode === 'contain' ? 'contain' : 'cover';
         var fx = ae.autoFocal === false ? (Number(ae.focalX) || 50) : (tokenValues && tokenValues.focalX != null ? tokenValues.focalX : 50);
         var fy = ae.autoFocal === false ? (Number(ae.focalY) || 50) : (tokenValues && tokenValues.focalY != null ? tokenValues.focalY : 50);
-        var imgBorder = ae.borderWidth ? (Number(ae.borderWidth) + 'px solid ' + esc(ae.borderColor || '#fff')) : 'none';
         html += '<div style="' +
           'position:absolute;left:' + Number(ae.x) + '%;top:' + Number(ae.y) + '%;' +
           'width:' + w + '%;height:' + h + '%;overflow:hidden;' +
-          'border:' + imgBorder + ';box-sizing:border-box;' +
+          imageBorderStyle(ae) + 'box-sizing:border-box;' +
           'transform:translate(-50%,-50%);pointer-events:none;">' +
           '<img src="' + esc(src) + '" style="width:100%;height:100%;object-fit:' + fitMode + ';' +
           (fitMode === 'cover' ? ('object-position:' + fx + '% ' + fy + '%;') : '') +
           'display:block;" alt="" />' +
           '</div>';
       } else {
-        var staticBorder = ae.borderWidth ? (Number(ae.borderWidth) + 'px solid ' + esc(ae.borderColor || '#fff')) : 'none';
         html += '<img src="' + esc(src) + '" style="' +
           'position:absolute;left:' + Number(ae.x) + '%;top:' + Number(ae.y) + '%;' +
-          'width:' + w + '%;box-sizing:border-box;border:' + staticBorder + ';' +
+          'width:' + w + '%;box-sizing:border-box;' + imageBorderStyle(ae) +
           'transform:translate(-50%,-50%);pointer-events:none;" alt="" />';
       }
     } else if (ae.type === 'datetime') {
@@ -1437,6 +1471,16 @@ function renderScreenConfig(screen) {
 
     var dtype = screen.display_type;
 
+    // Header divider line: fixed per-screen for announcements, per-slide for
+    // rss (set inside its branch below via PAGED_STATE.headerLines), off for
+    // everything else.
+    if (dtype === 'announcement') {
+      applyHeaderBorder(screen.header_line_width, screen.header_line_color);
+    } else if (dtype !== 'rss') {
+      PAGED_STATE.headerLines = null;
+      applyHeaderBorder(0, null);
+    }
+
     // games/figure_skating manage PAGED_STATE + pagedContentTimer themselves
     // via renderPagedContent() (which only resets on an actual content
     // change). Any other screen type doesn't use paged rotation at all, so
@@ -1666,6 +1710,8 @@ function renderScreenConfig(screen) {
       if (!feedIds.length || !templates.length) {
         if (rssRotateTimer) { clearTimeout(rssRotateTimer); rssRotateTimer = null; }
         PAGED_STATE.pageHtmls = null;
+        PAGED_STATE.headerLines = null;
+        applyHeaderBorder(0, null);
         updatePreviewPageControls();
         rssContent.innerHTML = '<div class="empty"><p>No RSS feed or slide layout configured.</p></div>';
         return;
@@ -1677,18 +1723,35 @@ function renderScreenConfig(screen) {
         if (!selected.length || !anyItems) {
           if (rssRotateTimer) { clearTimeout(rssRotateTimer); rssRotateTimer = null; }
           PAGED_STATE.pageHtmls = null;
+          PAGED_STATE.headerLines = null;
+          applyHeaderBorder(0, null);
           updatePreviewPageControls();
           rssContent.innerHTML = '<div class="empty"><p>No items in ' + (selected.length > 1 ? 'these feeds' : 'this feed') + ' yet.</p></div>';
           return;
         }
         var count = screen.rss_item_count || 10;
+        // Tag every item with which feed it came from — a logo element on
+        // the template is pinned to one specific feed, and should only
+        // render on the slides actually drawing from that feed (so if you
+        // place a logo per selected feed, each one only appears when its
+        // own feed's article is on screen instead of all logos showing on
+        // every slide regardless of source).
+        function withFeedId(item, feedId) {
+          var tagged = {};
+          for (var k in item) tagged[k] = item[k];
+          tagged._feedId = feedId;
+          return tagged;
+        }
         var items;
         if (screen.rss_multi_mode === 'total') {
           // Merge every selected feed's items into one pool, newest first,
           // and take the top `count` overall — feeds compete by recency
           // rather than each guaranteeing airtime.
           var merged = [];
-          for (var mi = 0; mi < selected.length; mi++) merged = merged.concat(selected[mi].items || []);
+          for (var mi = 0; mi < selected.length; mi++) {
+            var mItems = selected[mi].items || [];
+            for (var mj = 0; mj < mItems.length; mj++) merged.push(withFeedId(mItems[mj], selected[mi].id));
+          }
           merged.sort(function(a, b) {
             var ta = a.pubDate ? new Date(a.pubDate).getTime() : 0;
             var tb = b.pubDate ? new Date(b.pubDate).getTime() : 0;
@@ -1700,7 +1763,9 @@ function renderScreenConfig(screen) {
           // round-robin (feed1#1, feed2#1, feed3#1, feed1#2, ...) so the
           // rotation mixes sources instead of exhausting one feed before
           // ever showing the next.
-          var perFeed = selected.map(function(f) { return (f.items || []).slice(0, count); });
+          var perFeed = selected.map(function(f) {
+            return (f.items || []).slice(0, count).map(function(it) { return withFeedId(it, f.id); });
+          });
           items = [];
           var maxLen = 0;
           for (var pi = 0; pi < perFeed.length; pi++) maxLen = Math.max(maxLen, perFeed[pi].length);
@@ -1714,23 +1779,80 @@ function renderScreenConfig(screen) {
         // (pb-page-nav) that games/figure-skating previews use, so opening
         // ?preview on an RSS screen lets you step through every slide that's
         // currently in rotation instead of only seeing whichever one loaded.
+        // Logos are tied to a feed, not the rotating item, so the lookup is
+        // built once from the full feed list (not just `selected`) — a logo
+        // element keeps working even if its feed is later removed as a
+        // content source but left as the other's branding.
+        var feedLogos = {};
+        for (var lgi = 0; lgi < feeds.length; lgi++) feedLogos[feeds[lgi].id] = feeds[lgi].logo_src || '';
+
+        // A template can be pinned to one feed (assignedFeedId) to keep a
+        // consistent look (color scheme, logo) for that source — pinned
+        // templates are only ever used for their own feed's articles.
+        // Everything else cycles through the "rotation pool" (unpinned
+        // templates), advancing only on items that actually land in that
+        // pool so pinned slides don't eat a turn in the rotation.
+        var dedicatedByFeed = {};
+        var rotationPool = [];
+        for (var ti = 0; ti < templates.length; ti++) {
+          var tmplDef = templates[ti];
+          if (tmplDef.assignedFeedId) {
+            if (!dedicatedByFeed[tmplDef.assignedFeedId]) dedicatedByFeed[tmplDef.assignedFeedId] = [];
+            dedicatedByFeed[tmplDef.assignedFeedId].push(tmplDef);
+          } else {
+            rotationPool.push(tmplDef);
+          }
+        }
+        // If every template ended up pinned, fall back to the full list for
+        // rotation so an item from an unpinned feed still has something to
+        // render with instead of nothing.
+        if (!rotationPool.length) rotationPool = templates;
+
+        var rotationCounter = 0;
+        var perFeedCounter = {};
+        var chosenTemplates = items.map(function(item) {
+          var feedId = item._feedId;
+          var pinned = dedicatedByFeed[feedId];
+          if (pinned && pinned.length) {
+            var pc = perFeedCounter[feedId] || 0;
+            perFeedCounter[feedId] = pc + 1;
+            return pinned[pc % pinned.length];
+          }
+          var rc = rotationCounter;
+          rotationCounter++;
+          return rotationPool[rc % rotationPool.length];
+        });
+
+        // One "page" per feed item — reuses the same manual page-nav bar
+        // (pb-page-nav) that games/figure-skating previews use, so opening
+        // ?preview on an RSS screen lets you step through every slide that's
+        // currently in rotation instead of only seeing whichever one loaded.
         var pageHtmls = items.map(function(item, idx) {
-          var tmpl = templates[idx % templates.length];
+          var tmpl = chosenTemplates[idx];
           return renderTemplateBackground(tmpl) + renderSlideElements(tmpl.elements, {
             title: item.title || '',
             description: item.description || '',
+            feedLogos: feedLogos,
+            itemFeedId: item._feedId,
             pubDate: item.pubDate ? fmtTime(item.pubDate) : '',
             image: item.image || '',
             focalX: item.focal ? item.focal.x : 50,
             focalY: item.focal ? item.focal.y : 50,
           });
         });
+        // Header divider is per-template too — kept as a parallel array
+        // (rather than baked into pageHtmls) since the header lives outside
+        // #content; showPagedIndex() applies the entry for whichever slide
+        // it's displaying, on every page flip including live rotation.
+        PAGED_STATE.headerLines = chosenTemplates.map(function(tmpl) {
+          return { width: tmpl.headerLineWidth || 0, color: tmpl.headerLineColor || '#000000' };
+        });
         renderRssPages(pageHtmls, screen.rss_rotate_seconds);
       });
     }
 }
 
-// ── Settings (rink name / logo) ───────────────────────────────────────────────
+// ── Settings (rink name / logo) ─────────────────────────────────────────────
 get('/api/settings', function(err, s) {
   if (err || !s) return;
   var el = document.getElementById('rink-name');

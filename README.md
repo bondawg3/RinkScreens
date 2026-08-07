@@ -1,4 +1,4 @@
-# RinkScreens — v1.24.1
+# RinkScreens — v1.26.1
 
 Digital signage system for ice rinks. Pulls games from Google Calendar (iCal) and displays them on smart TVs around the facility. An admin panel on any local browser lets staff control what each screen shows and manage locker room assignments, pricing, and backgrounds.
 
@@ -48,6 +48,8 @@ npm run dev
 Navigate to `/admin` from any browser on the local network.
 
 Every screen card also has a duplicate button (⧉) next to Delete that creates a copy of the screen with the same settings, named "&lt;screen name&gt; - Copy".
+
+Screens within each tab's list can be reordered by dragging the ⠿ handle (in the date-nav bar on tabs that have one, otherwise in the card's action row); the order persists immediately.
 
 ### Displays tab
 - View all registered TV displays, each titled "Display &lt;TV number&gt;", with live thumbnails of their assigned screen

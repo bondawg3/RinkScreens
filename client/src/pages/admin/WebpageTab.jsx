@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
+import { DndContext, closestCenter } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 import tStyles from './ScreensTab.module.css';
 import sStyles from './ScreensSection.module.css';
 import Modal from './Modal';
 import Thumbnail from './Thumbnail';
-import { useScreenCards, InUseBadge, EyeButton, EyeHint, DuplicateButton } from './screenCard';
+import { useScreenCards, useScreenReorder, InUseBadge, EyeButton, EyeHint, DuplicateButton, SortableCard, DragHandle } from './screenCard';
 
 const EMPTY_FORM = { name: '', webpage_url: '', webpage_width: 100, webpage_zoom: 100 };
 
@@ -32,6 +34,7 @@ export default function WebpageTab() {
   const [err, setErr] = useState('');
 
   const screens = (allScreens || []).filter((s) => s.display_type === 'webpage');
+  const { orderedScreens, sensors, handleDragEnd } = useScreenReorder({ screens, reload });
 
   function openAdd() {
     setForm(EMPTY_FORM);
@@ -93,39 +96,48 @@ export default function WebpageTab() {
         <button className={styles.btnPrimary} onClick={openAdd}>+ Add Screen</button>
       </div>
 
-      <div className={tStyles.grid} style={{ marginTop: '1.5rem' }}>
-        {screens.map((sc) => (
-          <div key={sc.id} className={tStyles.card}>
-            <Thumbnail screenId={sc.id} />
-            <div className={tStyles.cardBody}>
-              <div className={tStyles.cardName}>{sc.name}</div>
-              <div className={tStyles.cardMeta} style={{ wordBreak: 'break-all' }}>
-                {sc.webpage_url || <span style={{ opacity: 0.5 }}>No URL set</span>}
-              </div>
-              <InUseBadge name={assignedDisplayName(sc.id)} />
-              <div className={tStyles.cardMeta}>
-                {sc.webpage_width}% width · {sc.webpage_zoom}% zoom
-                {sc.webpage_refresh > 0 && (() => {
-                  const { val, unit } = toDisplayRefresh(sc.webpage_refresh);
-                  return ` · refreshes every ${val} ${unit}`;
-                })()}
-              </div>
-              <div className={tStyles.cardActions}>
-                <a href={`/tv/screen/${sc.id}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">📺</a>
-                <button className={styles.btnGhost} onClick={() => openEdit(sc)} title="Edit">✎</button>
-                <button className={styles.btnGhost} title="Resync page" onClick={() => apiFetch(`/screens/${sc.id}/reload`, { method: 'POST' })}>&#8635;</button>
-                <EyeButton screen={sc} assignedName={assignedDisplayName(sc.id)} onToggle={toggleVisible} />
-                <button className={styles.btnDanger} onClick={() => deleteScreen(sc.id)} title="Delete">🗑</button>
-                <DuplicateButton screen={sc} onDuplicate={duplicateScreen} />
-              </div>
-              <EyeHint show={eyeHint === sc.id} name={assignedDisplayName(sc.id)} />
-            </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={orderedScreens.map((sc) => sc.id)} strategy={rectSortingStrategy}>
+          <div className={tStyles.grid} style={{ marginTop: '1.5rem' }}>
+            {orderedScreens.map((sc) => (
+              <SortableCard key={sc.id} id={sc.id} className={tStyles.card} draggingClassName={tStyles.dragging}>
+                {({ attributes, listeners }) => (
+                  <>
+                    <Thumbnail screenId={sc.id} />
+                    <div className={tStyles.cardBody}>
+                      <div className={tStyles.cardName}>{sc.name}</div>
+                      <div className={tStyles.cardMeta} style={{ wordBreak: 'break-all' }}>
+                        {sc.webpage_url || <span style={{ opacity: 0.5 }}>No URL set</span>}
+                      </div>
+                      <InUseBadge name={assignedDisplayName(sc.id)} />
+                      <div className={tStyles.cardMeta}>
+                        {sc.webpage_width}% width · {sc.webpage_zoom}% zoom
+                        {sc.webpage_refresh > 0 && (() => {
+                          const { val, unit } = toDisplayRefresh(sc.webpage_refresh);
+                          return ` · refreshes every ${val} ${unit}`;
+                        })()}
+                      </div>
+                      <div className={tStyles.cardActions}>
+                        <DragHandle attributes={attributes} listeners={listeners} className={tStyles.dragHandle} />
+                        <a href={`/tv/screen/${sc.id}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">📺</a>
+                        <button className={styles.btnGhost} onClick={() => openEdit(sc)} title="Edit">✎</button>
+                        <button className={styles.btnGhost} title="Resync page" onClick={() => apiFetch(`/screens/${sc.id}/reload`, { method: 'POST' })}>&#8635;</button>
+                        <EyeButton screen={sc} assignedName={assignedDisplayName(sc.id)} onToggle={toggleVisible} />
+                        <button className={styles.btnDanger} onClick={() => deleteScreen(sc.id)} title="Delete">🗑</button>
+                        <DuplicateButton screen={sc} onDuplicate={duplicateScreen} />
+                      </div>
+                      <EyeHint show={eyeHint === sc.id} name={assignedDisplayName(sc.id)} />
+                    </div>
+                  </>
+                )}
+              </SortableCard>
+            ))}
+            {screens.length === 0 && (
+              <p className={styles.muted}>No webpage screens configured yet.</p>
+            )}
           </div>
-        ))}
-        {screens.length === 0 && (
-          <p className={styles.muted}>No webpage screens configured yet.</p>
-        )}
-      </div>
+        </SortableContext>
+      </DndContext>
 
       {modal && (
         <Modal

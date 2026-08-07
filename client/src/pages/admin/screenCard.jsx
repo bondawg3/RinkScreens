@@ -1,4 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
+import { arrayMove, useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { apiFetch } from '../../hooks/useApi';
 import adminStyles from './AdminTab.module.css';
 import s from './ScreensSection.module.css';
@@ -66,4 +69,66 @@ export function EyeButton({ screen, assignedName, onToggle }) {
 
 export function EyeHint({ show, name }) {
   return show ? <div className={s.eyeHintText}>In use by {name} — unassign it first to hide.</div> : null;
+}
+
+// Drag-and-drop reordering for a screen list. Keeps an optimistic local order
+// while the reorder request is in flight, then defers back to the server's
+// order once `screens` reflects it (its id sequence changes to match).
+export function useScreenReorder({ screens, reload }) {
+  const [localOrder, setLocalOrder] = useState(null);
+  const idsKey = screens.map((sc) => sc.id).join(',');
+
+  useEffect(() => { setLocalOrder(null); }, [idsKey]);
+
+  const orderedScreens = useMemo(() => {
+    if (!localOrder) return screens;
+    const byId = new Map(screens.map((sc) => [sc.id, sc]));
+    return localOrder.map((id) => byId.get(id)).filter(Boolean);
+  }, [screens, localOrder]);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  async function handleDragEnd(event) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const ids = orderedScreens.map((sc) => sc.id);
+    const oldIndex = ids.indexOf(active.id);
+    const newIndex = ids.indexOf(over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const next = arrayMove(ids, oldIndex, newIndex);
+    setLocalOrder(next);
+    try {
+      await apiFetch('/screens/reorder', { method: 'POST', body: JSON.stringify({ ids: next }) });
+    } catch (ex) {
+      setLocalOrder(null);
+    }
+    reload();
+  }
+
+  return { orderedScreens, sensors, handleDragEnd };
+}
+
+// Wraps a screen card to make it draggable. `children` is a render prop
+// receiving the drag-handle props to spread onto a handle button, so drags
+// don't fight with the card's other click targets (Edit/Delete/etc).
+export function SortableCard({ id, className, draggingClassName, children }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = { transform: CSS.Transform.toString(transform), transition };
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={isDragging ? `${className} ${draggingClassName}` : className}
+    >
+      {children({ attributes, listeners })}
+    </div>
+  );
+}
+
+export function DragHandle({ attributes, listeners, className }) {
+  return (
+    <button type="button" className={className} title="Drag to reorder" {...attributes} {...listeners}>
+      ⠿
+    </button>
+  );
 }

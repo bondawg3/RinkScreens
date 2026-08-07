@@ -107,6 +107,7 @@
 
 .canvasElSelected {
   border-color: rgba(255, 230, 0, 0.85) !important;
+  background: rgba(255, 230, 0, 0.16);
 }
 
 .canvasEl:active { cursor: grabbing; }

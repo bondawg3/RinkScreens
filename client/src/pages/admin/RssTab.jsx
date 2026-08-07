@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { DndContext, closestCenter } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { useApi, apiFetch, getToken } from '../../hooks/useApi';
 import adminStyles from './AdminTab.module.css';
 import tStyles from './ScreensTab.module.css';
 import s from './AnnouncementTab.module.css';
 import Thumbnail from './Thumbnail';
-import { useScreenCards, InUseBadge, EyeButton, EyeHint, DuplicateButton } from './screenCard';
-import { FONTS, makeId, hexToRgba, AutoFitText, StackedBoxText, LinesEditor, Section, useUndo, ResizeHandles, WidthResizeHandles, borderStyle, BORDER_SIDES } from './SlideEditorShared';
+import { useScreenCards, useScreenReorder, InUseBadge, EyeButton, EyeHint, DuplicateButton, SortableCard, DragHandle } from './screenCard';
+import { FONTS, makeId, hexToRgba, AutoFitText, StackedBoxText, LinesEditor, Section, useUndo, ResizeHandles, WidthResizeHandles, borderStyle, BORDER_SIDES, reorderElement } from './SlideEditorShared';
 
 const TOKENS = [
   { key: 'title', label: 'Title' },
@@ -442,6 +444,12 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
     if (selectedId === id) setSelectedId(null);
   }
 
+  function moveLayer(dir) {
+    if (!selectedId) return;
+    pushHistory();
+    setElements(prev => reorderElement(prev, selectedId, dir));
+  }
+
   const selectedEl = elements.find(e => e.id === selectedId) || null;
   const bgImages = (backgrounds || []).filter(b => (b.image_type || 'background') === 'background');
   const generalImages = (backgrounds || []).filter(b => b.image_type === 'general');
@@ -658,186 +666,21 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
         </div>
 
         <div className={s.propsPanel}>
-          <Section title="Feeds">
-            <div className={s.propLabel}>Sources ({feedIds.length} selected)</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', maxHeight: '140px', overflowY: 'auto' }}>
-              {(feeds || []).map(f => (
-                <label key={f.id} className={s.checkRow}>
-                  <input type="checkbox" checked={feedIds.includes(f.id)} onChange={() => toggleFeed(f.id)} />
-                  {f.name}
-                </label>
-              ))}
-              {(!feeds || feeds.length === 0) && (
-                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.82rem' }}>No feeds yet — add one below.</span>
-              )}
-            </div>
-
-            {feedIds.length > 1 && (
-              <>
-                <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>How to combine multiple feeds</div>
-                <div className={s.alignToggle}>
-                  <button type="button" className={multiMode === 'per_feed' ? s.alignActive : s.alignBtn} onClick={() => setMultiMode('per_feed')}>Per Feed</button>
-                  <button type="button" className={multiMode === 'total' ? s.alignActive : s.alignBtn} onClick={() => setMultiMode('total')}>Total (by date)</button>
-                </div>
-                <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>
-                  {multiMode === 'total'
-                    ? 'The count below is a total across all selected feeds combined, newest first.'
-                    : 'The count below applies to each feed — with 3 feeds and a count of 5, that\'s 15 slides, interleaved so sources are mixed rather than shown one feed at a time.'}
-                </div>
-              </>
-            )}
-
-            <div className={s.propRow} style={{ marginTop: '0.4rem' }}>
-              <div style={{ flex: 1 }}>
-                <div className={s.propLabel}>Seconds per slide</div>
-                <input
-                  className={s.numInput}
-                  type="number" min="2" max="120"
-                  value={rotateSeconds}
-                  onChange={e => setRotateSeconds(Number(e.target.value))}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div className={s.propLabel}>
-                  {feedIds.length > 1 && multiMode === 'total' ? 'Total items' : feedIds.length > 1 ? 'Items/feed' : 'Items to cycle'}
-                </div>
-                <input
-                  className={s.numInput}
-                  type="number" min="1" max="50"
-                  value={itemCount}
-                  onChange={e => setItemCount(Number(e.target.value))}
-                />
-              </div>
-            </div>
-          </Section>
-
-          <Section title={`Template Assignment — ${activeTemplate.name || 'Template'}`}>
-            <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>
-              Pin this template to one feed to keep a consistent look (color scheme, logo) for that
-              source — pinned templates are never used for any other feed's articles. Leave as
-              "Rotate" to have it cycle for whichever feeds aren't pinned elsewhere.
-            </div>
-            <select
-              className={s.propSelect}
-              value={activeTemplate.assignedFeedId || ''}
-              onChange={e => updateTemplate({ assignedFeedId: e.target.value ? Number(e.target.value) : undefined })}
-            >
-              <option value="">🔁 Rotate (default)</option>
-              {(feeds || []).filter(f => feedIds.includes(f.id)).map(f => (
-                <option key={f.id} value={f.id}>📌 {f.name}</option>
-              ))}
-            </select>
-          </Section>
-
-          <Section title={`Background — ${activeTemplate.name || 'Template'}`}>
-            <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>Each template has its own background.</div>
-            <div className={s.propRow}>
-              <input
-                type="color"
-                className={s.colorInput}
-                value={activeTemplate.bgColor || '#000000'}
-                onChange={e => updateTemplate({ bgColor: e.target.value })}
-              />
-              <input
-                className={s.propInput}
-                placeholder="#000000"
-                value={activeTemplate.bgColor || ''}
-                onChange={e => updateTemplate({ bgColor: e.target.value })}
-                style={{ fontFamily: 'monospace', flex: 1 }}
-              />
-              {activeTemplate.bgColor && (
-                <button className={s.deleteBtnDark} onClick={() => updateTemplate({ bgColor: '' })} title="Clear color">✕</button>
-              )}
-            </div>
-            <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Color Transparency — {activeTemplate.bgColorAlpha ?? 100}%</div>
-            <input
-              type="range" min="0" max="100" step="5"
-              value={activeTemplate.bgColorAlpha ?? 100}
-              onChange={e => updateTemplate({ bgColorAlpha: Number(e.target.value) })}
-              style={{ width: '100%' }}
-            />
-            <select
-              className={s.propSelect}
-              value={activeTemplate.bgFilename || ''}
-              onChange={e => {
-                const b = bgImages.find(im => im.filename === e.target.value);
-                updateTemplate({ bgFilename: b ? b.filename : '', bgLabel: b ? b.label : '' });
-              }}
-              style={{ marginTop: '0.4rem' }}
-            >
-              <option value="">None</option>
-              {bgImages.map(b => <option key={b.id} value={b.filename}>{b.label}</option>)}
-            </select>
-            {activeTemplate.bgFilename && (
-              <>
-                <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Image Opacity — {activeTemplate.bgOpacity ?? 100}%</div>
-                <input
-                  type="range" min="0" max="100" step="5"
-                  value={activeTemplate.bgOpacity ?? 100}
-                  onChange={e => updateTemplate({ bgOpacity: Number(e.target.value) })}
-                  style={{ width: '100%' }}
-                />
-              </>
-            )}
-          </Section>
-
-          <Section title={`Header Divider — ${activeTemplate.name || 'Template'}`}>
-            <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>
-              An optional line under the rink name/clock header, shown while this template's slide is on screen. Width 0 hides it.
-            </div>
-            <div className={s.propLabel}>Width — {activeTemplate.headerLineWidth || 0}px</div>
-            <div className={s.propRow}>
-              <input
-                type="range" min="0" max="20" step="1"
-                value={activeTemplate.headerLineWidth || 0}
-                onChange={e => updateTemplate({ headerLineWidth: Number(e.target.value) })}
-              />
-              {(activeTemplate.headerLineWidth || 0) > 0 && (
-                <input
-                  type="color"
-                  className={s.colorInput}
-                  value={activeTemplate.headerLineColor || '#000000'}
-                  onChange={e => updateTemplate({ headerLineColor: e.target.value })}
-                  title="Line color"
-                />
-              )}
-            </div>
-          </Section>
-
-          <Section title="Add Element">
-            <div className={s.addBtns}>
-              <button className={s.addBtn} onClick={addText}>+ Text</button>
-              <button className={s.addBtn} onClick={addFeedImage}>+ Feed Image</button>
-            </div>
-            <div style={{ marginTop: '0.25rem' }}>
-              <select
-                className={s.propSelect}
-                defaultValue=""
-                onChange={e => { addStaticImage(e.target.value); e.target.value = ''; }}
-              >
-                <option value="" disabled>+ Add Static Image…</option>
-                {generalImages.length === 0 && <option disabled>— No general images uploaded —</option>}
-                {generalImages.map(b => <option key={b.id} value={b.filename}>{b.label}</option>)}
-              </select>
-            </div>
-            <div style={{ marginTop: '0.25rem' }}>
-              <select
-                className={s.propSelect}
-                defaultValue=""
-                onChange={e => { addLogo(e.target.value); e.target.value = ''; }}
-              >
-                <option value="" disabled>+ Logo…</option>
-                {feedsWithLogos.length === 0 && <option disabled>— No logos on selected feeds —</option>}
-                {feedsWithLogos.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-              </select>
-            </div>
-          </Section>
-
-          {selectedEl ? (
+          {selectedEl && (
             <Section
               title={selectedEl.type === 'text' ? 'Text' : selectedEl.filename === '{{image}}' ? 'Feed Image' : selectedEl.logoFeedId ? 'Feed Logo' : 'Image'}
               extra={<button className={s.deleteBtnDark} onClick={() => deleteEl(selectedId)}>Remove</button>}
             >
+              <div>
+                <div className={s.propLabel}>Layer order</div>
+                <div className={s.alignToggle}>
+                  <button type="button" className={s.alignBtn} onClick={() => moveLayer('back')} title="Send to back">⇊</button>
+                  <button type="button" className={s.alignBtn} onClick={() => moveLayer('down')} title="Send backward">↓</button>
+                  <button type="button" className={s.alignBtn} onClick={() => moveLayer('up')} title="Bring forward">↑</button>
+                  <button type="button" className={s.alignBtn} onClick={() => moveLayer('front')} title="Bring to front">⇈</button>
+                </div>
+              </div>
+
               {selectedEl.type === 'text' && (
                 <>
                   {!(selectedEl.boxWidth && selectedEl.boxHeight && selectedEl.lines && selectedEl.lines.length) && (
@@ -1205,11 +1048,188 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                 </div>
               </div>
             </Section>
-          ) : (
-            <div style={{ padding: '1rem', color: 'rgba(255,255,255,0.35)', fontSize: '0.85rem', textAlign: 'center' }}>
-              Click an element on the canvas to edit its properties, or add a new element above.
+          )}
+          {!selectedEl && (
+            <div style={{ padding: '0.6rem 0.2rem', color: 'rgba(255,255,255,0.35)', fontSize: '0.82rem' }}>
+              Click an element on the canvas to edit its properties, or add a new one below.
             </div>
           )}
+
+          <Section title="Add Element">
+            <div className={s.addBtns}>
+              <button className={s.addBtn} onClick={addText}>+ Text</button>
+              <button className={s.addBtn} onClick={addFeedImage}>+ Feed Image</button>
+            </div>
+            <div style={{ marginTop: '0.25rem' }}>
+              <select
+                className={s.propSelect}
+                defaultValue=""
+                onChange={e => { addStaticImage(e.target.value); e.target.value = ''; }}
+              >
+                <option value="" disabled>+ Add Static Image…</option>
+                {generalImages.length === 0 && <option disabled>— No general images uploaded —</option>}
+                {generalImages.map(b => <option key={b.id} value={b.filename}>{b.label}</option>)}
+              </select>
+            </div>
+            <div style={{ marginTop: '0.25rem' }}>
+              <select
+                className={s.propSelect}
+                defaultValue=""
+                onChange={e => { addLogo(e.target.value); e.target.value = ''; }}
+              >
+                <option value="" disabled>+ Logo…</option>
+                {feedsWithLogos.length === 0 && <option disabled>— No logos on selected feeds —</option>}
+                {feedsWithLogos.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+            </div>
+          </Section>
+
+          <Section title="Feeds">
+            <div className={s.propLabel}>Sources ({feedIds.length} selected)</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', maxHeight: '140px', overflowY: 'auto' }}>
+              {(feeds || []).map(f => (
+                <label key={f.id} className={s.checkRow}>
+                  <input type="checkbox" checked={feedIds.includes(f.id)} onChange={() => toggleFeed(f.id)} />
+                  {f.name}
+                </label>
+              ))}
+              {(!feeds || feeds.length === 0) && (
+                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.82rem' }}>No feeds yet — add one below.</span>
+              )}
+            </div>
+
+            {feedIds.length > 1 && (
+              <>
+                <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>How to combine multiple feeds</div>
+                <div className={s.alignToggle}>
+                  <button type="button" className={multiMode === 'per_feed' ? s.alignActive : s.alignBtn} onClick={() => setMultiMode('per_feed')}>Per Feed</button>
+                  <button type="button" className={multiMode === 'total' ? s.alignActive : s.alignBtn} onClick={() => setMultiMode('total')}>Total (by date)</button>
+                </div>
+                <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>
+                  {multiMode === 'total'
+                    ? 'The count below is a total across all selected feeds combined, newest first.'
+                    : 'The count below applies to each feed — with 3 feeds and a count of 5, that\'s 15 slides, interleaved so sources are mixed rather than shown one feed at a time.'}
+                </div>
+              </>
+            )}
+
+            <div className={s.propRow} style={{ marginTop: '0.4rem' }}>
+              <div style={{ flex: 1 }}>
+                <div className={s.propLabel}>Seconds per slide</div>
+                <input
+                  className={s.numInput}
+                  type="number" min="2" max="120"
+                  value={rotateSeconds}
+                  onChange={e => setRotateSeconds(Number(e.target.value))}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div className={s.propLabel}>
+                  {feedIds.length > 1 && multiMode === 'total' ? 'Total items' : feedIds.length > 1 ? 'Items/feed' : 'Items to cycle'}
+                </div>
+                <input
+                  className={s.numInput}
+                  type="number" min="1" max="50"
+                  value={itemCount}
+                  onChange={e => setItemCount(Number(e.target.value))}
+                />
+              </div>
+            </div>
+          </Section>
+
+          <Section title={`Template Assignment — ${activeTemplate.name || 'Template'}`} defaultOpen={false}>
+            <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>
+              Pin this template to one feed to keep a consistent look (color scheme, logo) for that
+              source — pinned templates are never used for any other feed's articles. Leave as
+              "Rotate" to have it cycle for whichever feeds aren't pinned elsewhere.
+            </div>
+            <select
+              className={s.propSelect}
+              value={activeTemplate.assignedFeedId || ''}
+              onChange={e => updateTemplate({ assignedFeedId: e.target.value ? Number(e.target.value) : undefined })}
+            >
+              <option value="">🔁 Rotate (default)</option>
+              {(feeds || []).filter(f => feedIds.includes(f.id)).map(f => (
+                <option key={f.id} value={f.id}>📌 {f.name}</option>
+              ))}
+            </select>
+          </Section>
+
+          <Section title={`Background — ${activeTemplate.name || 'Template'}`} defaultOpen={false}>
+            <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>Each template has its own background.</div>
+            <div className={s.propRow}>
+              <input
+                type="color"
+                className={s.colorInput}
+                value={activeTemplate.bgColor || '#000000'}
+                onChange={e => updateTemplate({ bgColor: e.target.value })}
+              />
+              <input
+                className={s.propInput}
+                placeholder="#000000"
+                value={activeTemplate.bgColor || ''}
+                onChange={e => updateTemplate({ bgColor: e.target.value })}
+                style={{ fontFamily: 'monospace', flex: 1 }}
+              />
+              {activeTemplate.bgColor && (
+                <button className={s.deleteBtnDark} onClick={() => updateTemplate({ bgColor: '' })} title="Clear color">✕</button>
+              )}
+            </div>
+            <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Color Transparency — {activeTemplate.bgColorAlpha ?? 100}%</div>
+            <input
+              type="range" min="0" max="100" step="5"
+              value={activeTemplate.bgColorAlpha ?? 100}
+              onChange={e => updateTemplate({ bgColorAlpha: Number(e.target.value) })}
+              style={{ width: '100%' }}
+            />
+            <select
+              className={s.propSelect}
+              value={activeTemplate.bgFilename || ''}
+              onChange={e => {
+                const b = bgImages.find(im => im.filename === e.target.value);
+                updateTemplate({ bgFilename: b ? b.filename : '', bgLabel: b ? b.label : '' });
+              }}
+              style={{ marginTop: '0.4rem' }}
+            >
+              <option value="">None</option>
+              {bgImages.map(b => <option key={b.id} value={b.filename}>{b.label}</option>)}
+            </select>
+            {activeTemplate.bgFilename && (
+              <>
+                <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Image Opacity — {activeTemplate.bgOpacity ?? 100}%</div>
+                <input
+                  type="range" min="0" max="100" step="5"
+                  value={activeTemplate.bgOpacity ?? 100}
+                  onChange={e => updateTemplate({ bgOpacity: Number(e.target.value) })}
+                  style={{ width: '100%' }}
+                />
+              </>
+            )}
+          </Section>
+
+          <Section title={`Header Divider — ${activeTemplate.name || 'Template'}`} defaultOpen={false}>
+            <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>
+              An optional line under the rink name/clock header, shown while this template's slide is on screen. Width 0 hides it.
+            </div>
+            <div className={s.propLabel}>Width — {activeTemplate.headerLineWidth || 0}px</div>
+            <div className={s.propRow}>
+              <input
+                type="range" min="0" max="20" step="1"
+                value={activeTemplate.headerLineWidth || 0}
+                onChange={e => updateTemplate({ headerLineWidth: Number(e.target.value) })}
+              />
+              {(activeTemplate.headerLineWidth || 0) > 0 && (
+                <input
+                  type="color"
+                  className={s.colorInput}
+                  value={activeTemplate.headerLineColor || '#000000'}
+                  onChange={e => updateTemplate({ headerLineColor: e.target.value })}
+                  title="Line color"
+                />
+              )}
+            </div>
+          </Section>
+
         </div>
       </div>
     </div>
@@ -1227,6 +1247,7 @@ export default function RssTab() {
     useScreenCards({ displays, reload, confirmMessage: 'Delete this RSS screen?' });
 
   const screens = (allScreens || []).filter(sc => sc.display_type === 'rss');
+  const { orderedScreens, sensors, handleDragEnd } = useScreenReorder({ screens, reload });
 
   if (editingScreen !== null) {
     return (
@@ -1249,37 +1270,46 @@ export default function RssTab() {
 
       <FeedManager feeds={feeds} reload={reloadFeeds} />
 
-      <div className={s.grid}>
-        {screens.map(sc => (
-          <div key={sc.id} className={tStyles.card}>
-            <Thumbnail screenId={sc.id} />
-            <div className={tStyles.cardBody}>
-              <div className={tStyles.cardName}>{sc.name}</div>
-              <div className={tStyles.cardMeta}>
-                {(() => {
-                  const ids = sc.rss_feed_ids?.length ? sc.rss_feed_ids : (sc.rss_feed_id ? [sc.rss_feed_id] : []);
-                  const names = ids.map(id => (feeds || []).find(f => f.id === id)?.name).filter(Boolean);
-                  return names.length ? names.join(', ') : 'No feed';
-                })()}
-                {` · ${sc.rss_rotate_seconds ?? 8}s/slide`}
-                {sc.rss_templates?.length > 1 ? ` · ${sc.rss_templates.length} templates` : ''}
-              </div>
-              <InUseBadge name={assignedDisplayName(sc.id)} />
-              <div className={tStyles.cardActions}>
-                <a href={`/tv/screen/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost} title="Preview">📺</a>
-                <button className={adminStyles.btnGhost} onClick={() => setEditingScreen(sc)} title="Edit">✎</button>
-                <EyeButton screen={sc} assignedName={assignedDisplayName(sc.id)} onToggle={toggleVisible} />
-                <button className={adminStyles.btnDanger} onClick={() => deleteScreen(sc.id)} title="Delete">🗑</button>
-                <DuplicateButton screen={sc} onDuplicate={duplicateScreen} />
-              </div>
-              <EyeHint show={eyeHint === sc.id} name={assignedDisplayName(sc.id)} />
-            </div>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={orderedScreens.map(sc => sc.id)} strategy={rectSortingStrategy}>
+          <div className={s.grid}>
+            {orderedScreens.map(sc => (
+              <SortableCard key={sc.id} id={sc.id} className={tStyles.card} draggingClassName={tStyles.dragging}>
+                {({ attributes, listeners }) => (
+                  <>
+                    <Thumbnail screenId={sc.id} />
+                    <div className={tStyles.cardBody}>
+                      <div className={tStyles.cardName}>{sc.name}</div>
+                      <div className={tStyles.cardMeta}>
+                        {(() => {
+                          const ids = sc.rss_feed_ids?.length ? sc.rss_feed_ids : (sc.rss_feed_id ? [sc.rss_feed_id] : []);
+                          const names = ids.map(id => (feeds || []).find(f => f.id === id)?.name).filter(Boolean);
+                          return names.length ? names.join(', ') : 'No feed';
+                        })()}
+                        {` · ${sc.rss_rotate_seconds ?? 8}s/slide`}
+                        {sc.rss_templates?.length > 1 ? ` · ${sc.rss_templates.length} templates` : ''}
+                      </div>
+                      <InUseBadge name={assignedDisplayName(sc.id)} />
+                      <div className={tStyles.cardActions}>
+                        <DragHandle attributes={attributes} listeners={listeners} className={tStyles.dragHandle} />
+                        <a href={`/tv/screen/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost} title="Preview">📺</a>
+                        <button className={adminStyles.btnGhost} onClick={() => setEditingScreen(sc)} title="Edit">✎</button>
+                        <EyeButton screen={sc} assignedName={assignedDisplayName(sc.id)} onToggle={toggleVisible} />
+                        <button className={adminStyles.btnDanger} onClick={() => deleteScreen(sc.id)} title="Delete">🗑</button>
+                        <DuplicateButton screen={sc} onDuplicate={duplicateScreen} />
+                      </div>
+                      <EyeHint show={eyeHint === sc.id} name={assignedDisplayName(sc.id)} />
+                    </div>
+                  </>
+                )}
+              </SortableCard>
+            ))}
+            {screens.length === 0 && (
+              <p className={adminStyles.muted}>No RSS screens yet.</p>
+            )}
           </div>
-        ))}
-        {screens.length === 0 && (
-          <p className={adminStyles.muted}>No RSS screens yet.</p>
-        )}
-      </div>
+        </SortableContext>
+      </DndContext>
     </div>
   );
 }

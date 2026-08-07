@@ -318,6 +318,23 @@ export function LinesEditor({ lines, onChange, tokens }) {
   );
 }
 
+// Elements render (both in the editor canvas and tv.html) in array order,
+// last = on top — so "layering" is just reordering this array. Exported so
+// each tab's move-to-front/back/up/down buttons share one implementation.
+export function reorderElement(elements, id, dir) {
+  const idx = elements.findIndex(el => el.id === id);
+  if (idx === -1) return elements;
+  const next = elements.slice();
+  const [el] = next.splice(idx, 1);
+  let target;
+  if (dir === 'front') target = next.length;
+  else if (dir === 'back') target = 0;
+  else if (dir === 'up') target = Math.min(next.length, idx + 1);
+  else target = Math.max(0, idx - 1);
+  next.splice(target, 0, el);
+  return next;
+}
+
 // Collapsible properties-panel section — the panel gets long once an element
 // has many controls (position, size, color, border...), so each section can
 // be folded away. Defaults to open; pass `defaultOpen={false}` to start

@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.26.1] — 2026-08-07
+
+### Added
+- **Drag-and-drop screen reordering** — every screen list (Hockey, Public Skate, Custom, Rink Events, Figure Skating, RSS, Announcements, Webpage) can now be reordered by dragging a card's ⠿ handle. On the tabs with a date-nav bar (Hockey, Public Skate, Custom, Rink Events, Figure Skating), the handle sits at the top-left of that gray bar; the date and its navigation arrows stay centered. Order is saved immediately and persists across reloads.
+
 ## [1.26.0] — 2026-08-07
 
 ### Added

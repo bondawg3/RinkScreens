@@ -183,6 +183,30 @@ describe('screens', () => {
     const after = await request(app).get('/api/screens');
     expect(after.body.find((s) => s.id === created.body.id).show_locker_rooms).toBe(false);
   });
+
+  it('reorders screens without disturbing other display_types', async () => {
+    const a = await auth(request(app).post('/api/screens')).send({ name: 'RSS A', display_type: 'rss' });
+    const other = await auth(request(app).post('/api/screens')).send({ name: 'Games', display_type: 'games' });
+    const b = await auth(request(app).post('/api/screens')).send({ name: 'RSS B', display_type: 'rss' });
+    const c = await auth(request(app).post('/api/screens')).send({ name: 'RSS C', display_type: 'rss' });
+
+    const res = await auth(request(app).post('/api/screens/reorder'))
+      .send({ ids: [c.body.id, a.body.id, b.body.id] });
+    expect(res.status).toBe(200);
+
+    const list = await request(app).get('/api/screens');
+    const ids = list.body.map((s) => s.id);
+    expect(ids.indexOf(c.body.id)).toBeLessThan(ids.indexOf(a.body.id));
+    expect(ids.indexOf(a.body.id)).toBeLessThan(ids.indexOf(b.body.id));
+    // the untouched 'games' screen is neither dropped nor duplicated
+    expect(ids).toContain(other.body.id);
+    expect(ids.filter((id) => id === other.body.id)).toHaveLength(1);
+  });
+
+  it('400s reorder without an ids array', async () => {
+    const res = await auth(request(app).post('/api/screens/reorder')).send({});
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('displays', () => {

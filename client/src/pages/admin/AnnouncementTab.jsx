@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { DndContext, closestCenter } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import adminStyles from './AdminTab.module.css';
 import tStyles from './ScreensTab.module.css';
 import s from './AnnouncementTab.module.css';
 import Thumbnail from './Thumbnail';
-import { useScreenCards, InUseBadge, EyeButton, EyeHint, DuplicateButton } from './screenCard';
-import { FONTS, makeId, hexToRgba, AutoFitText, StackedBoxText, LinesEditor, Section, useUndo, ResizeHandles, borderStyle, BORDER_SIDES } from './SlideEditorShared';
+import { useScreenCards, useScreenReorder, InUseBadge, EyeButton, EyeHint, DuplicateButton, SortableCard, DragHandle } from './screenCard';
+import { FONTS, makeId, hexToRgba, AutoFitText, StackedBoxText, LinesEditor, Section, useUndo, ResizeHandles, borderStyle, BORDER_SIDES, reorderElement } from './SlideEditorShared';
 
 function formatDateTimePreview(format, showSeconds) {
   const now = new Date();
@@ -149,6 +151,12 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
     if (selectedId === id) setSelectedId(null);
   }
 
+  function moveLayer(dir) {
+    if (!selectedId) return;
+    pushHistory();
+    setElements(prev => reorderElement(prev, selectedId, dir));
+  }
+
   const selectedEl = elements.find(e => e.id === selectedId) || null;
   const bgFilename = backgrounds?.find(b => b.id === Number(backgroundId))?.filename || null;
   const bgImages = (backgrounds || []).filter(b => (b.image_type || 'background') === 'background');
@@ -285,111 +293,21 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
 
         {/* Properties panel */}
         <div className={s.propsPanel}>
-          {/* Background */}
-          <Section title="Background">
-            <div className={s.propLabel}>Color</div>
-            <div className={s.propRow}>
-              <input
-                type="color"
-                className={s.colorInput}
-                value={bgColor || '#000000'}
-                onChange={e => setBgColor(e.target.value)}
-              />
-              <input
-                className={s.propInput}
-                placeholder="#000000"
-                value={bgColor}
-                onChange={e => setBgColor(e.target.value)}
-                style={{ fontFamily: 'monospace', flex: 1 }}
-              />
-              {bgColor && (
-                <button className={s.deleteBtnDark} onClick={() => setBgColor('')} title="Clear color">✕</button>
-              )}
-            </div>
-            <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Color Transparency — {bgColorAlpha}%</div>
-            <input
-              type="range" min="0" max="100" step="5"
-              value={bgColorAlpha}
-              onChange={e => setBgColorAlpha(Number(e.target.value))}
-              style={{ width: '100%' }}
-            />
-
-            <select
-              className={s.propSelect}
-              value={backgroundId}
-              onChange={e => setBackgroundId(e.target.value)}
-              style={{ marginTop: '0.4rem' }}
-            >
-              <option value="">None</option>
-              {bgImages.map(b => (
-                <option key={b.id} value={b.id}>{b.label}</option>
-              ))}
-            </select>
-            {backgroundId && (
-              <>
-                <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Image Opacity — {bgOpacity}%</div>
-                <input
-                  type="range" min="0" max="100" step="5"
-                  value={bgOpacity}
-                  onChange={e => setBgOpacity(Number(e.target.value))}
-                  style={{ width: '100%' }}
-                />
-              </>
-            )}
-          </Section>
-
-          <Section title="Header Divider">
-            <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>
-              An optional line under the rink name/clock header, above this screen's content. Width 0 hides it.
-            </div>
-            <div className={s.propLabel}>Width — {headerLineWidth}px</div>
-            <div className={s.propRow}>
-              <input
-                type="range" min="0" max="20" step="1"
-                value={headerLineWidth}
-                onChange={e => setHeaderLineWidth(Number(e.target.value))}
-              />
-              {headerLineWidth > 0 && (
-                <input
-                  type="color"
-                  className={s.colorInput}
-                  value={headerLineColor}
-                  onChange={e => setHeaderLineColor(e.target.value)}
-                  title="Line color"
-                />
-              )}
-            </div>
-          </Section>
-
-          {/* Add elements */}
-          <Section title="Add Element">
-            <div className={s.addBtns}>
-              <button className={s.addBtn} onClick={() => addText('heading')}>+ Heading</button>
-              <button className={s.addBtn} onClick={() => addText('body')}>+ Body</button>
-              <button className={s.addBtn} onClick={() => addText('footer')}>+ Footer</button>
-              <button className={s.addBtn} onClick={addDateTime}>+ Date/Time</button>
-            </div>
-            <div style={{ marginTop: '0.25rem' }}>
-              <select
-                className={s.propSelect}
-                defaultValue=""
-                onChange={e => { addImage(e.target.value); e.target.value = ''; }}
-              >
-                <option value="" disabled>+ Add Image…</option>
-                {generalImages.length === 0 && <option disabled>— No general images uploaded —</option>}
-                {generalImages.map(b => (
-                  <option key={b.id} value={b.filename}>{b.label}</option>
-                ))}
-              </select>
-            </div>
-          </Section>
-
           {/* Selected element properties */}
-          {selectedEl ? (
+          {selectedEl && (
             <Section
               title={selectedEl.type === 'text' ? 'Text' : selectedEl.type === 'datetime' ? 'Date/Time' : 'Image'}
               extra={<button className={s.deleteBtnDark} onClick={() => deleteEl(selectedId)}>Remove</button>}
             >
+              <div>
+                <div className={s.propLabel}>Layer order</div>
+                <div className={s.alignToggle}>
+                  <button type="button" className={s.alignBtn} onClick={() => moveLayer('back')} title="Send to back">⇊</button>
+                  <button type="button" className={s.alignBtn} onClick={() => moveLayer('down')} title="Send backward">↓</button>
+                  <button type="button" className={s.alignBtn} onClick={() => moveLayer('up')} title="Bring forward">↑</button>
+                  <button type="button" className={s.alignBtn} onClick={() => moveLayer('front')} title="Bring to front">⇈</button>
+                </div>
+              </div>
               {selectedEl.type === 'text' && (
                 <>
                   {!(selectedEl.boxWidth && selectedEl.boxHeight && selectedEl.lines && selectedEl.lines.length) && (
@@ -776,11 +694,112 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                 </div>
               </div>
             </Section>
-          ) : (
-            <div style={{ padding: '1rem', color: 'rgba(255,255,255,0.35)', fontSize: '0.85rem', textAlign: 'center' }}>
-              Click an element on the canvas to edit its properties, or add a new element above.
+          )}
+          {!selectedEl && (
+            <div style={{ padding: '0.6rem 0.2rem', color: 'rgba(255,255,255,0.35)', fontSize: '0.82rem' }}>
+              Click an element on the canvas to edit its properties, or add a new one below.
             </div>
           )}
+
+          {/* Add elements */}
+          <Section title="Add Element">
+            <div className={s.addBtns}>
+              <button className={s.addBtn} onClick={() => addText('heading')}>+ Heading</button>
+              <button className={s.addBtn} onClick={() => addText('body')}>+ Body</button>
+              <button className={s.addBtn} onClick={() => addText('footer')}>+ Footer</button>
+              <button className={s.addBtn} onClick={addDateTime}>+ Date/Time</button>
+            </div>
+            <div style={{ marginTop: '0.25rem' }}>
+              <select
+                className={s.propSelect}
+                defaultValue=""
+                onChange={e => { addImage(e.target.value); e.target.value = ''; }}
+              >
+                <option value="" disabled>+ Add Image…</option>
+                {generalImages.length === 0 && <option disabled>— No general images uploaded —</option>}
+                {generalImages.map(b => (
+                  <option key={b.id} value={b.filename}>{b.label}</option>
+                ))}
+              </select>
+            </div>
+          </Section>
+
+          {/* Background */}
+          <Section title="Background" defaultOpen={false}>
+            <div className={s.propLabel}>Color</div>
+            <div className={s.propRow}>
+              <input
+                type="color"
+                className={s.colorInput}
+                value={bgColor || '#000000'}
+                onChange={e => setBgColor(e.target.value)}
+              />
+              <input
+                className={s.propInput}
+                placeholder="#000000"
+                value={bgColor}
+                onChange={e => setBgColor(e.target.value)}
+                style={{ fontFamily: 'monospace', flex: 1 }}
+              />
+              {bgColor && (
+                <button className={s.deleteBtnDark} onClick={() => setBgColor('')} title="Clear color">✕</button>
+              )}
+            </div>
+            <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Color Transparency — {bgColorAlpha}%</div>
+            <input
+              type="range" min="0" max="100" step="5"
+              value={bgColorAlpha}
+              onChange={e => setBgColorAlpha(Number(e.target.value))}
+              style={{ width: '100%' }}
+            />
+
+            <select
+              className={s.propSelect}
+              value={backgroundId}
+              onChange={e => setBackgroundId(e.target.value)}
+              style={{ marginTop: '0.4rem' }}
+            >
+              <option value="">None</option>
+              {bgImages.map(b => (
+                <option key={b.id} value={b.id}>{b.label}</option>
+              ))}
+            </select>
+            {backgroundId && (
+              <>
+                <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Image Opacity — {bgOpacity}%</div>
+                <input
+                  type="range" min="0" max="100" step="5"
+                  value={bgOpacity}
+                  onChange={e => setBgOpacity(Number(e.target.value))}
+                  style={{ width: '100%' }}
+                />
+              </>
+            )}
+          </Section>
+
+          <Section title="Header Divider" defaultOpen={false}>
+            <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>
+              An optional line under the rink name/clock header, above this screen's content. Width 0 hides it.
+            </div>
+            <div className={s.propLabel}>Width — {headerLineWidth}px</div>
+            <div className={s.propRow}>
+              <input
+                type="range" min="0" max="20" step="1"
+                value={headerLineWidth}
+                onChange={e => setHeaderLineWidth(Number(e.target.value))}
+              />
+              {headerLineWidth > 0 && (
+                <input
+                  type="color"
+                  className={s.colorInput}
+                  value={headerLineColor}
+                  onChange={e => setHeaderLineColor(e.target.value)}
+                  title="Line color"
+                />
+              )}
+            </div>
+          </Section>
+
         </div>
       </div>
     </div>
@@ -797,6 +816,7 @@ export default function AnnouncementTab() {
     useScreenCards({ displays, reload, confirmMessage: 'Delete this announcement screen?' });
 
   const screens = (allScreens || []).filter(sc => sc.display_type === 'announcement');
+  const { orderedScreens, sensors, handleDragEnd } = useScreenReorder({ screens, reload });
 
   if (editingScreen !== null) {
     return (
@@ -816,9 +836,13 @@ export default function AnnouncementTab() {
         <button className={adminStyles.btnPrimary} onClick={() => setEditingScreen({})}>+ Add Screen</button>
       </div>
 
-      <div className={s.grid}>
-        {screens.map(sc => (
-          <div key={sc.id} className={tStyles.card}>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={orderedScreens.map(sc => sc.id)} strategy={rectSortingStrategy}>
+          <div className={s.grid}>
+            {orderedScreens.map(sc => (
+          <SortableCard key={sc.id} id={sc.id} className={tStyles.card} draggingClassName={tStyles.dragging}>
+            {({ attributes, listeners }) => (
+              <>
             <Thumbnail screenId={sc.id} />
             <div className={tStyles.cardBody}>
               <div className={tStyles.cardName}>{sc.name}</div>
@@ -828,6 +852,7 @@ export default function AnnouncementTab() {
               </div>
               <InUseBadge name={assignedDisplayName(sc.id)} />
               <div className={tStyles.cardActions}>
+                <DragHandle attributes={attributes} listeners={listeners} className={tStyles.dragHandle} />
                 <a href={`/tv/screen/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost} title="Preview">📺</a>
                 <button className={adminStyles.btnGhost} onClick={() => setEditingScreen(sc)} title="Edit">✎</button>
                 <EyeButton screen={sc} assignedName={assignedDisplayName(sc.id)} onToggle={toggleVisible} />
@@ -836,12 +861,16 @@ export default function AnnouncementTab() {
               </div>
               <EyeHint show={eyeHint === sc.id} name={assignedDisplayName(sc.id)} />
             </div>
+              </>
+            )}
+          </SortableCard>
+            ))}
+            {screens.length === 0 && (
+              <p className={adminStyles.muted}>No announcement screens yet.</p>
+            )}
           </div>
-        ))}
-        {screens.length === 0 && (
-          <p className={adminStyles.muted}>No announcement screens yet.</p>
-        )}
-      </div>
+        </SortableContext>
+      </DndContext>
     </div>
   );
 }

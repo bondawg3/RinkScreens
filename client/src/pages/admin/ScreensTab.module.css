@@ -44,3 +44,21 @@
   flex-wrap: wrap;
 }
 
+.dragHandle {
+  background: none;
+  border: 1.5px solid var(--border, #e5e7eb);
+  border-radius: 5px;
+  padding: 0.28rem 0.5rem;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: grab;
+  color: var(--muted);
+  touch-action: none;
+}
+
+.dragHandle:active { cursor: grabbing; }
+
+.dragging {
+  opacity: 0.5;
+}
+

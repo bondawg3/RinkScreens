@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import { DndContext, closestCenter } from '@dnd-kit/core';
+import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import adminStyles from './AdminTab.module.css';
 import s from './ScreensSection.module.css';
 import Modal from './Modal';
 import Thumbnail from './Thumbnail';
-import { useScreenCards, InUseBadge, EyeButton, EyeHint, DuplicateButton } from './screenCard';
+import { useScreenCards, useScreenReorder, InUseBadge, EyeButton, EyeHint, DuplicateButton, SortableCard, DragHandle } from './screenCard';
 import { stepDate, todayStr, fmtDateLabel } from '../../utils/date';
 
 const CAL_TYPE_LABELS = {
@@ -167,6 +169,7 @@ export default function ScreensSection({ displayType, calendarType }) {
 
   const { eyeHint, assignedDisplayName, toggleVisible, deleteScreen, duplicateScreen } =
     useScreenCards({ displays, reload });
+  const { orderedScreens, sensors, handleDragEnd } = useScreenReorder({ screens, reload });
 
   function calNamesForScreen(screen) {
     if (!screen.calendar_ids || !screen.calendar_ids.length) return null;
@@ -188,47 +191,56 @@ export default function ScreensSection({ displayType, calendarType }) {
         <button className={adminStyles.btnPrimary} onClick={openAdd}>+ Add Screen</button>
       </div>
 
-      <div className={s.grid}>
-        {screens.map((sc) => {
-          const pd = getPreviewDate(sc.id);
-          const calNames = calNamesForScreen(sc);
-          const bg = bgForScreen(sc);
-          return (
-            <div key={sc.id} className={s.card}>
-              <div className={s.dateNav}>
-                <button onClick={() => shiftDate(sc.id, -1)}>&#8249;</button>
-                <span className={s.dateLabel}>{fmtDateLabel(pd)}</span>
-                <button onClick={() => shiftDate(sc.id, 1)}>&#8250;</button>
-              </div>
-              <Thumbnail screenId={sc.id} previewDate={pd} />
-              <div className={s.cardBody}>
-                <div className={s.cardName}>{sc.name}</div>
-                <div className={s.calChips}>
-                  {calNames
-                    ? calNames.map((n) => <span key={n} className={s.chip}>{n}</span>)
-                    : <span className={s.chipAll}>All calendars</span>}
-                </div>
-                {bg && <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{bg} — {sc.bg_opacity ?? 100}% opacity</div>}
-                <InUseBadge name={assignedDisplayName(sc.id)} />
-                <div className={s.cardActions}>
-                  <a href={`/tv/screen/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost} title="Preview">📺</a>
-                  <button className={adminStyles.btnGhost} onClick={() => openEdit(sc)} title="Edit">✎</button>
-                  {sc.show_pricing && (
-                    <button className={s.pricingBtn} title="Choose which prices to show" onClick={() => openPricingModal(sc)}>$</button>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={orderedScreens.map((sc) => sc.id)} strategy={rectSortingStrategy}>
+          <div className={s.grid}>
+            {orderedScreens.map((sc) => {
+              const pd = getPreviewDate(sc.id);
+              const calNames = calNamesForScreen(sc);
+              const bg = bgForScreen(sc);
+              return (
+                <SortableCard key={sc.id} id={sc.id} className={s.card} draggingClassName={s.dragging}>
+                  {({ attributes, listeners }) => (
+                    <>
+                      <div className={s.dateNav}>
+                        <DragHandle attributes={attributes} listeners={listeners} className={s.dateNavHandle} />
+                        <button onClick={() => shiftDate(sc.id, -1)}>&#8249;</button>
+                        <span className={s.dateLabel}>{fmtDateLabel(pd)}</span>
+                        <button onClick={() => shiftDate(sc.id, 1)}>&#8250;</button>
+                      </div>
+                      <Thumbnail screenId={sc.id} previewDate={pd} />
+                      <div className={s.cardBody}>
+                        <div className={s.cardName}>{sc.name}</div>
+                        <div className={s.calChips}>
+                          {calNames
+                            ? calNames.map((n) => <span key={n} className={s.chip}>{n}</span>)
+                            : <span className={s.chipAll}>All calendars</span>}
+                        </div>
+                        {bg && <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{bg} — {sc.bg_opacity ?? 100}% opacity</div>}
+                        <InUseBadge name={assignedDisplayName(sc.id)} />
+                        <div className={s.cardActions}>
+                          <a href={`/tv/screen/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost} title="Preview">📺</a>
+                          <button className={adminStyles.btnGhost} onClick={() => openEdit(sc)} title="Edit">✎</button>
+                          {sc.show_pricing && (
+                            <button className={s.pricingBtn} title="Choose which prices to show" onClick={() => openPricingModal(sc)}>$</button>
+                          )}
+                          <EyeButton screen={sc} assignedName={assignedDisplayName(sc.id)} onToggle={toggleVisible} />
+                          <button className={adminStyles.btnDanger} onClick={() => deleteScreen(sc.id)} title="Delete">🗑</button>
+                          <DuplicateButton screen={sc} onDuplicate={duplicateScreen} />
+                        </div>
+                        <EyeHint show={eyeHint === sc.id} name={assignedDisplayName(sc.id)} />
+                      </div>
+                    </>
                   )}
-                  <EyeButton screen={sc} assignedName={assignedDisplayName(sc.id)} onToggle={toggleVisible} />
-                  <button className={adminStyles.btnDanger} onClick={() => deleteScreen(sc.id)} title="Delete">🗑</button>
-                  <DuplicateButton screen={sc} onDuplicate={duplicateScreen} />
-                </div>
-                <EyeHint show={eyeHint === sc.id} name={assignedDisplayName(sc.id)} />
-              </div>
-            </div>
-          );
-        })}
-        {screens.length === 0 && (
-          <p className={adminStyles.muted}>No screens configured yet.</p>
-        )}
-      </div>
+                </SortableCard>
+              );
+            })}
+            {screens.length === 0 && (
+              <p className={adminStyles.muted}>No screens configured yet.</p>
+            )}
+          </div>
+        </SortableContext>
+      </DndContext>
 
       {modal && (
         <Modal

@@ -192,6 +192,14 @@ function _remove(data, table, id) {
   return data[table].length < before;
 }
 
+// Reorders a table's rows to match `orderedIds` (must be a permutation of
+// every id currently in the table — used for full-list drag-and-drop reorder).
+function _reorder(data, table, orderedIds) {
+  const rows = data[table] || [];
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  data[table] = orderedIds.map((id) => byId.get(id)).filter(Boolean);
+}
+
 function _findByField(data, table, field, value) {
   const row = (data[table] || []).find((r) => r[field] === value);
   return row ? { ...row } : null;
@@ -284,6 +292,7 @@ function transaction(fn) {
       insert: (table, row) => _insert(data, table, row),
       update: (table, id, changes) => _update(data, table, id, changes),
       remove: (table, id) => _remove(data, table, id),
+      reorder: (table, orderedIds) => _reorder(data, table, orderedIds),
       findByField: (table, field, value) => _findByField(data, table, field, value),
       upsertByField: (table, field, value, row) => _upsertByField(data, table, field, value, row),
     });

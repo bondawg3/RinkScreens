@@ -1,6 +1,6 @@
 {
   "name": "rinkscreens",
-  "version": "1.26.0",
+  "version": "1.26.1",
   "private": true,
   "scripts": {
     "dev": "concurrently \"npm run server:dev\" \"npm run client:dev\"",
@@ -14,6 +14,9 @@
     "publish-release": "powershell -ExecutionPolicy Bypass -File scripts/publish-release.ps1"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "adm-zip": "^0.6.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",

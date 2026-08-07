@@ -295,6 +295,26 @@ router.post('/screens/:id/reload', requireAuth, (req, res) => {
   res.json({ ok: true });
 });
 
+// Reorders a subset of screens (e.g. all screens in one tab/display_type) to
+// match `ids`. Screens are spliced out and reinserted at the position of the
+// first one, so screens belonging to other display_types keep their place in
+// the shared array.
+router.post('/screens/reorder', requireAuth, (req, res) => {
+  const { ids } = req.body;
+  if (!Array.isArray(ids) || !ids.length) return res.status(400).json({ error: 'ids required' });
+  const wanted = ids.map(Number);
+  db.transaction((tx) => {
+    const all = tx.findAll('screens');
+    const firstIndex = all.findIndex((s) => wanted.includes(s.id));
+    if (firstIndex === -1) return;
+    const moving = wanted.map((id) => all.find((s) => s.id === id)).filter(Boolean);
+    const rest = all.filter((s) => !wanted.includes(s.id));
+    rest.splice(firstIndex, 0, ...moving);
+    tx.reorder('screens', rest.map((s) => s.id));
+  });
+  res.json({ ok: true });
+});
+
 // ── Displays ──────────────────────────────────────────────────────────────────
 
 router.get('/displays', (req, res) => {

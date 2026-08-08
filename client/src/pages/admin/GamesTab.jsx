@@ -87,6 +87,37 @@ export default function GamesTab() {
     reload();
   }
 
+  // Practice-mode games sharing an exact start time get one shared locker
+  // pair — updating either side applies it to every game in the group.
+  async function saveLockerGroup(games, field, value) {
+    await Promise.all(games.map((game) => apiFetch(`/games/${game.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        home_team: game.home_team,
+        away_team: game.away_team,
+        home_locker: game.home_locker,
+        away_locker: game.away_locker,
+        [field]: value,
+      }),
+    })));
+    reload();
+  }
+
+  // Groups consecutive practice-mode games sharing an exact start time so
+  // they render as one row, mirroring the hockey screen's grouping.
+  function groupPracticeRows(games) {
+    const groups = [];
+    for (const g of games) {
+      const prev = groups.length ? groups[groups.length - 1] : null;
+      if (g.event_mode === 'practice' && prev && prev[0].event_mode === 'practice' && prev[0].start_time === g.start_time) {
+        prev.push(g);
+      } else {
+        groups.push([g]);
+      }
+    }
+    return groups;
+  }
+
   function startEdit(game) {
     setEditing(game.id);
     setEditData({
@@ -112,22 +143,16 @@ export default function GamesTab() {
       const dayOrder = [];
       for (const g of sorted) {
         const dayKey = new Date(g.start_time).toDateString();
-        if (!byDay[dayKey]) { byDay[dayKey] = { label: dayLabel(g.start_time), byCal: {}, calOrder: [] }; dayOrder.push(dayKey); }
-        const calKey = g.calendar_id ? String(g.calendar_id) : '__none__';
-        if (!byDay[dayKey].byCal[calKey]) { byDay[dayKey].byCal[calKey] = []; byDay[dayKey].calOrder.push(calKey); }
-        byDay[dayKey].byCal[calKey].push(g);
+        if (!byDay[dayKey]) { byDay[dayKey] = { label: dayLabel(g.start_time), games: [] }; dayOrder.push(dayKey); }
+        byDay[dayKey].games.push(g);
       }
       return dayOrder.map((dayKey) => {
         const day = byDay[dayKey];
-        const firstGame = day.byCal[day.calOrder[0]][0];
-        const dateStr = localDateStr(new Date(firstGame.start_time));
+        const dateStr = localDateStr(new Date(day.games[0].start_time));
         return {
           label: day.label,
           dateStr,
-          subgroups: day.calOrder.map((calKey) => ({
-            label: calKey === '__none__' ? 'Unassigned' : (calMap[calKey] || `Calendar ${calKey}`),
-            games: day.byCal[calKey],
-          })),
+          subgroups: [{ label: null, games: day.games }],
         };
       });
     }
@@ -166,6 +191,37 @@ export default function GamesTab() {
     );
   }
 
+  function groupLockerSelect(games, field) {
+    const value = games[0][field] || '';
+    return (
+      <select className={tabStyles.lockerSelect} value={value} onChange={(e) => saveLockerGroup(games, field, e.target.value)}>
+        <option value="">— None —</option>
+        {(lockerRooms || []).map((r) => <option key={r.id} value={r.name}>{r.name}</option>)}
+      </select>
+    );
+  }
+
+  function renderGroupRow(games) {
+    const lead = games[0];
+    return (
+      <tr key={games.map((g) => g.id).join('-')}>
+        <td className={styles.nowrap} style={{ verticalAlign: 'top' }}>{fmtTime(lead.start_time)}</td>
+        <td>
+          {games.map((g) => <div key={g.id}>{g.title}</div>)}
+        </td>
+        <td>{lead.home_team || <span className={styles.muted}>—</span>}</td>
+        <td>{groupLockerSelect(games, 'home_locker')}</td>
+        <td>{lead.away_team || <span className={styles.muted}>—</span>}</td>
+        <td>{groupLockerSelect(games, 'away_locker')}</td>
+        <td className={styles.actions}>
+          {games.map((g) => (
+            <button key={g.id} className={styles.btnDanger} onClick={() => deleteGame(g)} title={`Delete "${g.title}"`} style={{ fontSize: '1rem', padding: '0.25rem 0.5rem', display: 'block', marginBottom: '0.2rem' }}>🗑</button>
+          ))}
+        </td>
+      </tr>
+    );
+  }
+
   function renderRow(g) {
     return (
       <tr key={g.id}>
@@ -190,7 +246,7 @@ export default function GamesTab() {
             <td>{g.away_team || <span className={styles.muted}>—</span>}</td>
             <td>{lockerSelect(g, 'away_locker')}</td>
             <td className={styles.actions}>
-              <button className={styles.btnGhost} onClick={() => startEdit(g)}>Edit</button>
+              <button className={styles.btnGhost} onClick={() => startEdit(g)} title="Edit game" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>✎</button>
               <button className={styles.btnDanger} onClick={() => deleteGame(g)} title="Delete game" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>🗑</button>
             </td>
           </>
@@ -286,7 +342,7 @@ export default function GamesTab() {
               )}
             </div>
           )}
-          <table className={styles.table}>
+          <table className={`${styles.table} ${tabStyles.noRowHover}`}>
             <thead>
               <tr>
                 <th>Time</th>
@@ -304,7 +360,9 @@ export default function GamesTab() {
                       <td colSpan={7} className={tabStyles.calSubHeaderRow}>{sub.label}</td>
                     </tr>
                   )}
-                  {sub.games.map(renderRow)}
+                  {groupPracticeRows(sub.games).map((grp) => (
+                    grp.length > 1 ? renderGroupRow(grp) : renderRow(grp[0])
+                  ))}
                 </React.Fragment>
               ))}
             </tbody>

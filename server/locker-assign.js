@@ -13,18 +13,37 @@ function localDateStr(isoStr) {
   );
 }
 
-function buildCalLeagueMap(tx) {
+function buildCalMap(tx) {
   const calendars = tx.findAll('calendars');
-  const leagues = tx.findAll('leagues');
-  const map = {}; // calId → { league, calSeqId }
+  const map = {}; // calId → { calSeqId, eventMode }
   for (const cal of calendars) {
-    const league = leagues.find((l) => l.name.toLowerCase() === cal.name.toLowerCase());
-    map[cal.id] = { league: league || null, calSeqId: cal.locker_sequence_id || null };
+    map[cal.id] = { calSeqId: cal.locker_sequence_id || null, eventMode: cal.event_mode || 'teams' };
   }
   return map;
 }
 
-function processDay(dayGames, calLeagueMap, seqMap, standardSeq) {
+// Practice-mode games that share an exact start time are treated as one time
+// slot: they get a single locker pair between them instead of one each.
+function buildSlots(dayGames, calMap) {
+  const slots = [];
+  const practiceSlotByStart = new Map();
+  for (const game of dayGames) {
+    const calEntry = game.calendar_id ? calMap[game.calendar_id] : null;
+    const isPractice = calEntry && calEntry.eventMode === 'practice';
+    if (isPractice) {
+      const key = new Date(game.start_time).getTime();
+      if (practiceSlotByStart.has(key)) {
+        slots[practiceSlotByStart.get(key)].games.push(game);
+        continue;
+      }
+      practiceSlotByStart.set(key, slots.length);
+    }
+    slots.push({ games: [game] });
+  }
+  return slots;
+}
+
+function processDay(dayGames, calMap, seqMap, standardSeq) {
   const updates = [];
   const conflicts = [];
 
@@ -34,11 +53,15 @@ function processDay(dayGames, calLeagueMap, seqMap, standardSeq) {
   let prevAssignedAway = null;
   let blockSeq = null; // sequence carried forward within a block
 
-  for (const game of dayGames) {
-    const startMs = new Date(game.start_time).getTime();
-    const endMs = game.end_time
-      ? new Date(game.end_time).getTime()
-      : startMs + 60 * 60 * 1000;
+  const slots = buildSlots(dayGames, calMap);
+
+  for (const slot of slots) {
+    const leadGame = slot.games[0];
+    const startMs = Math.min(...slot.games.map((g) => new Date(g.start_time).getTime()));
+    const endMs = Math.max(...slot.games.map((g) => {
+      const s = new Date(g.start_time).getTime();
+      return g.end_time ? new Date(g.end_time).getTime() : s + 60 * 60 * 1000;
+    }));
 
     const isNewBlock = prevEndMs !== null && startMs - prevEndMs > GAP_MS;
     if (isNewBlock) {
@@ -49,24 +72,22 @@ function processDay(dayGames, calLeagueMap, seqMap, standardSeq) {
       prevAssignedAway = null;
     }
 
-    // Sequence priority: calendar-level → league-level → carry-over within block → default
-    const calEntry = game.calendar_id ? calLeagueMap[game.calendar_id] : null;
-    const league = calEntry ? calEntry.league : null;
+    // Sequence priority: carry-over within block → calendar-level → default
+    // Once a block establishes a sequence, it continues for the rest of that
+    // block even if a later slot's own calendar specifies a different one.
+    const calEntry = leadGame.calendar_id ? calMap[leadGame.calendar_id] : null;
     const calSeqId = calEntry ? calEntry.calSeqId : null;
-    const gameSeq =
-      (calSeqId && seqMap[calSeqId]) ||
-      (league && league.locker_sequence_id && seqMap[league.locker_sequence_id]) ||
-      null;
-    if (gameSeq) blockSeq = gameSeq;
-    const seq = gameSeq || blockSeq || standardSeq;
+    const gameSeq = (calSeqId && seqMap[calSeqId]) || null;
+    if (blockSeq === null && gameSeq) blockSeq = gameSeq;
+    const seq = blockSeq || gameSeq || standardSeq;
 
-    const isManual = !!(game.home_locker || game.away_locker) && !game.lr_auto_assigned;
+    const isManual = slot.games.every((g) => !!(g.home_locker || g.away_locker) && !g.lr_auto_assigned);
 
     if (seq && seq.pairs && seq.pairs.length > 0) {
       const pair = seq.pairs[blockPairIdx % seq.pairs.length];
 
       if (!isManual) {
-        // Conflict check: same locker used in consecutive games within a block
+        // Conflict check: same locker used in consecutive slots within a block
         if (
           prevAssignedHome !== null &&
           !isNewBlock &&
@@ -80,22 +101,24 @@ function processDay(dayGames, calLeagueMap, seqMap, standardSeq) {
               ? pair.home
               : pair.away;
           conflicts.push({
-            game_id: game.id,
-            start_time: game.start_time,
+            game_id: leadGame.id,
+            start_time: leadGame.start_time,
             locker: conflicting,
           });
         }
 
-        updates.push({
-          id: game.id,
-          home_locker: pair.home,
-          away_locker: pair.away,
-        });
+        for (const game of slot.games) {
+          updates.push({
+            id: game.id,
+            home_locker: pair.home,
+            away_locker: pair.away,
+          });
+        }
         prevAssignedHome = pair.home;
         prevAssignedAway = pair.away;
       } else {
-        prevAssignedHome = game.home_locker;
-        prevAssignedAway = game.away_locker;
+        prevAssignedHome = leadGame.home_locker;
+        prevAssignedAway = leadGame.away_locker;
       }
 
       blockPairIdx++;
@@ -147,7 +170,7 @@ function autoAssign({ dateStr, resetExisting } = {}) {
     if (candidateDates.size === 0) return { assigned: 0, conflicts: [] };
 
     // Step 4: Build lookup maps
-    const calLeagueMap = buildCalLeagueMap(tx);
+    const calMap = buildCalMap(tx);
     const seqList = tx.findAll('locker_sequences');
     const seqMap = Object.fromEntries(seqList.map((s) => [s.id, s]));
     const settings = tx.getSettings();
@@ -174,7 +197,7 @@ function autoAssign({ dateStr, resetExisting } = {}) {
       const sorted = byDate[date].sort(
         (a, b) => new Date(a.start_time) - new Date(b.start_time)
       );
-      const { updates, conflicts } = processDay(sorted, calLeagueMap, seqMap, standardSeq);
+      const { updates, conflicts } = processDay(sorted, calMap, seqMap, standardSeq);
 
       for (const u of updates) {
         tx.update('activities', u.id, {

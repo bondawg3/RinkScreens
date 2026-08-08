@@ -7,7 +7,7 @@ import tStyles from './ScreensTab.module.css';
 import s from './AnnouncementTab.module.css';
 import Thumbnail from './Thumbnail';
 import { useScreenCards, useScreenReorder, InUseBadge, EyeButton, EyeHint, DuplicateButton, SortableCard, DragHandle } from './screenCard';
-import { FONTS, makeId, hexToRgba, AutoFitText, StackedBoxText, LinesEditor, Section, useUndo, ResizeHandles, borderStyle, BORDER_SIDES, reorderElement, LayersPanel } from './SlideEditorShared';
+import { FONTS, makeId, hexToRgba, AutoFitText, StackedBoxText, LinesEditor, Section, useUndo, useArrowKeyNudge, ResizeHandles, borderStyle, BORDER_SIDES, reorderElement, LayersPanel, SteppedSlider, SteppedNumberInput } from './SlideEditorShared';
 
 function formatDateTimePreview(format, showSeconds) {
   const now = new Date();
@@ -53,6 +53,8 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
 
   // Undo/redo (Ctrl+Z / Cmd+Z, Shift to redo) over the elements array
   const pushHistory = useUndo(useCallback(() => elements, [elements]), setElements);
+
+  useArrowKeyNudge({ selectedId, elements, updateEl });
 
   // Canvas is sized to the largest 16:9 box that fits inside canvasFit (the
   // flexible area below the header/toolbar rows), so it shrinks to stay
@@ -334,11 +336,7 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                       <div>
                         <div className={s.propLabel}>Size — {selectedEl.size}px{selectedEl.boxWidth && selectedEl.boxHeight ? ' (max)' : ''}</div>
                         <div className={s.propRow}>
-                          <input
-                            type="range" min="12" max="200" step="4"
-                            value={selectedEl.size}
-                            onChange={e => updateEl(selectedId, { size: Number(e.target.value) })}
-                          />
+                          <SteppedSlider min={12} max={200} value={selectedEl.size} onChange={v => updateEl(selectedId, { size: v })} />
                           <input
                             className={s.numInput}
                             type="number" min="4" max="400"
@@ -408,19 +406,11 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                         </div>
                         <div className={s.propLabel}>Box Width — {selectedEl.boxWidth}%</div>
                         <div className={s.propRow}>
-                          <input
-                            type="range" min="5" max="100" step="5"
-                            value={selectedEl.boxWidth}
-                            onChange={e => updateEl(selectedId, { boxWidth: Number(e.target.value) })}
-                          />
+                          <SteppedSlider min={5} max={100} value={selectedEl.boxWidth} onChange={v => updateEl(selectedId, { boxWidth: v })} />
                         </div>
                         <div className={s.propLabel}>Box Height — {selectedEl.boxHeight}%</div>
                         <div className={s.propRow}>
-                          <input
-                            type="range" min="5" max="100" step="5"
-                            value={selectedEl.boxHeight}
-                            onChange={e => updateEl(selectedId, { boxHeight: Number(e.target.value) })}
-                          />
+                          <SteppedSlider min={5} max={100} value={selectedEl.boxHeight} onChange={v => updateEl(selectedId, { boxHeight: v })} />
                         </div>
                         <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Vertical Alignment</div>
                         <div className={s.alignToggle}>
@@ -437,19 +427,11 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                         </div>
                         <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Padding — {selectedEl.boxPadding || 0}px</div>
                         <div className={s.propRow}>
-                          <input
-                            type="range" min="0" max="100" step="2"
-                            value={selectedEl.boxPadding || 0}
-                            onChange={e => updateEl(selectedId, { boxPadding: Number(e.target.value) })}
-                          />
+                          <SteppedSlider min={0} max={100} value={selectedEl.boxPadding || 0} onChange={v => updateEl(selectedId, { boxPadding: v })} />
                         </div>
                         <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Corner Radius — {selectedEl.boxRadius || 0}px</div>
                         <div className={s.propRow}>
-                          <input
-                            type="range" min="0" max="100" step="2"
-                            value={selectedEl.boxRadius || 0}
-                            onChange={e => updateEl(selectedId, { boxRadius: Number(e.target.value) })}
-                          />
+                          <SteppedSlider min={0} max={100} value={selectedEl.boxRadius || 0} onChange={v => updateEl(selectedId, { boxRadius: v })} />
                         </div>
                         <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Box Background Color</div>
                         <div className={s.propRow}>
@@ -464,12 +446,9 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                           )}
                         </div>
                         <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Box Color Opacity — {selectedEl.boxAlpha ?? 100}%</div>
-                        <input
-                          type="range" min="0" max="100" step="5"
-                          value={selectedEl.boxAlpha ?? 100}
-                          onChange={e => updateEl(selectedId, { boxAlpha: Number(e.target.value) })}
-                          style={{ width: '100%' }}
-                        />
+                        <div className={s.propRow}>
+                          <SteppedSlider min={0} max={100} value={selectedEl.boxAlpha ?? 100} onChange={v => updateEl(selectedId, { boxAlpha: v })} />
+                        </div>
 
                         <label className={s.checkRow} style={{ marginTop: '0.4rem' }}>
                           <input
@@ -490,11 +469,7 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                             </div>
                             <div className={s.propLabel}>Line Spacing — {selectedEl.lineSpacing || 0}px</div>
                             <div className={s.propRow} style={{ marginBottom: '0.3rem' }}>
-                              <input
-                                type="range" min="0" max="60" step="1"
-                                value={selectedEl.lineSpacing || 0}
-                                onChange={e => updateEl(selectedId, { lineSpacing: Number(e.target.value) })}
-                              />
+                              <SteppedSlider min={0} max={60} value={selectedEl.lineSpacing || 0} onChange={v => updateEl(selectedId, { lineSpacing: v })} />
                             </div>
                             <LinesEditor lines={selectedEl.lines} onChange={next => updateEl(selectedId, { lines: next })} />
                           </div>
@@ -549,11 +524,7 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                   <div>
                     <div className={s.propLabel}>Size — {selectedEl.size}px</div>
                     <div className={s.propRow}>
-                      <input
-                        type="range" min="12" max="200" step="4"
-                        value={selectedEl.size}
-                        onChange={e => updateEl(selectedId, { size: Number(e.target.value) })}
-                      />
+                      <SteppedSlider min={12} max={200} value={selectedEl.size} onChange={v => updateEl(selectedId, { size: v })} />
                       <input
                         className={s.numInput}
                         type="number" min="4" max="400"
@@ -621,24 +592,13 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
                   <div>
                     <div className={s.propLabel}>Width — {selectedEl.width}%</div>
                     <div className={s.propRow}>
-                      <input
-                        type="range" min="5" max="100" step="5"
-                        value={selectedEl.width}
-                        onChange={e => updateEl(selectedId, { width: Number(e.target.value) })}
-                      />
-                      <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.82rem', minWidth: '32px' }}>
-                        {selectedEl.width}%
-                      </span>
+                      <SteppedSlider min={5} max={100} value={selectedEl.width} onChange={v => updateEl(selectedId, { width: v })} />
                     </div>
                   </div>
                   <div>
                     <div className={s.propLabel}>Border Width — {selectedEl.borderWidth || 0}px</div>
                     <div className={s.propRow}>
-                      <input
-                        type="range" min="0" max="20" step="1"
-                        value={selectedEl.borderWidth || 0}
-                        onChange={e => updateEl(selectedId, { borderWidth: Number(e.target.value) })}
-                      />
+                      <SteppedSlider min={0} max={20} value={selectedEl.borderWidth || 0} onChange={v => updateEl(selectedId, { borderWidth: v })} />
                     </div>
                   </div>
                   {!!selectedEl.borderWidth && (
@@ -676,18 +636,8 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
               <div>
                 <div className={s.propLabel}>Position (X / Y %)</div>
                 <div className={s.propRow}>
-                  <input
-                    className={s.numInput}
-                    type="number" min="0" max="100" step="1"
-                    value={selectedEl.x}
-                    onChange={e => updateEl(selectedId, { x: Number(e.target.value) })}
-                  />
-                  <input
-                    className={s.numInput}
-                    type="number" min="0" max="100" step="1"
-                    value={selectedEl.y}
-                    onChange={e => updateEl(selectedId, { y: Number(e.target.value) })}
-                  />
+                  <SteppedNumberInput min={0} max={100} value={selectedEl.x} onChange={v => updateEl(selectedId, { x: v })} />
+                  <SteppedNumberInput min={0} max={100} value={selectedEl.y} onChange={v => updateEl(selectedId, { y: v })} />
                 </div>
               </div>
             </Section>
@@ -754,12 +704,9 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
               )}
             </div>
             <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Color Transparency — {bgColorAlpha}%</div>
-            <input
-              type="range" min="0" max="100" step="5"
-              value={bgColorAlpha}
-              onChange={e => setBgColorAlpha(Number(e.target.value))}
-              style={{ width: '100%' }}
-            />
+            <div className={s.propRow}>
+              <SteppedSlider min={0} max={100} value={bgColorAlpha} onChange={setBgColorAlpha} />
+            </div>
 
             <select
               className={s.propSelect}
@@ -775,12 +722,9 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
             {backgroundId && (
               <>
                 <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Image Opacity — {bgOpacity}%</div>
-                <input
-                  type="range" min="0" max="100" step="5"
-                  value={bgOpacity}
-                  onChange={e => setBgOpacity(Number(e.target.value))}
-                  style={{ width: '100%' }}
-                />
+                <div className={s.propRow}>
+                  <SteppedSlider min={0} max={100} value={bgOpacity} onChange={setBgOpacity} />
+                </div>
               </>
             )}
           </Section>
@@ -791,11 +735,7 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
             </div>
             <div className={s.propLabel}>Width — {headerLineWidth}px</div>
             <div className={s.propRow}>
-              <input
-                type="range" min="0" max="20" step="1"
-                value={headerLineWidth}
-                onChange={e => setHeaderLineWidth(Number(e.target.value))}
-              />
+              <SteppedSlider min={0} max={20} value={headerLineWidth} onChange={setHeaderLineWidth} />
               {headerLineWidth > 0 && (
                 <input
                   type="color"

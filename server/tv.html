@@ -215,6 +215,8 @@ header {
 .td-home  { font-weight: bold; white-space: nowrap; width: 15%; }
 .td-gap    { width: 20px; background: transparent !important; padding: 0 !important; }
 .td-locker { font-weight: bold; text-align: center; background: #000 !important; color: #fff !important; white-space: nowrap; width: 70px; min-width: 70px; }
+.td-time-top { vertical-align: top; padding-top: 22px; }
+.td-title-line + .td-title-line { margin-top: 10px; }
 
 /* ── Rounded corners ── */
 /* col-header row: Home/LR# and Away/LR# pills (7 cells: colspan-2 cal name + gap + home + lr + gap + away + lr) */
@@ -1022,6 +1024,22 @@ function buildLockerGameRow(timeStr, titleHtml, homeInfo, awayInfo, homeLocker, 
     '</tr>';
 }
 
+// Practice-mode games sharing an exact start time: one row, one shared
+// locker pair, each event's title on its own line (time pinned to the top).
+function buildLockerGameGroupRow(timeStr, titleHtmlList, homeInfo, awayInfo, homeLocker, awayLocker) {
+  var titlesHtml = titleHtmlList.map(function(t) { return '<div class="td-title-line">' + t + '</div>'; }).join('');
+  return '<tr class="game-row">' +
+    '<td class="td-time td-time-top">' + timeStr + '</td>' +
+    '<td class="td-title">' + titlesHtml + '</td>' +
+    '<td class="td-gap"></td>' +
+    '<td class="td-home"' + teamStyleAttr(homeInfo) + '>' + esc(homeInfo.label) + '</td>' +
+    '<td class="td-locker">' + esc(homeLocker || '') + '</td>' +
+    '<td class="td-gap"></td>' +
+    '<td class="td-away"' + teamStyleAttr(awayInfo) + '>' + esc(awayInfo.label) + '</td>' +
+    '<td class="td-locker">' + esc(awayLocker || '') + '</td>' +
+    '</tr>';
+}
+
 // Simple time + description row (contentHtml is pre-escaped)
 function buildEventRow(timeStr, contentHtml) {
   return '<tr class="event-row">' +
@@ -1089,17 +1107,32 @@ function buildGamesRows(pageGames, calMap, teamMap, showLockerRooms) {
     } else {
       tbody += '<tr class="col-header-row"><td class="col-cal-name" colspan="2">' + esc(calName) + '</td></tr>';
     }
+    // Practice-mode games sharing an exact start time collapse onto one row
     var grpGames = blocks[bi].games;
+    var subGroups = [];
     for (var j = 0; j < grpGames.length; j++) {
       var g = grpGames[j];
-      var homeInfo = teamInfo(teamMap, g.home_team);
-      var awayInfo = teamInfo(teamMap, g.away_team);
-      if (showLockerRooms) {
-        tbody += buildLockerGameRow(fmtTime(g.start_time), esc(g.title || ''), homeInfo, awayInfo, g.home_locker, g.away_locker);
+      var prevSub = subGroups.length ? subGroups[subGroups.length - 1] : null;
+      if (g.event_mode === 'practice' && prevSub && prevSub[0].event_mode === 'practice' && prevSub[0].start_time === g.start_time) {
+        prevSub.push(g);
+      } else {
+        subGroups.push([g]);
+      }
+    }
+    for (var s = 0; s < subGroups.length; s++) {
+      var sub = subGroups[s];
+      var lead = sub[0];
+      var homeInfo = teamInfo(teamMap, lead.home_team);
+      var awayInfo = teamInfo(teamMap, lead.away_team);
+      if (sub.length > 1) {
+        var titleList = sub.map(function(sg) { return esc(sg.title || ''); });
+        tbody += buildLockerGameGroupRow(fmtTime(lead.start_time), titleList, homeInfo, awayInfo, lead.home_locker, lead.away_locker);
+      } else if (showLockerRooms) {
+        tbody += buildLockerGameRow(fmtTime(lead.start_time), esc(lead.title || ''), homeInfo, awayInfo, lead.home_locker, lead.away_locker);
       } else {
         var matchup = esc(homeInfo.label) + ' vs ' + esc(awayInfo.label);
-        var mergedTitle = g.title ? esc(g.title) + ' — ' + matchup : matchup;
-        tbody += buildEventRow(fmtTime(g.start_time), mergedTitle);
+        var mergedTitle = lead.title ? esc(lead.title) + ' — ' + matchup : matchup;
+        tbody += buildEventRow(fmtTime(lead.start_time), mergedTitle);
       }
     }
     if (bi < blocks.length - 1) {

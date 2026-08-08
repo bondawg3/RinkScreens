@@ -27,13 +27,12 @@ function isAdminRequest(req) {
 // Activities belonging to calendars of one type, sorted by start time.
 // includeLegacy also returns rows with no calendar (pre-calendar imports).
 function activitiesByCalType(type, { includeLegacy = false } = {}) {
-  const calIds = new Set(
-    db.findAll('calendars')
-      .filter((c) => c.type === type)
-      .map((c) => c.id)
-  );
+  const cals = db.findAll('calendars').filter((c) => c.type === type);
+  const calIds = new Set(cals.map((c) => c.id));
+  const eventModeById = Object.fromEntries(cals.map((c) => [c.id, c.event_mode || 'teams']));
   return db.findAll('activities', 'start_time')
-    .filter((g) => calIds.has(g.calendar_id) || (includeLegacy && !g.calendar_id));
+    .filter((g) => calIds.has(g.calendar_id) || (includeLegacy && !g.calendar_id))
+    .map((g) => ({ ...g, event_mode: eventModeById[g.calendar_id] || 'teams' }));
 }
 
 // Case-insensitive duplicate-name lookup, optionally ignoring one row

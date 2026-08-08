@@ -11,6 +11,24 @@ function teamLabel(name, locker) {
   return locker ? `${name} (${locker})` : name;
 }
 
+// Practice-mode games sharing an exact start time are grouped onto one row
+function groupGames(games) {
+  const rows = [];
+  const rowIndexByKey = new Map();
+  for (const g of games) {
+    if (g.event_mode === 'practice') {
+      const key = g.start_time;
+      if (rowIndexByKey.has(key)) {
+        rows[rowIndexByKey.get(key)].push(g);
+        continue;
+      }
+      rowIndexByKey.set(key, rows.length);
+    }
+    rows.push([g]);
+  }
+  return rows;
+}
+
 export default function GameBoard({ rinkName }) {
   const [games, setGames] = useState([]);
 
@@ -50,20 +68,29 @@ export default function GameBoard({ rinkName }) {
         <span className={styles.homeHeader}>Home</span>
       </div>
       <div className={styles.rows}>
-        {games.map((g) => {
-          const awayLabel = teamLabel(g.away_team, g.away_locker);
-          const homeLabel = teamLabel(g.home_team, g.home_locker);
+        {groupGames(games).map((group) => {
+          const isGrouped = group.length > 1;
           return (
-            <div key={g.id} className={styles.row}>
-              <div className={styles.time}>
-                <span className={styles.clock}>{formatTime(g.start_time)}</span>
+            <div key={group[0].id} className={styles.row + (isGrouped ? ' ' + styles.rowGrouped : '')}>
+              <div className={styles.time + (isGrouped ? ' ' + styles.timeTop : '')}>
+                <span className={styles.clock}>{formatTime(group[0].start_time)}</span>
               </div>
-              <div className={styles.team + ' ' + styles.away}>
-                {awayLabel || <span className={styles.tbd}>Open</span>}
-              </div>
-              <div className={styles.vsCell}>VS</div>
-              <div className={styles.team + ' ' + styles.home}>
-                {homeLabel || <span className={styles.tbd}>Open</span>}
+              <div className={styles.subRows}>
+                {group.map((g) => {
+                  const awayLabel = teamLabel(g.away_team, g.away_locker);
+                  const homeLabel = teamLabel(g.home_team, g.home_locker);
+                  return (
+                    <div key={g.id} className={styles.subRow}>
+                      <div className={styles.team + ' ' + styles.away}>
+                        {awayLabel || <span className={styles.tbd}>Open</span>}
+                      </div>
+                      <div className={styles.vsCell}>VS</div>
+                      <div className={styles.team + ' ' + styles.home}>
+                        {homeLabel || <span className={styles.tbd}>Open</span>}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );

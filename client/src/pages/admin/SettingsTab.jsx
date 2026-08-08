@@ -185,14 +185,21 @@ function CalendarModal({ type, existing, onClose, onSaved }) {
           )}
           {type === 'hockey_games' && (
             <div className={styles.field}>
-              <label className={styles.label}>Event Type</label>
+              <label className={styles.label}>Locker Room Assignments</label>
               <div className={calStyles.teamOrderToggle}>
                 <button
                   type="button"
                   className={eventMode === 'teams' ? calStyles.teamOrderActive : calStyles.teamOrderBtn}
                   onClick={() => setEventMode('teams')}
                 >
-                  Team Order
+                  Teams
+                </button>
+                <button
+                  type="button"
+                  className={eventMode === 'stick_shoot' ? calStyles.teamOrderActive : calStyles.teamOrderBtn}
+                  onClick={() => setEventMode('stick_shoot')}
+                >
+                  Stick & Shoot
                 </button>
                 <button
                   type="button"
@@ -201,10 +208,21 @@ function CalendarModal({ type, existing, onClose, onSaved }) {
                 >
                   Open
                 </button>
+                <button
+                  type="button"
+                  className={eventMode === 'practice' ? calStyles.teamOrderActive : calStyles.teamOrderBtn}
+                  onClick={() => setEventMode('practice')}
+                >
+                  Practice
+                </button>
               </div>
               <span className={styles.hint} style={{ fontSize: '0.8rem' }}>
                 {eventMode === 'open'
                   ? 'Locker rooms will show "Open" instead of team names for this calendar\'s events'
+                  : eventMode === 'stick_shoot'
+                  ? 'Locker rooms will show "Youth" (Home) and "Adults" (Away) instead of team names for this calendar\'s events'
+                  : eventMode === 'practice'
+                  ? 'Locker rooms will show "Open" for this calendar\'s events; events sharing the same start time will be grouped onto one row with a single locker room assignment'
                   : 'Teams are parsed from the event title'}
               </span>
             </div>
@@ -314,7 +332,7 @@ export default function CalendarsTab() {
                     <td>{cal.name}</td>
                     <td>{cal.poll_interval_minutes % (24 * 60) === 0 ? `${cal.poll_interval_minutes / (24 * 60)}d` : `${cal.poll_interval_minutes}m`}</td>
                     {value === 'hockey_games' && (
-                      <td>{cal.event_mode === 'open' ? 'Open' : (cal.team_order === 'home_away' ? 'Home vs. Away' : 'Away vs. Home')}</td>
+                      <td>{cal.event_mode === 'open' ? 'Open' : cal.event_mode === 'stick_shoot' ? 'Stick & Shoot' : cal.event_mode === 'practice' ? 'Practice' : (cal.team_order === 'home_away' ? 'Home vs. Away' : 'Away vs. Home')}</td>
                     )}
                     <td><SyncStatus cal={cal} /></td>
                     <td>

@@ -2,6 +2,18 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.28.0] — 2026-08-08
+
+### Added
+- **Practice event mode** — a new calendar event mode for practice-style bookings: locker rooms show "Open"/"Open", and games sharing an exact start time are grouped onto one row with a single shared locker-room assignment (Games tab, TV display, and lobby game board all reflect this).
+- **Stick & Shoot event mode** — a new calendar event mode showing "Youth" (Home) / "Adults" (Away) instead of parsed team names.
+- **Slider/number nudge controls** — every slider and number field in the Announcement and RSS slide editors now has +/− step buttons, and arrow keys nudge the selected canvas element by 1px while it's selected.
+
+### Changed
+- Locker room sequence is now set at the calendar level only; the per-league sequence override has been removed from the Leagues tab.
+- RSS feed logo editor no longer shows "Upload" as pre-selected before a logo exists, and the Feeds table layout was tightened up.
+- Games tab edit action switched from a text button to a ✎ icon; row hover highlight removed from the shared admin table style.
+
 ## [1.27.0] — 2026-08-08
 
 ### Added

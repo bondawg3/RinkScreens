@@ -410,6 +410,45 @@
   text-align: center;
 }
 
+/* ── Slider/number step buttons (SteppedSlider, SteppedNumberInput) ── */
+.stepBtn {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.25);
+  color: #fff;
+  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  font-size: 0.9rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.stepBtn:hover { background: rgba(255,255,255,0.2); }
+.stepBtn:disabled { opacity: 0.25; cursor: default; }
+.stepBtn:disabled:hover { background: rgba(255,255,255,0.1); }
+
+.numStepRow {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+/* Hides the native spinner arrows only on number inputs paired with our own
+   +/- buttons — plain number inputs elsewhere keep the browser default. */
+.numInputStepped::-webkit-inner-spin-button,
+.numInputStepped::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.numInputStepped {
+  -moz-appearance: textfield;
+}
+
 /* ── Screen list (card grid) ── */
 .grid {
   display: grid;

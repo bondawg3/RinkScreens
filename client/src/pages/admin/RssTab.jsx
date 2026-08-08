@@ -7,7 +7,7 @@ import tStyles from './ScreensTab.module.css';
 import s from './AnnouncementTab.module.css';
 import Thumbnail from './Thumbnail';
 import { useScreenCards, useScreenReorder, InUseBadge, EyeButton, EyeHint, DuplicateButton, SortableCard, DragHandle } from './screenCard';
-import { FONTS, makeId, hexToRgba, AutoFitText, StackedBoxText, LinesEditor, Section, useUndo, ResizeHandles, WidthResizeHandles, borderStyle, BORDER_SIDES, reorderElement, LayersPanel } from './SlideEditorShared';
+import { FONTS, makeId, hexToRgba, AutoFitText, StackedBoxText, LinesEditor, Section, useUndo, useArrowKeyNudge, ResizeHandles, WidthResizeHandles, borderStyle, BORDER_SIDES, reorderElement, LayersPanel, SteppedSlider, SteppedNumberInput } from './SlideEditorShared';
 
 const TOKENS = [
   { key: 'title', label: 'Title' },
@@ -62,11 +62,19 @@ function migrateLogosToSlides(templates) {
 
 // ── Feed management ──────────────────────────────────────────────────────────
 function FeedLogoEditor({ feed, onChanged }) {
-  const [mode, setMode] = useState(feed.logo_url ? 'link' : 'upload');
+  // No mode is active until the feed actually has a logo (or the user picks
+  // one) — starting on 'upload' by default made the Upload button look dead
+  // the first time you clicked it, since it was already the active mode.
+  const [mode, setMode] = useState(feed.logo_url ? 'link' : (feed.logo_src ? 'upload' : null));
   const [linkUrl, setLinkUrl] = useState(feed.logo_url || '');
   const [uploading, setUploading] = useState(false);
   const [err, setErr] = useState('');
   const fileRef = useRef();
+
+  function chooseUpload() {
+    setMode('upload');
+    fileRef.current.click();
+  }
 
   async function upload(e) {
     const file = e.target.files[0]; if (!file) return;
@@ -102,26 +110,22 @@ function FeedLogoEditor({ feed, onChanged }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-      {feed.logo_src && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+      <div className={adminStyles.actions} style={{ alignItems: 'center' }}>
+        {feed.logo_src && (
           <img src={feed.logo_src} alt="" style={{ maxHeight: '32px', maxWidth: '80px', objectFit: 'contain', background: '#fff', borderRadius: '3px' }} />
+        )}
+        {feed.logo_src && (
           <button type="button" className={adminStyles.btnGhost} onClick={removeLogo}>Remove</button>
-        </div>
-      )}
-      <div className={adminStyles.actions}>
-        <button type="button" className={mode === 'upload' ? adminStyles.btnPrimary : adminStyles.btnGhost} onClick={() => setMode('upload')}>Upload</button>
+        )}
+        <button type="button" className={mode === 'upload' ? adminStyles.btnPrimary : adminStyles.btnGhost} onClick={chooseUpload} disabled={uploading}>
+          {uploading ? 'Uploading…' : 'Upload'}
+        </button>
         <button type="button" className={mode === 'link' ? adminStyles.btnPrimary : adminStyles.btnGhost} onClick={() => setMode('link')}>Link</button>
       </div>
-      {mode === 'upload' ? (
-        <>
-          <button type="button" className={adminStyles.btnGhost} onClick={() => fileRef.current.click()} disabled={uploading}>
-            {uploading ? 'Uploading…' : 'Choose Image…'}
-          </button>
-          <input ref={fileRef} type="file" accept=".jpg,.jpeg,.png,.gif,.webp,.svg" style={{ display: 'none' }} onChange={upload} />
-        </>
-      ) : (
+      <input ref={fileRef} type="file" accept=".jpg,.jpeg,.png,.gif,.webp,.svg" style={{ display: 'none' }} onChange={upload} />
+      {mode === 'link' && (
         <div className={adminStyles.actions}>
-          <input className={adminStyles.input} placeholder="https://example.com/logo.png" value={linkUrl} onChange={e => setLinkUrl(e.target.value)} style={{ minWidth: '200px' }} />
+          <input className={adminStyles.input} placeholder="https://example.com/logo.png" value={linkUrl} onChange={e => setLinkUrl(e.target.value)} style={{ flex: '1 1 100px', minWidth: 0, boxSizing: 'border-box' }} />
           <button type="button" className={adminStyles.btnGhost} onClick={saveLink} disabled={!linkUrl.trim()}>Save</button>
         </div>
       )}
@@ -161,21 +165,31 @@ function FeedRow({ feed, onSaved, onDeleted, onSynced }) {
   if (editing) {
     return (
       <tr>
-        <td><input className={adminStyles.input} value={name} onChange={e => setName(e.target.value)} autoFocus /></td>
-        <td><input className={adminStyles.input} value={url} onChange={e => setUrl(e.target.value)} style={{ minWidth: '220px' }} /></td>
+        <td>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+            <input className={adminStyles.input} value={name} onChange={e => setName(e.target.value)} autoFocus style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} />
+            <input className={adminStyles.input} value={url} onChange={e => setUrl(e.target.value)} placeholder="Feed URL" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', fontSize: '0.82rem' }} />
+            {err && <span style={{ color: '#ff8080', fontSize: '0.8rem' }}>{err}</span>}
+          </div>
+        </td>
         <td>
           <input
             className={adminStyles.input}
-            type="number" min="1" style={{ width: '70px' }}
+            type="number" min="1" max="999" maxLength={3} style={{ width: '56px', minWidth: '56px', padding: '0.4rem 0.4rem' }}
             value={pollMinutes}
             onChange={e => setPollMinutes(e.target.value)}
           />
         </td>
-        <td><FeedLogoEditor feed={feed} onChanged={onSaved} /></td>
-        <td colSpan={2}>{err && <span style={{ color: '#ff8080', fontSize: '0.85rem' }}>{err}</span>}</td>
-        <td className={adminStyles.actions}>
-          <button className={adminStyles.btnPrimary} onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
-          <button className={adminStyles.btnGhost} onClick={cancel}>Cancel</button>
+        {/* Spans into the Items/Status columns while editing — the logo
+            controls (upload/link toggle, URL field, remove) need more room
+            than the Logo column alone gives them, and those two columns
+            have nothing else to show for a row mid-edit anyway. */}
+        <td colSpan={3}><FeedLogoEditor feed={feed} onChanged={onSaved} /></td>
+        <td>
+          <div className={adminStyles.actions}>
+            <button className={adminStyles.btnPrimary} onClick={save} disabled={saving}>{saving ? 'Saving…' : 'Save'}</button>
+            <button className={adminStyles.btnGhost} onClick={cancel}>Cancel</button>
+          </div>
         </td>
       </tr>
     );
@@ -183,8 +197,10 @@ function FeedRow({ feed, onSaved, onDeleted, onSynced }) {
 
   return (
     <tr>
-      <td>{feed.name}</td>
-      <td style={{ maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{feed.url}</td>
+      <td>
+        <div>{feed.name}</div>
+        <div className={adminStyles.muted} style={{ fontSize: '0.78rem', maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{feed.url}</div>
+      </td>
       <td>{feed.poll_interval_minutes}</td>
       <td>
         {feed.logo_src
@@ -197,10 +213,12 @@ function FeedRow({ feed, onSaved, onDeleted, onSynced }) {
           ? <span style={{ color: '#ff8080' }} title={feed.last_sync_error}>Error</span>
           : feed.last_sync_at ? <span style={{ color: '#7fd88f' }}>OK</span> : <span>Pending…</span>}
       </td>
-      <td className={adminStyles.actions}>
-        <button className={adminStyles.btnGhost} onClick={() => onSynced(feed.id)} title="Sync now">↻</button>
-        <button className={adminStyles.btnGhost} onClick={() => setEditing(true)} title="Edit">✎</button>
-        <button className={adminStyles.btnDanger} onClick={() => onDeleted(feed.id)} title="Delete">🗑</button>
+      <td>
+        <div className={adminStyles.actions}>
+          <button className={adminStyles.btnGhost} onClick={() => onSynced(feed.id)} title="Sync now">↻</button>
+          <button className={adminStyles.btnGhost} onClick={() => setEditing(true)} title="Edit">✎</button>
+          <button className={adminStyles.btnDanger} onClick={() => onDeleted(feed.id)} title="Delete">🗑</button>
+        </div>
       </td>
     </tr>
   );
@@ -243,16 +261,24 @@ function FeedManager({ feeds, reload }) {
   return (
     <div className={adminStyles.settingsForm} style={{ marginBottom: '1.5rem' }}>
       <h3 className={adminStyles.subheading}>Feeds</h3>
-      <table className={adminStyles.table}>
+      <table className={adminStyles.table} style={{ tableLayout: 'fixed' }}>
+        <colgroup>
+          <col style={{ width: '30%' }} />
+          <col style={{ width: '8%' }} />
+          <col style={{ width: '27%' }} />
+          <col style={{ width: '7%' }} />
+          <col style={{ width: '10%' }} />
+          <col style={{ width: '18%' }} />
+        </colgroup>
         <thead>
-          <tr><th>Name</th><th>URL</th><th>Poll (min)</th><th>Logo</th><th>Items</th><th>Status</th><th></th></tr>
+          <tr><th>Name</th><th>Poll (min)</th><th>Logo</th><th>Items</th><th>Status</th><th></th></tr>
         </thead>
         <tbody>
           {(feeds || []).map((f) => (
             <FeedRow key={f.id} feed={f} onSaved={reload} onDeleted={deleteFeed} onSynced={syncFeed} />
           ))}
           {(!feeds || feeds.length === 0) && (
-            <tr><td colSpan={7} className={adminStyles.muted}>No feeds yet.</td></tr>
+            <tr><td colSpan={6} className={adminStyles.muted}>No feeds yet.</td></tr>
           )}
         </tbody>
       </table>
@@ -339,6 +365,8 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
     useCallback(() => ({ idx: activeTemplateIdx, templates }), [activeTemplateIdx, templates]),
     useCallback((snap) => { setActiveTemplateIdx(snap.idx); setTemplates(snap.templates); }, [])
   );
+
+  useArrowKeyNudge({ selectedId, elements, updateEl });
 
   // Canvas is sized to the largest 16:9 box that fits inside canvasFit (the
   // flexible area below the template tabs/hint row), so it shrinks to stay
@@ -850,23 +878,13 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
             <div className={s.propRow} style={{ marginTop: '0.4rem' }}>
               <div style={{ flex: 1 }}>
                 <div className={s.propLabel}>Seconds per slide</div>
-                <input
-                  className={s.numInput}
-                  type="number" min="2" max="120"
-                  value={rotateSeconds}
-                  onChange={e => setRotateSeconds(Number(e.target.value))}
-                />
+                <SteppedNumberInput min={2} max={120} value={rotateSeconds} onChange={setRotateSeconds} />
               </div>
               <div style={{ flex: 1 }}>
                 <div className={s.propLabel}>
                   {feedIds.length > 1 && multiMode === 'total' ? 'Total items' : feedIds.length > 1 ? 'Items/feed' : 'Items to cycle'}
                 </div>
-                <input
-                  className={s.numInput}
-                  type="number" min="1" max="50"
-                  value={itemCount}
-                  onChange={e => setItemCount(Number(e.target.value))}
-                />
+                <SteppedNumberInput min={1} max={50} value={itemCount} onChange={setItemCount} />
               </div>
             </div>
           </Section>
@@ -933,12 +951,9 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
               )}
             </div>
             <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Color Transparency — {activeTemplate.bgColorAlpha ?? 100}%</div>
-            <input
-              type="range" min="0" max="100" step="5"
-              value={activeTemplate.bgColorAlpha ?? 100}
-              onChange={e => updateTemplate({ bgColorAlpha: Number(e.target.value) })}
-              style={{ width: '100%' }}
-            />
+            <div className={s.propRow}>
+              <SteppedSlider min={0} max={100} value={activeTemplate.bgColorAlpha ?? 100} onChange={v => updateTemplate({ bgColorAlpha: v })} />
+            </div>
             <select
               className={s.propSelect}
               value={activeTemplate.bgFilename || ''}
@@ -954,12 +969,9 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
             {activeTemplate.bgFilename && (
               <>
                 <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Image Opacity — {activeTemplate.bgOpacity ?? 100}%</div>
-                <input
-                  type="range" min="0" max="100" step="5"
-                  value={activeTemplate.bgOpacity ?? 100}
-                  onChange={e => updateTemplate({ bgOpacity: Number(e.target.value) })}
-                  style={{ width: '100%' }}
-                />
+                <div className={s.propRow}>
+                  <SteppedSlider min={0} max={100} value={activeTemplate.bgOpacity ?? 100} onChange={v => updateTemplate({ bgOpacity: v })} />
+                </div>
               </>
             )}
           </Section>
@@ -972,11 +984,7 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
             </div>
             <div className={s.propLabel}>Width — {activeTemplate.headerLineWidth || 0}px</div>
             <div className={s.propRow}>
-              <input
-                type="range" min="0" max="20" step="1"
-                value={activeTemplate.headerLineWidth || 0}
-                onChange={e => updateTemplate({ headerLineWidth: Number(e.target.value) })}
-              />
+              <SteppedSlider min={0} max={20} value={activeTemplate.headerLineWidth || 0} onChange={v => updateTemplate({ headerLineWidth: v })} />
               {(activeTemplate.headerLineWidth || 0) > 0 && (
                 <input
                   type="color"
@@ -1079,11 +1087,7 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                       <div>
                         <div className={s.propLabel}>Size — {selectedEl.size}px{selectedEl.boxWidth && selectedEl.boxHeight ? ' (max)' : ''}</div>
                         <div className={s.propRow}>
-                          <input
-                            type="range" min="12" max="200" step="4"
-                            value={selectedEl.size}
-                            onChange={e => updateEl(selectedId, { size: Number(e.target.value) })}
-                          />
+                          <SteppedSlider min={12} max={200} value={selectedEl.size} onChange={v => updateEl(selectedId, { size: v })} />
                           <input
                             className={s.numInput}
                             type="number" min="4" max="400"
@@ -1153,19 +1157,11 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                         </div>
                         <div className={s.propLabel}>Box Width — {selectedEl.boxWidth}%</div>
                         <div className={s.propRow}>
-                          <input
-                            type="range" min="5" max="100" step="5"
-                            value={selectedEl.boxWidth}
-                            onChange={e => updateEl(selectedId, { boxWidth: Number(e.target.value) })}
-                          />
+                          <SteppedSlider min={5} max={100} value={selectedEl.boxWidth} onChange={v => updateEl(selectedId, { boxWidth: v })} />
                         </div>
                         <div className={s.propLabel}>Box Height — {selectedEl.boxHeight}%</div>
                         <div className={s.propRow}>
-                          <input
-                            type="range" min="5" max="100" step="5"
-                            value={selectedEl.boxHeight}
-                            onChange={e => updateEl(selectedId, { boxHeight: Number(e.target.value) })}
-                          />
+                          <SteppedSlider min={5} max={100} value={selectedEl.boxHeight} onChange={v => updateEl(selectedId, { boxHeight: v })} />
                         </div>
                         <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Vertical Alignment</div>
                         <div className={s.alignToggle}>
@@ -1182,19 +1178,11 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                         </div>
                         <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Padding — {selectedEl.boxPadding || 0}px</div>
                         <div className={s.propRow}>
-                          <input
-                            type="range" min="0" max="100" step="2"
-                            value={selectedEl.boxPadding || 0}
-                            onChange={e => updateEl(selectedId, { boxPadding: Number(e.target.value) })}
-                          />
+                          <SteppedSlider min={0} max={100} value={selectedEl.boxPadding || 0} onChange={v => updateEl(selectedId, { boxPadding: v })} />
                         </div>
                         <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Corner Radius — {selectedEl.boxRadius || 0}px</div>
                         <div className={s.propRow}>
-                          <input
-                            type="range" min="0" max="100" step="2"
-                            value={selectedEl.boxRadius || 0}
-                            onChange={e => updateEl(selectedId, { boxRadius: Number(e.target.value) })}
-                          />
+                          <SteppedSlider min={0} max={100} value={selectedEl.boxRadius || 0} onChange={v => updateEl(selectedId, { boxRadius: v })} />
                         </div>
                         <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Box Background Color</div>
                         <div className={s.propRow}>
@@ -1209,12 +1197,9 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                           )}
                         </div>
                         <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Box Color Opacity — {selectedEl.boxAlpha ?? 100}%</div>
-                        <input
-                          type="range" min="0" max="100" step="5"
-                          value={selectedEl.boxAlpha ?? 100}
-                          onChange={e => updateEl(selectedId, { boxAlpha: Number(e.target.value) })}
-                          style={{ width: '100%' }}
-                        />
+                        <div className={s.propRow}>
+                          <SteppedSlider min={0} max={100} value={selectedEl.boxAlpha ?? 100} onChange={v => updateEl(selectedId, { boxAlpha: v })} />
+                        </div>
 
                         <label className={s.checkRow} style={{ marginTop: '0.4rem' }}>
                           <input
@@ -1236,11 +1221,7 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                             </div>
                             <div className={s.propLabel}>Line Spacing — {selectedEl.lineSpacing || 0}px</div>
                             <div className={s.propRow} style={{ marginBottom: '0.3rem' }}>
-                              <input
-                                type="range" min="0" max="60" step="1"
-                                value={selectedEl.lineSpacing || 0}
-                                onChange={e => updateEl(selectedId, { lineSpacing: Number(e.target.value) })}
-                              />
+                              <SteppedSlider min={0} max={60} value={selectedEl.lineSpacing || 0} onChange={v => updateEl(selectedId, { lineSpacing: v })} />
                             </div>
                             <LinesEditor lines={selectedEl.lines} onChange={next => updateEl(selectedId, { lines: next })} tokens={TOKENS} />
                           </div>
@@ -1271,14 +1252,7 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                   )}
                   <div className={s.propLabel}>Width — {selectedEl.width}%</div>
                   <div className={s.propRow}>
-                    <input
-                      type="range" min="5" max="100" step="5"
-                      value={selectedEl.width}
-                      onChange={e => updateEl(selectedId, { width: Number(e.target.value) })}
-                    />
-                    <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.82rem', minWidth: '32px' }}>
-                      {selectedEl.width}%
-                    </span>
+                    <SteppedSlider min={5} max={100} value={selectedEl.width} onChange={v => updateEl(selectedId, { width: v })} />
                   </div>
 
                   {selectedEl.filename === '{{image}}' && (
@@ -1287,14 +1261,7 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                         Height — {selectedEl.height ?? Math.round(selectedEl.width * 0.6)}%
                       </div>
                       <div className={s.propRow}>
-                        <input
-                          type="range" min="5" max="100" step="5"
-                          value={selectedEl.height ?? Math.round(selectedEl.width * 0.6)}
-                          onChange={e => updateEl(selectedId, { height: Number(e.target.value) })}
-                        />
-                        <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: '0.82rem', minWidth: '32px' }}>
-                          {selectedEl.height ?? Math.round(selectedEl.width * 0.6)}%
-                        </span>
+                        <SteppedSlider min={5} max={100} value={selectedEl.height ?? Math.round(selectedEl.width * 0.6)} onChange={v => updateEl(selectedId, { height: v })} />
                       </div>
                       <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Fit Mode</div>
                       <div className={s.alignToggle}>
@@ -1332,21 +1299,11 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                         <div className={s.propRow} style={{ marginTop: '0.3rem' }}>
                           <div>
                             <div className={s.propLabel}>Focal X%</div>
-                            <input
-                              className={s.numInput}
-                              type="number" min="0" max="100" step="1"
-                              value={selectedEl.focalX ?? 50}
-                              onChange={e => updateEl(selectedId, { focalX: Number(e.target.value) })}
-                            />
+                            <SteppedNumberInput min={0} max={100} value={selectedEl.focalX ?? 50} onChange={v => updateEl(selectedId, { focalX: v })} />
                           </div>
                           <div>
                             <div className={s.propLabel}>Focal Y%</div>
-                            <input
-                              className={s.numInput}
-                              type="number" min="0" max="100" step="1"
-                              value={selectedEl.focalY ?? 50}
-                              onChange={e => updateEl(selectedId, { focalY: Number(e.target.value) })}
-                            />
+                            <SteppedNumberInput min={0} max={100} value={selectedEl.focalY ?? 50} onChange={v => updateEl(selectedId, { focalY: v })} />
                           </div>
                         </div>
                       )}
@@ -1355,11 +1312,7 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
 
                   <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Border Width — {selectedEl.borderWidth || 0}px</div>
                   <div className={s.propRow}>
-                    <input
-                      type="range" min="0" max="20" step="1"
-                      value={selectedEl.borderWidth || 0}
-                      onChange={e => updateEl(selectedId, { borderWidth: Number(e.target.value) })}
-                    />
+                    <SteppedSlider min={0} max={20} value={selectedEl.borderWidth || 0} onChange={v => updateEl(selectedId, { borderWidth: v })} />
                   </div>
                   {!!selectedEl.borderWidth && (
                     <>
@@ -1395,18 +1348,8 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
               <div>
                 <div className={s.propLabel}>Position (X / Y %)</div>
                 <div className={s.propRow}>
-                  <input
-                    className={s.numInput}
-                    type="number" min="0" max="100" step="1"
-                    value={selectedEl.x}
-                    onChange={e => updateEl(selectedId, { x: Number(e.target.value) })}
-                  />
-                  <input
-                    className={s.numInput}
-                    type="number" min="0" max="100" step="1"
-                    value={selectedEl.y}
-                    onChange={e => updateEl(selectedId, { y: Number(e.target.value) })}
-                  />
+                  <SteppedNumberInput min={0} max={100} value={selectedEl.x} onChange={v => updateEl(selectedId, { x: v })} />
+                  <SteppedNumberInput min={0} max={100} value={selectedEl.y} onChange={v => updateEl(selectedId, { y: v })} />
                 </div>
               </div>
             </Section>

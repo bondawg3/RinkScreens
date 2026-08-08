@@ -45,6 +45,12 @@ function parseTitle(rawTitle, cal) {
   if (cal && cal.event_mode === 'open') {
     return { title: rawTitle, away_team: 'Open', home_team: 'Open' };
   }
+  if (cal && cal.event_mode === 'stick_shoot') {
+    return { title: rawTitle, away_team: 'Adults', home_team: 'Youth' };
+  }
+  if (cal && cal.event_mode === 'practice') {
+    return { title: rawTitle, away_team: 'Open', home_team: 'Open' };
+  }
 
   let title = rawTitle;
   let matchup = rawTitle;

@@ -148,7 +148,7 @@ function TeamRow({ team, onSaved, onDeleted }) {
   );
 }
 
-function LeagueCard({ league, sequences, onChanged, onDeleted }) {
+function LeagueCard({ league, onChanged, onDeleted }) {
   const [addingTeam, setAddingTeam] = useState(false);
   const [newTeamName, setNewTeamName] = useState('');
   const [newTeamColor, setNewTeamColor] = useState('');
@@ -156,15 +156,6 @@ function LeagueCard({ league, sequences, onChanged, onDeleted }) {
   const [editingName, setEditingName] = useState(false);
   const [leagueName, setLeagueName] = useState(league.name);
   const [error, setError] = useState('');
-
-  async function saveSequence(e) {
-    const val = e.target.value;
-    await apiFetch(`/leagues/${league.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ locker_sequence_id: val ? Number(val) : null }),
-    });
-    onChanged();
-  }
 
   async function saveName() {
     setError('');
@@ -216,20 +207,6 @@ function LeagueCard({ league, sequences, onChanged, onDeleted }) {
 
       {error && <div className={styles.errorMsg} style={{ marginBottom: '0.5rem' }}>{error}</div>}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
-        <label className={styles.label} style={{ margin: 0, whiteSpace: 'nowrap' }}>Locker Room Sequence:</label>
-        <select
-          style={{ width: 'fit-content', border: '1.5px solid var(--border)', borderRadius: 5, padding: '0.4rem 0.7rem', fontSize: '0.95rem', background: '#fff', color: 'var(--text)' }}
-          value={league.locker_sequence_id || ''}
-          onChange={saveSequence}
-        >
-          <option value="">— None —</option>
-          {sequences.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
-          ))}
-        </select>
-      </div>
-
       {(league.teams || []).length > 0 ? (
         <table className={styles.table} style={{ marginBottom: '0.75rem' }}>
           <thead>
@@ -277,7 +254,6 @@ function LeagueCard({ league, sequences, onChanged, onDeleted }) {
 
 export default function LeaguesTab() {
   const { data: leagues, reload } = useApi('/leagues');
-  const { data: sequences } = useApi('/locker-sequences');
   const [activeId, setActiveId] = useState(null);
   const [addingLeague, setAddingLeague] = useState(false);
   const [newName, setNewName] = useState('');
@@ -362,7 +338,6 @@ export default function LeaguesTab() {
         <LeagueCard
           key={active.id}
           league={active}
-          sequences={sequences || []}
           onChanged={reload}
           onDeleted={handleDeleted}
         />

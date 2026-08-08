@@ -7,6 +7,50 @@ export const FONTS = [
   'Orbitron', 'Share Tech Mono', 'DS-Digital', 'DSEG14 Classic', 'DSEG7 Classic',
 ];
 
+// Renders just the two step buttons + the range input (no wrapping div) so
+// callers can drop it into an existing row — either bare (wrap it in a
+// propRow-styled div) or alongside a paired number field that already
+// occupies that row. Always steps by 1 unit regardless of the slider's own
+// `step` (which is tuned for drag granularity, not click-to-nudge), per the
+// explicit ask for one-pixel/one-percent nudges.
+export function SteppedSlider({ value, min, max, step = 1, onChange }) {
+  function nudge(dir) {
+    const next = Math.min(max, Math.max(min, Math.round((value + dir) * 100) / 100));
+    onChange(next);
+  }
+  return (
+    <>
+      <button type="button" className={s.stepBtn} onClick={() => nudge(-1)} disabled={value <= min} title="Decrease by 1">−</button>
+      <input type="range" min={min} max={max} step={step} value={value} onChange={e => onChange(Number(e.target.value))} />
+      <button type="button" className={s.stepBtn} onClick={() => nudge(1)} disabled={value >= max} title="Increase by 1">+</button>
+    </>
+  );
+}
+
+// A number input with big, easy-to-click +/- buttons in place of the
+// browser's tiny native spinner arrows (hidden via .numInputStepped in CSS).
+// Typing a value directly still works same as before.
+export function SteppedNumberInput({ value, min, max, step = 1, onChange, className, style }) {
+  function nudge(dir) {
+    let next = (Number(value) || 0) + dir * step;
+    if (min != null) next = Math.max(min, next);
+    if (max != null) next = Math.min(max, next);
+    onChange(next);
+  }
+  return (
+    <div className={s.numStepRow} style={style}>
+      <button type="button" className={s.stepBtn} onClick={() => nudge(-1)} title="Decrease">−</button>
+      <input
+        className={(className || s.numInput) + ' ' + s.numInputStepped}
+        type="number" min={min} max={max} step={step}
+        value={value}
+        onChange={e => onChange(Number(e.target.value))}
+      />
+      <button type="button" className={s.stepBtn} onClick={() => nudge(1)} title="Increase">+</button>
+    </div>
+  );
+}
+
 export function makeId() {
   return 'el-' + Math.random().toString(36).slice(2, 9);
 }
@@ -223,21 +267,11 @@ export function LinesEditor({ lines, onChange, tokens }) {
                   value={ln.color || '#ffffff'}
                   onChange={e => updateLine(idx, { color: e.target.value })}
                 />
-                <input
-                  className={s.numInput}
-                  type="number" min="1" max="40"
-                  value={ln.thickness || 4}
-                  onChange={e => updateLine(idx, { thickness: Number(e.target.value) })}
-                  title="Thickness (px)"
-                />
+                <SteppedNumberInput min={1} max={40} value={ln.thickness || 4} onChange={v => updateLine(idx, { thickness: v })} />
               </div>
               <div className={s.propLabel}>Width — {ln.widthPct ?? 100}%</div>
               <div className={s.propRow}>
-                <input
-                  type="range" min="5" max="100" step="5"
-                  value={ln.widthPct ?? 100}
-                  onChange={e => updateLine(idx, { widthPct: Number(e.target.value) })}
-                />
+                <SteppedSlider min={5} max={100} value={ln.widthPct ?? 100} onChange={v => updateLine(idx, { widthPct: v })} />
               </div>
               <div className={s.alignToggle}>
                 {['left', 'center', 'right'].map(a => (
@@ -275,13 +309,7 @@ export function LinesEditor({ lines, onChange, tokens }) {
               </select>
 
               <div className={s.propRow}>
-                <input
-                  className={s.numInput}
-                  type="number" min="4" max="400"
-                  value={ln.size}
-                  onChange={e => updateLine(idx, { size: Number(e.target.value) })}
-                  title="Size (px)"
-                />
+                <SteppedNumberInput min={4} max={400} value={ln.size} onChange={v => updateLine(idx, { size: v })} />
                 <input
                   type="color"
                   className={s.colorInput}
@@ -404,6 +432,41 @@ export function Section({ title, extra, defaultOpen = true, highlighted = false,
       {open && <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>{children}</div>}
     </div>
   );
+}
+
+// One output pixel, expressed as a % of the fixed 1920x1080 canvas that x/y
+// are stored relative to — so a nudge is the same real-world distance no
+// matter how zoomed-in/out the editor's on-screen canvas currently is.
+const NUDGE_X_PCT = 100 / 1920;
+const NUDGE_Y_PCT = 100 / 1080;
+
+// Arrow keys shift the selected element by one pixel while it's selected —
+// ignored while focus is in a text field so normal cursor movement there
+// still works. `elements`/`updateEl` should be the active template/screen's
+// own (so a nudge always lands on whichever element is actually selected).
+export function useArrowKeyNudge({ selectedId, elements, updateEl }) {
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (!selectedId) return;
+      if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+      const tag = e.target && e.target.tagName;
+      if (tag === 'TEXTAREA' || tag === 'INPUT' || tag === 'SELECT') return;
+      const el = elements.find(e2 => e2.id === selectedId);
+      if (!el) return;
+      e.preventDefault();
+      let dx = 0, dy = 0;
+      if (e.key === 'ArrowUp') dy = -NUDGE_Y_PCT;
+      else if (e.key === 'ArrowDown') dy = NUDGE_Y_PCT;
+      else if (e.key === 'ArrowLeft') dx = -NUDGE_X_PCT;
+      else dx = NUDGE_X_PCT;
+      updateEl(selectedId, {
+        x: Math.round(Math.max(0, Math.min(100, el.x + dx)) * 1000) / 1000,
+        y: Math.round(Math.max(0, Math.min(100, el.y + dy)) * 1000) / 1000,
+      });
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectedId, elements, updateEl]);
 }
 
 // Ctrl+Z / Cmd+Z undo (Shift for redo) over a caller-supplied snapshot of

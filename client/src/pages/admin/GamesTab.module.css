@@ -132,3 +132,5 @@
 .group table th {
   background: #1a7abf;
 }
+
+.noRowHover tr:hover td { background: inherit; }

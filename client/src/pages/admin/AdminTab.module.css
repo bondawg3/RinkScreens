@@ -82,7 +82,6 @@
 }
 
 .table tr:last-child td { border-bottom: none; }
-.table tr:hover td { background: var(--ice-light); }
 
 .actions {
   display: flex;

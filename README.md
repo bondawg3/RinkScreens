@@ -1,4 +1,4 @@
-# RinkScreens — v1.26.1
+# RinkScreens — v1.28.0
 
 Digital signage system for ice rinks. Pulls games from Google Calendar (iCal) and displays them on smart TVs around the facility. An admin panel on any local browser lets staff control what each screen shows and manage locker room assignments, pricing, and backgrounds.
 
@@ -62,7 +62,8 @@ Screens within each tab's list can be reordered by dragging the ⠿ handle (in t
 - Lists all imported hockey games
 - Sort by **Date & Time** (grouped by day, then by calendar with week pagination) or **By Calendar**
 - Assign home/away team names and locker rooms per game via dropdowns
-- Locker room dropdowns auto-save on change; Edit button for team name changes
+- Locker room dropdowns auto-save on change; ✎ button for team name changes
+- Practice-mode games sharing an exact start time are grouped onto one row with a single shared locker-room assignment (dropdown updates every game in the group)
 - Delete individual games with the 🗑 button (re-import on next calendar sync)
 - **Refresh Calendar** button forces an immediate re-sync
 - **Reset Auto-Assign LRs** resets all auto-assigned locker rooms and re-runs assignment; per-day reset button on each day group header
@@ -79,6 +80,7 @@ Screens within each tab's list can be reordered by dragging the ⠿ handle (in t
 ### Announcements tab
 - Full-screen canvas editor: drag text, image, and date/time elements freely; Ctrl+Z / Cmd+Z (Shift to redo) undoes canvas gestures and property edits
 - Text controls: font, size, color, bold, alignment
+- Every slider and number field has +/− step buttons for precise nudging, and the selected canvas element can be nudged 1px at a time with the arrow keys
 - Text elements can optionally be given a bounding box ("Bounding box (auto-fit text)") — the configured size becomes a maximum that auto-shrinks (wrapping onto more lines first if the box is tall enough) until the text fits the box; drag the yellow corner/edge handles on the canvas to resize instead of only using the sliders
 - Bounding-box text supports vertical justification (top/middle/bottom), internal padding, corner radius, and its own background color/opacity
 - A bounding-box text element can hold multiple independently-styled **stacked lines** (a "mail merge" composite) instead of one uniform block — each line has its own font/size/color/alignment, plus a **horizontal divider line** type (color/thickness/width%) and configurable line spacing; the whole stack shrinks together so relative sizing is preserved
@@ -119,7 +121,7 @@ Screens within each tab's list can be reordered by dragging the ⠿ handle (in t
 ### Settings tab
 Settings is organized into sub-tabs:
 - **General** — rink name and logo (logo replaces text in TV header)
-- **Calendars** — add/edit/delete iCal calendars (Hockey Games, Public Skates, Rink Events, Figure Skating) with poll interval and locker sequence overrides; **Last Sync** column shows success/failure status per calendar
+- **Calendars** — add/edit/delete iCal calendars (Hockey Games, Public Skates, Rink Events, Figure Skating) with poll interval and locker sequence assignment; **Last Sync** column shows success/failure status per calendar
 - **Pricing** — admission pricing tiers (label + subheading + price + sort order); each screen (Public Skate, Hockey, Rink Events, Figure Skating, Custom) has a **Show Pricing** checkbox plus a picker for which tiers to display on that screen
 - **Locker Rooms** — add/edit/delete rooms; define named **Locker Room Sequences** for auto-assignment
 - **Displays** — register physical TV devices (name + TV number, which sets its `/tv/[tvNumber]` web address)
@@ -131,7 +133,6 @@ Settings is organized into sub-tabs:
 - One tab per league; leagues are auto-created from Hockey Games calendars on sync
 - Set a team's background and text color (shown on the Hockey TV display)
 - Set a display name override per team (used on TV instead of the calendar name)
-- Assign a **Locker Room Sequence** per league used by auto-assignment; syncs automatically to/from the matching calendar's sequence setting
 
 ---
 
@@ -152,11 +153,14 @@ Events are imported if they start within the last 12 hours through the next 30 d
 | Title has a colon | Everything before `:` (e.g. "CON") | Parsed from matchup after colon | Parsed from matchup after colon |
 | No colon, has "vs" | _(blank)_ | First team per team order setting | Second team per team order setting |
 | No colon, no "vs" | Full raw title | _(blank, displays as `Open`)_ | _(blank, displays as `Open`)_ |
-| Calendar's Event Type is set to "Open" | Full raw title, even if it contains a colon | `Open` | `Open` |
+| Calendar's Locker Room Assignments mode is "Open" or "Practice" | Full raw title, even if it contains a colon | `Open` | `Open` |
+| Calendar's Locker Room Assignments mode is "Stick & Shoot" | Full raw title, even if it contains a colon | `Adults` | `Youth` |
 
-Each Hockey calendar has an **Event Type** setting: **Team Order** (the rules above parse home/away from the title) or **Open** (every event on that calendar gets `Open`/`Open` regardless of title, for calendars like practices or stick & shoot where there are no teams).
+Each Hockey calendar has a **Locker Room Assignments** setting with four modes: **Teams** (the rules above parse home/away from the title), **Stick & Shoot** (every event gets `Youth`/`Adults` regardless of title), **Open** (every event gets `Open`/`Open`), and **Practice** (also `Open`/`Open`, but with grouped locker assignment — see below).
 
-On the combined "custom" Events TV screen, an Open-type game displays its title (e.g. "Stick & Shoot") instead of "Open vs Open". Hockey-specific screens (Game Board) still show the Away/Home columns as `Open`/`Open`.
+On the combined "custom" Events TV screen, a non-Teams-mode game displays its title (e.g. "Stick & Shoot") instead of "Open vs Open". Hockey-specific screens (Game Board) still show the Away/Home columns per the mode's labels.
+
+**Practice mode grouping**: events sharing an exact start time on a Practice-mode calendar are treated as one time slot everywhere they're displayed (Games tab, TV display, lobby Game Board) — one row, one shared pair of locker room assignments, each event's own title listed underneath. This is meant for back-to-back practice bookings on the same sheet of ice that should share a locker room pair rather than each getting its own.
 
 ### NCWHL calendar special rules
 Calendars with "NCWHL" in the name use a different parsing strategy:

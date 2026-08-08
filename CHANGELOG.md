@@ -2,6 +2,17 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.27.0] — 2026-08-08
+
+### Added
+- **Logo slides** — logos are now built as their own reusable "Logos" slides instead of being placed as elements directly on every content slide. A content slide picks one Logos slide (or none) from a "Logo Overlay" dropdown; it always renders on top and never counts as one of that slide's own elements. Logos slides never enter the content rotation and get their own tab row, separate from regular slides. Existing per-slide logo elements are migrated into Logos slides automatically the next time a screen is opened and saved (slides with an identical logo set share one Logos slide instead of duplicating it).
+- **Layers panel** — the properties panel now lists every element on the active slide top-first (matching actual stacking order) with ↑/↓ buttons to reorder them, fixing cases where an element (e.g. a full-bleed feed image) silently covered another because of add order.
+- **"Template" renamed to "Slide"** throughout the RSS editor (tab labels, section titles, tooltips, default names) to match how the feature is actually used.
+
+### Changed
+- **Properties panel reorganized** — Feed Settings (Feeds, Slide Assignment, Background, Header Divider) is now one collapsible group at the top, open by default for a new screen and collapsed for an existing one; the selected element's properties, Layers, and Add Element sit below it in that order.
+- Selecting an element on the canvas no longer highlights it with a yellow border/background there — the highlight moved to the selected element's box in the properties panel and its row in the Layers list, which stays legible once elements overlap.
+
 ## [1.26.1] — 2026-08-07
 
 ### Added

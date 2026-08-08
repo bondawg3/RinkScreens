@@ -335,15 +335,57 @@ export function reorderElement(elements, id, dir) {
   return next;
 }
 
+// Lists elements top-layer-first (i.e. reverse of the render array, since
+// last-in-array renders on top) with per-row up/down buttons to shift
+// layering — lets the user see and fix stacking order without guessing which
+// overlapping element on the canvas is "in front."`labelFor` returns each
+// row's display text (differs per tab: RSS has feed images/logos,
+// Announcements has date/time).
+export function LayersPanel({ elements, selectedId, onSelect, onReorder, labelFor }) {
+  const topFirst = elements.slice().reverse();
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+      {topFirst.map((el, i) => {
+        const isTop = i === 0;
+        const isBottom = i === topFirst.length - 1;
+        return (
+          <div
+            key={el.id}
+            className={s.layerRow + (selectedId === el.id ? ' ' + s.layerRowSelected : '')}
+            onClick={() => onSelect(el.id)}
+          >
+            <span className={s.layerLabel}>{labelFor(el)}</span>
+            <div className={s.layerBtns}>
+              <button
+                type="button" className={s.layerBtn} disabled={isTop}
+                onClick={e => { e.stopPropagation(); onReorder(el.id, 'up'); }}
+                title="Move up (toward front)"
+              >↑</button>
+              <button
+                type="button" className={s.layerBtn} disabled={isBottom}
+                onClick={e => { e.stopPropagation(); onReorder(el.id, 'down'); }}
+                title="Move down (toward back)"
+              >↓</button>
+            </div>
+          </div>
+        );
+      })}
+      {elements.length === 0 && (
+        <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.82rem' }}>No elements yet.</span>
+      )}
+    </div>
+  );
+}
+
 // Collapsible properties-panel section — the panel gets long once an element
 // has many controls (position, size, color, border...), so each section can
 // be folded away. Defaults to open; pass `defaultOpen={false}` to start
 // collapsed. `extra` renders to the right of the chevron/title (e.g. a
 // Remove button) and stays clickable independent of the collapse toggle.
-export function Section({ title, extra, defaultOpen = true, children }) {
+export function Section({ title, extra, defaultOpen = true, highlighted = false, children }) {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className={s.propSection}>
+    <div className={s.propSection + (highlighted ? ' ' + s.propSectionHighlighted : '')}>
       <div className={s.propSectionTitle}>
         <span
           onClick={() => setOpen(o => !o)}

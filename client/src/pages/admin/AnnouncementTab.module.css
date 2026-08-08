@@ -105,11 +105,6 @@
   border-color: rgba(255,255,255,0.3);
 }
 
-.canvasElSelected {
-  border-color: rgba(255, 230, 0, 0.85) !important;
-  background: rgba(255, 230, 0, 0.16);
-}
-
 .canvasEl:active { cursor: grabbing; }
 
 /* ── BG controls ── */
@@ -165,6 +160,15 @@
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  border: 1px solid transparent;
+}
+
+/* Marks the properties panel section as the one currently being edited —
+   replaces highlighting the element on the canvas, since the canvas
+   highlight didn't help once several elements overlapped. */
+.propSectionHighlighted {
+  background: rgba(255, 230, 0, 0.07);
+  border-color: rgba(255, 230, 0, 0.4);
 }
 
 .propSectionTitle {
@@ -302,6 +306,57 @@
   font-size: 0.75rem;
   cursor: pointer;
 }
+
+/* ── Layers list (top of list = frontmost element) ── */
+.layerRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 5px;
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.75);
+}
+
+.layerRow:hover { background: rgba(255,255,255,0.09); }
+
+.layerRowSelected {
+  background: rgba(255, 230, 0, 0.14);
+  color: #fff;
+}
+
+.layerLabel {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.layerBtns {
+  display: flex;
+  gap: 0.2rem;
+}
+
+.layerBtn {
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  border-radius: 4px;
+  width: 20px;
+  height: 20px;
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.layerBtn:hover { background: rgba(255,255,255,0.2); }
+.layerBtn:disabled { opacity: 0.25; cursor: default; }
+.layerBtn:disabled:hover { background: rgba(255,255,255,0.1); }
 
 .deleteBtnDark:hover { background: rgba(220,50,50,0.4); }
 

@@ -1699,11 +1699,21 @@ function renderScreenConfig(screen) {
       // index, so consecutive slides don't all look identical; older screens
       // saved before templates existed fall back to their single
       // rss_slide_layout as a one-template list.
-      var templates = (screen.rss_templates && screen.rss_templates.length)
-        ? screen.rss_templates.filter(function(t) { return t && t.elements && t.elements.length; })
+      var allTemplates = (screen.rss_templates && screen.rss_templates.length)
+        ? screen.rss_templates
         : (screen.rss_slide_layout && screen.rss_slide_layout.elements && screen.rss_slide_layout.elements.length
             ? [{ elements: screen.rss_slide_layout.elements }]
             : []);
+      // "Logo" slides are a separate library of overlays (each usually a set
+      // of per-feed logo elements at the same spot) — never part of the
+      // content rotation themselves, only composited on top of whichever
+      // content slide opts into one via logoTemplateId.
+      var templates = allTemplates.filter(function(t) { return t && t.elements && t.elements.length && t.kind !== 'logo'; });
+      var logoTemplatesById = {};
+      for (var lti = 0; lti < allTemplates.length; lti++) {
+        var ltmpl = allTemplates[lti];
+        if (ltmpl && ltmpl.kind === 'logo' && ltmpl.id) logoTemplatesById[ltmpl.id] = ltmpl;
+      }
       // One or more source feeds; older screens saved before multi-feed
       // support only have the singular rss_feed_id.
       var feedIds = (screen.rss_feed_ids && screen.rss_feed_ids.length) ? screen.rss_feed_ids : (screen.rss_feed_id ? [screen.rss_feed_id] : []);
@@ -1829,7 +1839,7 @@ function renderScreenConfig(screen) {
         // currently in rotation instead of only seeing whichever one loaded.
         var pageHtmls = items.map(function(item, idx) {
           var tmpl = chosenTemplates[idx];
-          return renderTemplateBackground(tmpl) + renderSlideElements(tmpl.elements, {
+          var tokenValues = {
             title: item.title || '',
             description: item.description || '',
             feedLogos: feedLogos,
@@ -1838,7 +1848,15 @@ function renderScreenConfig(screen) {
             image: item.image || '',
             focalX: item.focal ? item.focal.x : 50,
             focalY: item.focal ? item.focal.y : 50,
-          });
+          };
+          var html = renderTemplateBackground(tmpl) + renderSlideElements(tmpl.elements, tokenValues);
+          // The logo overlay, if any, always renders last (i.e. on top of
+          // every one of the slide's own elements) — it's not one of the
+          // slide's own elements, so it isn't reordered by that slide's
+          // layer stack.
+          var logoTmpl = tmpl.logoTemplateId ? logoTemplatesById[tmpl.logoTemplateId] : null;
+          if (logoTmpl) html += renderSlideElements(logoTmpl.elements, tokenValues);
+          return html;
         });
         // Header divider is per-template too — kept as a parallel array
         // (rather than baked into pageHtmls) since the header lives outside

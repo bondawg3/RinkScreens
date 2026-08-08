@@ -7,7 +7,7 @@ import tStyles from './ScreensTab.module.css';
 import s from './AnnouncementTab.module.css';
 import Thumbnail from './Thumbnail';
 import { useScreenCards, useScreenReorder, InUseBadge, EyeButton, EyeHint, DuplicateButton, SortableCard, DragHandle } from './screenCard';
-import { FONTS, makeId, hexToRgba, AutoFitText, StackedBoxText, LinesEditor, Section, useUndo, ResizeHandles, WidthResizeHandles, borderStyle, BORDER_SIDES, reorderElement } from './SlideEditorShared';
+import { FONTS, makeId, hexToRgba, AutoFitText, StackedBoxText, LinesEditor, Section, useUndo, ResizeHandles, WidthResizeHandles, borderStyle, BORDER_SIDES, reorderElement, LayersPanel } from './SlideEditorShared';
 
 const TOKENS = [
   { key: 'title', label: 'Title' },
@@ -21,6 +21,43 @@ function defaultElements() {
     { id: makeId(), type: 'image', filename: '{{image}}', width: 40, height: 24, autoFocal: true, focalX: 50, focalY: 50, x: 50, y: 45, borderWidth: 0, borderColor: '#ffffff' },
     { id: makeId(), type: 'text', text: '{{description}}', color: '#ffffff', font: 'Arial', size: 40, bold: false, align: 'center', x: 50, y: 78, boxWidth: 80, boxHeight: 22 },
   ];
+}
+
+// One-time upgrade for screens saved before Logo slides existed: pulls any
+// `logoFeedId` elements embedded directly in a content slide out into their
+// own "Logos" slide (kind: 'logo'), and points that content slide at it via
+// logoTemplateId. Slides with an identical set of logo elements (matched by
+// feed + position + size, ignoring element id) share one Logos slide rather
+// than getting a duplicate each. Runs only while no slide has a `kind` yet —
+// once any Logos slide has been created (here or by the user), this is a
+// no-op, so it's safe to call on every load.
+function migrateLogosToSlides(templates) {
+  if (templates.some(t => t.kind)) return templates;
+  const logoSignature = (logoEls) => JSON.stringify(
+    logoEls
+      .map(e => ({ logoFeedId: e.logoFeedId, x: e.x, y: e.y, width: e.width, borderWidth: e.borderWidth, borderColor: e.borderColor, borderSide: e.borderSide }))
+      .sort((a, b) => a.logoFeedId - b.logoFeedId)
+  );
+  const bySignature = new Map();
+  const newLogoSlides = [];
+  const migratedContent = templates.map(t => {
+    const logoEls = (t.elements || []).filter(e => e.logoFeedId);
+    if (!logoEls.length) return t;
+    const sig = logoSignature(logoEls);
+    let logoSlide = bySignature.get(sig);
+    if (!logoSlide) {
+      logoSlide = {
+        id: makeId(),
+        name: newLogoSlides.length ? `Logos ${newLogoSlides.length + 1}` : 'Logos',
+        kind: 'logo',
+        elements: logoEls,
+      };
+      bySignature.set(sig, logoSlide);
+      newLogoSlides.push(logoSlide);
+    }
+    return { ...t, logoTemplateId: logoSlide.id, elements: (t.elements || []).filter(e => !e.logoFeedId) };
+  });
+  return newLogoSlides.length ? [...migratedContent, ...newLogoSlides] : templates;
 }
 
 // ── Feed management ──────────────────────────────────────────────────────────
@@ -246,12 +283,12 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
   // screen's old single rss_slide_layout as a one-template list, or a fresh
   // default template for a brand-new screen.
   const [templates, setTemplates] = useState(() => {
-    if (screen.rss_templates?.length) return screen.rss_templates;
+    if (screen.rss_templates?.length) return migrateLogosToSlides(screen.rss_templates);
     const legacyElements = screen.rss_slide_layout?.elements?.length ? screen.rss_slide_layout.elements : defaultElements();
-    // Background is per-template now; a screen saved before that existed
-    // has its background at the screen level, so fold it into template 1.
+    // Background is per-slide now; a screen saved before that existed
+    // has its background at the screen level, so fold it into slide 1.
     return [{
-      id: makeId(), name: 'Template 1', elements: legacyElements,
+      id: makeId(), name: 'Slide 1', elements: legacyElements,
       bgColor: screen.bg_color || '', bgColorAlpha: screen.bg_color_alpha ?? 100,
       bgFilename: screen.bg_filename || '', bgLabel: screen.bg_label || '', bgOpacity: screen.bg_opacity ?? 100,
       headerLineWidth: screen.header_line_width ?? 0, headerLineColor: screen.header_line_color || '#000000',
@@ -259,6 +296,7 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
   });
   const [activeTemplateIdx, setActiveTemplateIdx] = useState(0);
   const activeTemplate = templates[activeTemplateIdx] || {};
+  const activeIsLogo = activeTemplate.kind === 'logo';
   const elements = activeTemplate.elements || [];
   function setElements(updater) {
     setTemplates(prev => prev.map((t, i) => i === activeTemplateIdx
@@ -409,9 +447,19 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
     setSelectedId(null); // element ids/selection belong to whichever template was showing
   }
 
+  const contentTemplates = templates.filter(t => t.kind !== 'logo');
+  const logoTemplates = templates.filter(t => t.kind === 'logo');
+
   function addTemplate() {
     pushHistory();
-    const el = { id: makeId(), name: `Template ${templates.length + 1}`, elements: defaultElements() };
+    const el = { id: makeId(), name: `Slide ${contentTemplates.length + 1}`, elements: defaultElements() };
+    setTemplates(prev => [...prev, el]);
+    selectTemplate(templates.length);
+  }
+
+  function addLogoTemplate() {
+    pushHistory();
+    const el = { id: makeId(), name: `Logos ${logoTemplates.length + 1}`, kind: 'logo', elements: [] };
     setTemplates(prev => [...prev, el]);
     selectTemplate(templates.length);
   }
@@ -430,10 +478,16 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
   }
 
   function deleteTemplate(idx) {
-    if (templates.length <= 1) return;
-    if (!confirm(`Delete "${templates[idx].name}"? Items will keep cycling through the remaining templates.`)) return;
+    const target = templates[idx];
+    const isLogo = target.kind === 'logo';
+    if (!isLogo && contentTemplates.length <= 1) return;
+    if (!confirm(isLogo
+      ? `Delete "${target.name}"? Any slides using it as their logo overlay will go back to none.`
+      : `Delete "${target.name}"? Items will keep cycling through the remaining slides.`)) return;
     pushHistory();
-    const next = templates.filter((_, i) => i !== idx);
+    const next = templates
+      .filter((_, i) => i !== idx)
+      .map(t => (isLogo && t.logoTemplateId === target.id) ? { ...t, logoTemplateId: undefined } : t);
     setTemplates(next);
     selectTemplate(Math.min(activeTemplateIdx, next.length - 1));
   }
@@ -444,10 +498,19 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
     if (selectedId === id) setSelectedId(null);
   }
 
-  function moveLayer(dir) {
-    if (!selectedId) return;
+  function moveLayer(id, dir) {
     pushHistory();
-    setElements(prev => reorderElement(prev, selectedId, dir));
+    setElements(prev => reorderElement(prev, id, dir));
+  }
+
+  function layerLabel(el) {
+    if (el.type === 'text') {
+      const plain = (el.text || '').replace(/\{\{|\}\}/g, '');
+      return plain.trim() || 'Text';
+    }
+    if (el.filename === '{{image}}') return 'Feed Image';
+    if (el.logoFeedId) return 'Logo — ' + ((feeds || []).find(f => f.id === el.logoFeedId)?.name || 'Feed');
+    return 'Image';
   }
 
   const selectedEl = elements.find(e => e.id === selectedId) || null;
@@ -474,7 +537,7 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
       rss_multi_mode: multiMode,
       rss_item_count: Number(itemCount),
       rss_rotate_seconds: Number(rotateSeconds),
-      rss_slide_layout: { elements: templates[0]?.elements || [] },
+      rss_slide_layout: { elements: contentTemplates[0]?.elements || [] },
       rss_templates: templates,
     };
     try {
@@ -509,6 +572,7 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
         <div className={s.canvasCol}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap' }}>
             {templates.map((t, idx) => {
+              if (t.kind === 'logo') return null;
               const dedicatedFeed = t.assignedFeedId ? (feeds || []).find(f => f.id === t.assignedFeedId) : null;
               return (
                 <div
@@ -539,24 +603,62 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                   {dedicatedFeed && (
                     <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.5)' }}>({dedicatedFeed.name})</span>
                   )}
-                  <button type="button" className={s.deleteBtnDark} onClick={e => { e.stopPropagation(); duplicateTemplate(idx); }} title="Duplicate template">⧉</button>
-                  {templates.length > 1 && (
-                    <button type="button" className={s.deleteBtnDark} onClick={e => { e.stopPropagation(); deleteTemplate(idx); }} title="Delete template">✕</button>
+                  <button type="button" className={s.deleteBtnDark} onClick={e => { e.stopPropagation(); duplicateTemplate(idx); }} title="Duplicate slide">⧉</button>
+                  {contentTemplates.length > 1 && (
+                    <button type="button" className={s.deleteBtnDark} onClick={e => { e.stopPropagation(); deleteTemplate(idx); }} title="Delete slide">✕</button>
                   )}
                 </div>
               );
             })}
             <button type="button" className={adminStyles.btnGhost} onClick={addTemplate} style={{ color: '#fff', borderColor: 'rgba(255,255,255,0.3)' }}>
-              + Add Template
+              + Add Slide
             </button>
           </div>
-          {templates.length > 1 && (
+          {contentTemplates.length > 1 && (
             <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.78rem' }}>
-              🔁 rotation-pool templates cycle for any item whose feed isn't pinned to a 📌 dedicated template — a pinned
-              template is always used for its feed's articles and never appears for anyone else's. Set a template's pin in
-              its "Template Assignment" section below.
+              🔁 rotation-pool slides cycle for any item whose feed isn't pinned to a 📌 dedicated slide — a pinned
+              slide is always used for its feed's articles and never appears for anyone else's. Set a slide's pin in
+              its "Slide Assignment" section below.
             </div>
           )}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+            <span style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.78rem', fontWeight: 700, textTransform: 'uppercase' }}>Logos</span>
+            {templates.map((t, idx) => {
+              if (t.kind !== 'logo') return null;
+              return (
+                <div
+                  key={t.id || idx}
+                  onClick={() => selectTemplate(idx)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '0.3rem',
+                    padding: '0.3rem 0.6rem', borderRadius: '6px', cursor: 'pointer',
+                    background: idx === activeTemplateIdx ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)',
+                    border: idx === activeTemplateIdx ? '1px solid rgba(255,255,255,0.4)' : '1px solid transparent',
+                  }}
+                >
+                  <input
+                    value={t.name}
+                    onChange={e => renameTemplate(idx, e.target.value)}
+                    onClick={e => e.stopPropagation()}
+                    style={{
+                      background: 'transparent', border: 'none', color: '#fff', fontSize: '0.85rem',
+                      fontWeight: idx === activeTemplateIdx ? 700 : 400, width: Math.max(60, t.name.length * 7) + 'px',
+                    }}
+                  />
+                  <button type="button" className={s.deleteBtnDark} onClick={e => { e.stopPropagation(); duplicateTemplate(idx); }} title="Duplicate logo slide">⧉</button>
+                  <button type="button" className={s.deleteBtnDark} onClick={e => { e.stopPropagation(); deleteTemplate(idx); }} title="Delete logo slide">✕</button>
+                </div>
+              );
+            })}
+            <button type="button" className={adminStyles.btnGhost} onClick={addLogoTemplate} style={{ color: '#fff', borderColor: 'rgba(255,255,255,0.3)' }}>
+              + Add Logo Slide
+            </button>
+          </div>
+          <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: '0.78rem' }}>
+            A Logos slide is never part of the content rotation — build one or more logo layouts here, then pick one
+            to overlay on top of a regular slide from that slide's "Logo Overlay" setting below.
+          </div>
           <div className={s.canvasFit} ref={canvasFitRef}>
           <div className={s.canvasOuter} ref={canvasOuterRef} style={{ width: canvasWidth + 'px', height: canvasHeight + 'px', backgroundColor: activeTemplate.bgColor ? hexToRgba(activeTemplate.bgColor, activeTemplate.bgColorAlpha) : '#0a2a42' }}>
             <div
@@ -660,27 +762,287 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                   )}
                 </div>
               ))}
+              {/* Logo overlay preview — a read-only stand-in for whichever
+                  Logos slide this content slide has selected below. It's
+                  edited on its own Logos tab, not here, so no drag/select/
+                  resize affordances and it's excluded from this slide's own
+                  Layers list. */}
+              {activeTemplate.kind !== 'logo' && activeTemplate.logoTemplateId && (() => {
+                const logoTmpl = templates.find(t => t.id === activeTemplate.logoTemplateId);
+                if (!logoTmpl) return null;
+                return (logoTmpl.elements || []).map(el => (
+                  <div key={'overlay-' + el.id} className={s.canvasEl} style={{ left: el.x + '%', top: el.y + '%', pointerEvents: 'none' }}>
+                    {el.type === 'text' ? (
+                      <span style={{
+                        color: el.color,
+                        fontFamily: el.font + ', sans-serif',
+                        fontSize: Math.round(el.size * scale) + 'px',
+                        fontWeight: el.bold ? 'bold' : 'normal',
+                        textAlign: el.align,
+                        whiteSpace: 'pre-wrap',
+                        display: 'block',
+                        lineHeight: 1.2,
+                      }}>{el.text || ' '}</span>
+                    ) : el.filename === '{{image}}' ? (
+                      <div style={{
+                        width: Math.round(el.width / 100 * canvasWidth) + 'px',
+                        height: Math.round((el.height || el.width * 0.6) / 100 * canvasWidth * 0.5625) + 'px',
+                        border: el.borderWidth ? undefined : '2px dashed rgba(255,255,255,0.4)',
+                        ...borderStyle(el, scale),
+                        boxSizing: 'border-box',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem',
+                      }}>Feed Image</div>
+                    ) : el.logoFeedId ? (
+                      <img
+                        src={(feeds || []).find(f => f.id === el.logoFeedId)?.logo_src || ''}
+                        style={{ width: Math.round(el.width / 100 * canvasWidth) + 'px', display: 'block', boxSizing: 'border-box', ...borderStyle(el, scale) }}
+                        draggable={false}
+                        alt=""
+                      />
+                    ) : (
+                      <img
+                        src={`/uploads/${el.filename}`}
+                        style={{ width: Math.round(el.width / 100 * canvasWidth) + 'px', display: 'block', boxSizing: 'border-box', ...borderStyle(el, scale) }}
+                        draggable={false}
+                        alt=""
+                      />
+                    )}
+                  </div>
+                ));
+              })()}
             </div>
           </div>
           </div>
         </div>
 
         <div className={s.propsPanel}>
+          <Section title="Feed Settings" defaultOpen={!screen.id}>
+          <Section title="Feeds">
+            <div className={s.propLabel}>Sources ({feedIds.length} selected)</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', maxHeight: '140px', overflowY: 'auto' }}>
+              {(feeds || []).map(f => (
+                <label key={f.id} className={s.checkRow}>
+                  <input type="checkbox" checked={feedIds.includes(f.id)} onChange={() => toggleFeed(f.id)} />
+                  {f.name}
+                </label>
+              ))}
+              {(!feeds || feeds.length === 0) && (
+                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.82rem' }}>No feeds yet — add one below.</span>
+              )}
+            </div>
+
+            {feedIds.length > 1 && (
+              <>
+                <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>How to combine multiple feeds</div>
+                <div className={s.alignToggle}>
+                  <button type="button" className={multiMode === 'per_feed' ? s.alignActive : s.alignBtn} onClick={() => setMultiMode('per_feed')}>Per Feed</button>
+                  <button type="button" className={multiMode === 'total' ? s.alignActive : s.alignBtn} onClick={() => setMultiMode('total')}>Total (by date)</button>
+                </div>
+                <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>
+                  {multiMode === 'total'
+                    ? 'The count below is a total across all selected feeds combined, newest first.'
+                    : 'The count below applies to each feed — with 3 feeds and a count of 5, that\'s 15 slides, interleaved so sources are mixed rather than shown one feed at a time.'}
+                </div>
+              </>
+            )}
+
+            <div className={s.propRow} style={{ marginTop: '0.4rem' }}>
+              <div style={{ flex: 1 }}>
+                <div className={s.propLabel}>Seconds per slide</div>
+                <input
+                  className={s.numInput}
+                  type="number" min="2" max="120"
+                  value={rotateSeconds}
+                  onChange={e => setRotateSeconds(Number(e.target.value))}
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div className={s.propLabel}>
+                  {feedIds.length > 1 && multiMode === 'total' ? 'Total items' : feedIds.length > 1 ? 'Items/feed' : 'Items to cycle'}
+                </div>
+                <input
+                  className={s.numInput}
+                  type="number" min="1" max="50"
+                  value={itemCount}
+                  onChange={e => setItemCount(Number(e.target.value))}
+                />
+              </div>
+            </div>
+          </Section>
+
+          {!activeIsLogo && (
+          <Section title={`Slide Assignment — ${activeTemplate.name || 'Slide'}`} defaultOpen={false}>
+            <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>
+              Pin this slide to one feed to keep a consistent look (color scheme, logo) for that
+              source — pinned slides are never used for any other feed's articles. Leave as
+              "Rotate" to have it cycle for whichever feeds aren't pinned elsewhere.
+            </div>
+            <select
+              className={s.propSelect}
+              value={activeTemplate.assignedFeedId || ''}
+              onChange={e => updateTemplate({ assignedFeedId: e.target.value ? Number(e.target.value) : undefined })}
+            >
+              <option value="">🔁 Rotate (default)</option>
+              {(feeds || []).filter(f => feedIds.includes(f.id)).map(f => (
+                <option key={f.id} value={f.id}>📌 {f.name}</option>
+              ))}
+            </select>
+          </Section>
+          )}
+
+          {!activeIsLogo && (
+          <Section title={`Logo Overlay — ${activeTemplate.name || 'Slide'}`} defaultOpen={false}>
+            <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>
+              Optionally overlay a Logos slide on top of this one — it always renders above this
+              slide's own elements and doesn't show up in this slide's Layers list.
+            </div>
+            <select
+              className={s.propSelect}
+              value={activeTemplate.logoTemplateId || ''}
+              onChange={e => updateTemplate({ logoTemplateId: e.target.value || undefined })}
+            >
+              <option value="">— None —</option>
+              {logoTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            {logoTemplates.length === 0 && (
+              <div className={s.propLabel} style={{ marginTop: '0.2rem' }}>No Logos slides yet — add one from the "Logos" row above.</div>
+            )}
+          </Section>
+          )}
+
+          {!activeIsLogo && (
+          <Section title={`Background — ${activeTemplate.name || 'Slide'}`} defaultOpen={false}>
+            <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>Each slide has its own background.</div>
+            <div className={s.propRow}>
+              <input
+                type="color"
+                className={s.colorInput}
+                value={activeTemplate.bgColor || '#000000'}
+                onChange={e => updateTemplate({ bgColor: e.target.value })}
+              />
+              <input
+                className={s.propInput}
+                placeholder="#000000"
+                value={activeTemplate.bgColor || ''}
+                onChange={e => updateTemplate({ bgColor: e.target.value })}
+                style={{ fontFamily: 'monospace', flex: 1 }}
+              />
+              {activeTemplate.bgColor && (
+                <button className={s.deleteBtnDark} onClick={() => updateTemplate({ bgColor: '' })} title="Clear color">✕</button>
+              )}
+            </div>
+            <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Color Transparency — {activeTemplate.bgColorAlpha ?? 100}%</div>
+            <input
+              type="range" min="0" max="100" step="5"
+              value={activeTemplate.bgColorAlpha ?? 100}
+              onChange={e => updateTemplate({ bgColorAlpha: Number(e.target.value) })}
+              style={{ width: '100%' }}
+            />
+            <select
+              className={s.propSelect}
+              value={activeTemplate.bgFilename || ''}
+              onChange={e => {
+                const b = bgImages.find(im => im.filename === e.target.value);
+                updateTemplate({ bgFilename: b ? b.filename : '', bgLabel: b ? b.label : '' });
+              }}
+              style={{ marginTop: '0.4rem' }}
+            >
+              <option value="">None</option>
+              {bgImages.map(b => <option key={b.id} value={b.filename}>{b.label}</option>)}
+            </select>
+            {activeTemplate.bgFilename && (
+              <>
+                <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Image Opacity — {activeTemplate.bgOpacity ?? 100}%</div>
+                <input
+                  type="range" min="0" max="100" step="5"
+                  value={activeTemplate.bgOpacity ?? 100}
+                  onChange={e => updateTemplate({ bgOpacity: Number(e.target.value) })}
+                  style={{ width: '100%' }}
+                />
+              </>
+            )}
+          </Section>
+          )}
+
+          {!activeIsLogo && (
+          <Section title={`Header Divider — ${activeTemplate.name || 'Slide'}`} defaultOpen={false}>
+            <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>
+              An optional line under the rink name/clock header, shown while this slide is on screen. Width 0 hides it.
+            </div>
+            <div className={s.propLabel}>Width — {activeTemplate.headerLineWidth || 0}px</div>
+            <div className={s.propRow}>
+              <input
+                type="range" min="0" max="20" step="1"
+                value={activeTemplate.headerLineWidth || 0}
+                onChange={e => updateTemplate({ headerLineWidth: Number(e.target.value) })}
+              />
+              {(activeTemplate.headerLineWidth || 0) > 0 && (
+                <input
+                  type="color"
+                  className={s.colorInput}
+                  value={activeTemplate.headerLineColor || '#000000'}
+                  onChange={e => updateTemplate({ headerLineColor: e.target.value })}
+                  title="Line color"
+                />
+              )}
+            </div>
+          </Section>
+          )}
+          </Section>
+
+          <Section title="Layers">
+            <div className={s.propLabel} style={{ marginBottom: '0.1rem' }}>Top of the list renders in front.</div>
+            <LayersPanel
+              elements={elements}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onReorder={moveLayer}
+              labelFor={layerLabel}
+            />
+          </Section>
+
+          <Section title="Add Element">
+            <div className={s.addBtns}>
+              <button className={s.addBtn} onClick={addText}>+ Text</button>
+              <button className={s.addBtn} onClick={addFeedImage}>+ Feed Image</button>
+            </div>
+            <div style={{ marginTop: '0.25rem' }}>
+              <select
+                className={s.propSelect}
+                defaultValue=""
+                onChange={e => { addStaticImage(e.target.value); e.target.value = ''; }}
+              >
+                <option value="" disabled>+ Add Static Image…</option>
+                {generalImages.length === 0 && <option disabled>— No general images uploaded —</option>}
+                {generalImages.map(b => <option key={b.id} value={b.filename}>{b.label}</option>)}
+              </select>
+            </div>
+            <div style={{ marginTop: '0.25rem' }}>
+              <select
+                className={s.propSelect}
+                defaultValue=""
+                onChange={e => { addLogo(e.target.value); e.target.value = ''; }}
+              >
+                <option value="" disabled>+ Logo…</option>
+                {feedsWithLogos.length === 0 && <option disabled>— No logos on selected feeds —</option>}
+                {feedsWithLogos.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+              </select>
+            </div>
+          </Section>
+
+          {!selectedEl && (
+            <div style={{ padding: '0.6rem 0.2rem', color: 'rgba(255,255,255,0.35)', fontSize: '0.82rem' }}>
+              Click an element on the canvas to edit its properties, or add a new one above.
+            </div>
+          )}
+
           {selectedEl && (
             <Section
               title={selectedEl.type === 'text' ? 'Text' : selectedEl.filename === '{{image}}' ? 'Feed Image' : selectedEl.logoFeedId ? 'Feed Logo' : 'Image'}
               extra={<button className={s.deleteBtnDark} onClick={() => deleteEl(selectedId)}>Remove</button>}
+              highlighted
             >
-              <div>
-                <div className={s.propLabel}>Layer order</div>
-                <div className={s.alignToggle}>
-                  <button type="button" className={s.alignBtn} onClick={() => moveLayer('back')} title="Send to back">⇊</button>
-                  <button type="button" className={s.alignBtn} onClick={() => moveLayer('down')} title="Send backward">↓</button>
-                  <button type="button" className={s.alignBtn} onClick={() => moveLayer('up')} title="Bring forward">↑</button>
-                  <button type="button" className={s.alignBtn} onClick={() => moveLayer('front')} title="Bring to front">⇈</button>
-                </div>
-              </div>
-
               {selectedEl.type === 'text' && (
                 <>
                   {!(selectedEl.boxWidth && selectedEl.boxHeight && selectedEl.lines && selectedEl.lines.length) && (
@@ -1049,186 +1411,6 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
               </div>
             </Section>
           )}
-          {!selectedEl && (
-            <div style={{ padding: '0.6rem 0.2rem', color: 'rgba(255,255,255,0.35)', fontSize: '0.82rem' }}>
-              Click an element on the canvas to edit its properties, or add a new one below.
-            </div>
-          )}
-
-          <Section title="Add Element">
-            <div className={s.addBtns}>
-              <button className={s.addBtn} onClick={addText}>+ Text</button>
-              <button className={s.addBtn} onClick={addFeedImage}>+ Feed Image</button>
-            </div>
-            <div style={{ marginTop: '0.25rem' }}>
-              <select
-                className={s.propSelect}
-                defaultValue=""
-                onChange={e => { addStaticImage(e.target.value); e.target.value = ''; }}
-              >
-                <option value="" disabled>+ Add Static Image…</option>
-                {generalImages.length === 0 && <option disabled>— No general images uploaded —</option>}
-                {generalImages.map(b => <option key={b.id} value={b.filename}>{b.label}</option>)}
-              </select>
-            </div>
-            <div style={{ marginTop: '0.25rem' }}>
-              <select
-                className={s.propSelect}
-                defaultValue=""
-                onChange={e => { addLogo(e.target.value); e.target.value = ''; }}
-              >
-                <option value="" disabled>+ Logo…</option>
-                {feedsWithLogos.length === 0 && <option disabled>— No logos on selected feeds —</option>}
-                {feedsWithLogos.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-              </select>
-            </div>
-          </Section>
-
-          <Section title="Feeds">
-            <div className={s.propLabel}>Sources ({feedIds.length} selected)</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', maxHeight: '140px', overflowY: 'auto' }}>
-              {(feeds || []).map(f => (
-                <label key={f.id} className={s.checkRow}>
-                  <input type="checkbox" checked={feedIds.includes(f.id)} onChange={() => toggleFeed(f.id)} />
-                  {f.name}
-                </label>
-              ))}
-              {(!feeds || feeds.length === 0) && (
-                <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.82rem' }}>No feeds yet — add one below.</span>
-              )}
-            </div>
-
-            {feedIds.length > 1 && (
-              <>
-                <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>How to combine multiple feeds</div>
-                <div className={s.alignToggle}>
-                  <button type="button" className={multiMode === 'per_feed' ? s.alignActive : s.alignBtn} onClick={() => setMultiMode('per_feed')}>Per Feed</button>
-                  <button type="button" className={multiMode === 'total' ? s.alignActive : s.alignBtn} onClick={() => setMultiMode('total')}>Total (by date)</button>
-                </div>
-                <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>
-                  {multiMode === 'total'
-                    ? 'The count below is a total across all selected feeds combined, newest first.'
-                    : 'The count below applies to each feed — with 3 feeds and a count of 5, that\'s 15 slides, interleaved so sources are mixed rather than shown one feed at a time.'}
-                </div>
-              </>
-            )}
-
-            <div className={s.propRow} style={{ marginTop: '0.4rem' }}>
-              <div style={{ flex: 1 }}>
-                <div className={s.propLabel}>Seconds per slide</div>
-                <input
-                  className={s.numInput}
-                  type="number" min="2" max="120"
-                  value={rotateSeconds}
-                  onChange={e => setRotateSeconds(Number(e.target.value))}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div className={s.propLabel}>
-                  {feedIds.length > 1 && multiMode === 'total' ? 'Total items' : feedIds.length > 1 ? 'Items/feed' : 'Items to cycle'}
-                </div>
-                <input
-                  className={s.numInput}
-                  type="number" min="1" max="50"
-                  value={itemCount}
-                  onChange={e => setItemCount(Number(e.target.value))}
-                />
-              </div>
-            </div>
-          </Section>
-
-          <Section title={`Template Assignment — ${activeTemplate.name || 'Template'}`} defaultOpen={false}>
-            <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>
-              Pin this template to one feed to keep a consistent look (color scheme, logo) for that
-              source — pinned templates are never used for any other feed's articles. Leave as
-              "Rotate" to have it cycle for whichever feeds aren't pinned elsewhere.
-            </div>
-            <select
-              className={s.propSelect}
-              value={activeTemplate.assignedFeedId || ''}
-              onChange={e => updateTemplate({ assignedFeedId: e.target.value ? Number(e.target.value) : undefined })}
-            >
-              <option value="">🔁 Rotate (default)</option>
-              {(feeds || []).filter(f => feedIds.includes(f.id)).map(f => (
-                <option key={f.id} value={f.id}>📌 {f.name}</option>
-              ))}
-            </select>
-          </Section>
-
-          <Section title={`Background — ${activeTemplate.name || 'Template'}`} defaultOpen={false}>
-            <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>Each template has its own background.</div>
-            <div className={s.propRow}>
-              <input
-                type="color"
-                className={s.colorInput}
-                value={activeTemplate.bgColor || '#000000'}
-                onChange={e => updateTemplate({ bgColor: e.target.value })}
-              />
-              <input
-                className={s.propInput}
-                placeholder="#000000"
-                value={activeTemplate.bgColor || ''}
-                onChange={e => updateTemplate({ bgColor: e.target.value })}
-                style={{ fontFamily: 'monospace', flex: 1 }}
-              />
-              {activeTemplate.bgColor && (
-                <button className={s.deleteBtnDark} onClick={() => updateTemplate({ bgColor: '' })} title="Clear color">✕</button>
-              )}
-            </div>
-            <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Color Transparency — {activeTemplate.bgColorAlpha ?? 100}%</div>
-            <input
-              type="range" min="0" max="100" step="5"
-              value={activeTemplate.bgColorAlpha ?? 100}
-              onChange={e => updateTemplate({ bgColorAlpha: Number(e.target.value) })}
-              style={{ width: '100%' }}
-            />
-            <select
-              className={s.propSelect}
-              value={activeTemplate.bgFilename || ''}
-              onChange={e => {
-                const b = bgImages.find(im => im.filename === e.target.value);
-                updateTemplate({ bgFilename: b ? b.filename : '', bgLabel: b ? b.label : '' });
-              }}
-              style={{ marginTop: '0.4rem' }}
-            >
-              <option value="">None</option>
-              {bgImages.map(b => <option key={b.id} value={b.filename}>{b.label}</option>)}
-            </select>
-            {activeTemplate.bgFilename && (
-              <>
-                <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Image Opacity — {activeTemplate.bgOpacity ?? 100}%</div>
-                <input
-                  type="range" min="0" max="100" step="5"
-                  value={activeTemplate.bgOpacity ?? 100}
-                  onChange={e => updateTemplate({ bgOpacity: Number(e.target.value) })}
-                  style={{ width: '100%' }}
-                />
-              </>
-            )}
-          </Section>
-
-          <Section title={`Header Divider — ${activeTemplate.name || 'Template'}`} defaultOpen={false}>
-            <div className={s.propLabel} style={{ marginBottom: '0.2rem' }}>
-              An optional line under the rink name/clock header, shown while this template's slide is on screen. Width 0 hides it.
-            </div>
-            <div className={s.propLabel}>Width — {activeTemplate.headerLineWidth || 0}px</div>
-            <div className={s.propRow}>
-              <input
-                type="range" min="0" max="20" step="1"
-                value={activeTemplate.headerLineWidth || 0}
-                onChange={e => updateTemplate({ headerLineWidth: Number(e.target.value) })}
-              />
-              {(activeTemplate.headerLineWidth || 0) > 0 && (
-                <input
-                  type="color"
-                  className={s.colorInput}
-                  value={activeTemplate.headerLineColor || '#000000'}
-                  onChange={e => updateTemplate({ headerLineColor: e.target.value })}
-                  title="Line color"
-                />
-              )}
-            </div>
-          </Section>
 
         </div>
       </div>
@@ -1287,7 +1469,10 @@ export default function RssTab() {
                           return names.length ? names.join(', ') : 'No feed';
                         })()}
                         {` · ${sc.rss_rotate_seconds ?? 8}s/slide`}
-                        {sc.rss_templates?.length > 1 ? ` · ${sc.rss_templates.length} templates` : ''}
+                        {(() => {
+                          const count = (sc.rss_templates || []).filter(t => t.kind !== 'logo').length;
+                          return count > 1 ? ` · ${count} slides` : '';
+                        })()}
                       </div>
                       <InUseBadge name={assignedDisplayName(sc.id)} />
                       <div className={tStyles.cardActions}>

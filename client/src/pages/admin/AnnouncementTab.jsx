@@ -7,7 +7,7 @@ import tStyles from './ScreensTab.module.css';
 import s from './AnnouncementTab.module.css';
 import Thumbnail from './Thumbnail';
 import { useScreenCards, useScreenReorder, InUseBadge, EyeButton, EyeHint, DuplicateButton, SortableCard, DragHandle } from './screenCard';
-import { FONTS, makeId, hexToRgba, AutoFitText, StackedBoxText, LinesEditor, Section, useUndo, ResizeHandles, borderStyle, BORDER_SIDES, reorderElement } from './SlideEditorShared';
+import { FONTS, makeId, hexToRgba, AutoFitText, StackedBoxText, LinesEditor, Section, useUndo, ResizeHandles, borderStyle, BORDER_SIDES, reorderElement, LayersPanel } from './SlideEditorShared';
 
 function formatDateTimePreview(format, showSeconds) {
   const now = new Date();
@@ -151,10 +151,15 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
     if (selectedId === id) setSelectedId(null);
   }
 
-  function moveLayer(dir) {
-    if (!selectedId) return;
+  function moveLayer(id, dir) {
     pushHistory();
-    setElements(prev => reorderElement(prev, selectedId, dir));
+    setElements(prev => reorderElement(prev, id, dir));
+  }
+
+  function layerLabel(el) {
+    if (el.type === 'text') return (el.text || '').trim() || 'Text';
+    if (el.type === 'datetime') return 'Date/Time';
+    return 'Image';
   }
 
   const selectedEl = elements.find(e => e.id === selectedId) || null;
@@ -229,7 +234,7 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
               {elements.map(el => (
                 <div
                   key={el.id}
-                  className={s.canvasEl + (selectedId === el.id ? ' ' + s.canvasElSelected : '')}
+                  className={s.canvasEl}
                   style={{ left: el.x + '%', top: el.y + '%' }}
                   onMouseDown={e => startDrag(e, el)}
                 >
@@ -298,16 +303,8 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
             <Section
               title={selectedEl.type === 'text' ? 'Text' : selectedEl.type === 'datetime' ? 'Date/Time' : 'Image'}
               extra={<button className={s.deleteBtnDark} onClick={() => deleteEl(selectedId)}>Remove</button>}
+              highlighted
             >
-              <div>
-                <div className={s.propLabel}>Layer order</div>
-                <div className={s.alignToggle}>
-                  <button type="button" className={s.alignBtn} onClick={() => moveLayer('back')} title="Send to back">⇊</button>
-                  <button type="button" className={s.alignBtn} onClick={() => moveLayer('down')} title="Send backward">↓</button>
-                  <button type="button" className={s.alignBtn} onClick={() => moveLayer('up')} title="Bring forward">↑</button>
-                  <button type="button" className={s.alignBtn} onClick={() => moveLayer('front')} title="Bring to front">⇈</button>
-                </div>
-              </div>
               {selectedEl.type === 'text' && (
                 <>
                   {!(selectedEl.boxWidth && selectedEl.boxHeight && selectedEl.lines && selectedEl.lines.length) && (
@@ -700,6 +697,17 @@ function Editor({ screen, backgrounds, onSave, onCancel }) {
               Click an element on the canvas to edit its properties, or add a new one below.
             </div>
           )}
+
+          <Section title="Layers">
+            <div className={s.propLabel} style={{ marginBottom: '0.1rem' }}>Top of the list renders in front.</div>
+            <LayersPanel
+              elements={elements}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onReorder={moveLayer}
+              labelFor={layerLabel}
+            />
+          </Section>
 
           {/* Add elements */}
           <Section title="Add Element">

@@ -1,4 +1,4 @@
-# RinkScreens — v1.28.0
+# RinkScreens — v1.29.0
 
 Digital signage system for ice rinks. Pulls games from Google Calendar (iCal) and displays them on smart TVs around the facility. An admin panel on any local browser lets staff control what each screen shows and manage locker room assignments, pricing, and backgrounds.
 
@@ -144,7 +144,7 @@ Games are pulled from all calendars in the **Hockey Games** category.
 Events with a location that does **not** contain "San Mateo" are skipped (away games at other rinks). Events with no location are always imported.
 
 ### Import window
-Events are imported if they start within the last 12 hours through the next 30 days. Events outside this window are skipped, and previously imported games that fall outside it are removed on the next sync.
+Events are imported if they start within the last 12 hours through the next 30 days. Events outside this window are skipped, and a game that disappears from the feed while still inside the window is removed on the next sync. Games naturally age out of the window as time passes; those finished games are pruned separately, on server startup, once they're more than 30 days old — so the data store doesn't grow without bound.
 
 ### Title parsing
 

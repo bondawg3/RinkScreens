@@ -2,6 +2,20 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.29.0] — 2026-08-08
+
+### Changed
+- **Finished games are now pruned automatically** — activities more than 30 days old are removed on server startup. Calendar sync only maintains games inside its import window, so past games previously accumulated in `data/db.json` indefinitely; they're now cleaned up, keeping the data store small (every save rewrites the whole file, so its size affects all writes).
+- **Code efficiency and cleanup** — internal changes with no effect on behavior: shared date/formatting and save-notice helpers replace duplicated code across the Settings and RSS editors; the auto-fit text sizing (slide editor and TV game tables) and the calendar sync's per-event lookups were made substantially faster; a leftover drag listener in the schedule timeline is now cleaned up on unmount.
+
+### Security
+- Fixed a reflected XSS on the public `/tv/…` display routes, where a crafted URL could run script in the page.
+- Fixed a path-traversal ("zip-slip") in backup restore that could let a malicious backup `.zip` overwrite files outside the uploads folder.
+- Webpage-screen URLs are now restricted to `http(s)` and rendered in a sandboxed iframe.
+- The auto-updater's source repository can no longer be changed through the general settings endpoint — only the dedicated Updates settings.
+- Added an SSRF guard so RSS feed image fetches can't be aimed at internal/loopback addresses.
+- Hardened slide color/font handling against CSS injection, and stopped internal error details (including the secret calendar URL) from leaking in responses.
+
 ## [1.28.0] — 2026-08-08
 
 ### Added

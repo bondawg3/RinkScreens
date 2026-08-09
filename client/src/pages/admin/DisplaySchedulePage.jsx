@@ -6,12 +6,9 @@ import s from './scheduler.module.css';
 import ScheduleTimeline from './ScheduleTimeline';
 import ScreenPalette from './ScreenPalette';
 import { toMin, toHHMM, addDays, weekRange } from './scheduleLayout';
+import { todayStr } from '../../utils/date';
 
 const MAX_DAYS_AHEAD = 31;
-const todayStr = () => {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-};
 const fmtDay = (dateStr) =>
   new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
 

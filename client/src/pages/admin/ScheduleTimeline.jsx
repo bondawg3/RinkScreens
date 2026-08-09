@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import s from './scheduler.module.css';
 import { placeBlock, resizeBlock, defaultBlockAt, snap15, toHHMM, DAY_END } from './scheduleLayout';
 
@@ -22,6 +22,12 @@ export default function ScheduleTimeline({ blocks, screensById, onChange }) {
   const [drag, setDrag] = useState(null);   // { id, start, end } live move
   const [resz, setResz] = useState(null);   // { id, start, end } live resize
   const [dropY, setDropY] = useState(null); // px, palette drop hint
+
+  // Drag/resize attach their pointer listeners to `window` and normally detach
+  // on pointerup. If the component unmounts mid-drag that never fires, so keep
+  // a handle to the teardown and run it on unmount.
+  const dragCleanupRef = useRef(null);
+  useEffect(() => () => { if (dragCleanupRef.current) dragCleanupRef.current(); }, []);
 
   const yToMin = (clientY) => {
     const rect = ref.current.getBoundingClientRect();
@@ -52,8 +58,7 @@ export default function ScheduleTimeline({ blocks, screensById, onChange }) {
       setDrag({ id: block.id, start, end: start + dur });
     };
     const up = (ev) => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
+      detach();
       setDrag(null);
       const raw = block.start + (ev.clientY - startY) / PX_PER_MIN;
       let start = Math.max(0, Math.min(DAY_END - dur, snap15(raw)));
@@ -62,8 +67,14 @@ export default function ScheduleTimeline({ blocks, screensById, onChange }) {
       const candidate = { id: block.id, screen_id: block.screen_id, start, end: start + dur };
       commitPlacement(placeBlock(others, candidate), candidate, others);
     };
+    const detach = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      dragCleanupRef.current = null;
+    };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    dragCleanupRef.current = detach;
   }
 
   // ── Resize a block edge ──
@@ -79,15 +90,20 @@ export default function ScheduleTimeline({ blocks, screensById, onChange }) {
       if (next) setResz({ id: block.id, ...next });
     };
     const up = (ev) => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
+      detach();
       setResz(null);
       const raw = origin + (ev.clientY - anchorY) / PX_PER_MIN;
       const next = resizeBlock(blocks, block.id, edge === 'top' ? 'start' : 'end', raw);
       if (next) onChange(blocks.map((b) => (b.id === block.id ? { ...b, ...next } : b)));
     };
+    const detach = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      dragCleanupRef.current = null;
+    };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
+    dragCleanupRef.current = detach;
   }
 
   function deleteBlock(block) {

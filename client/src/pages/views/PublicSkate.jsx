@@ -1,14 +1,11 @@
 import React, { useEffect, useState } from 'react';
+import { fmtTime } from '../../utils/date';
 import styles from './PublicSkate.module.css';
 
 function formatDate(iso) {
   return new Date(iso).toLocaleDateString([], {
     weekday: 'long', month: 'long', day: 'numeric',
   });
-}
-
-function formatTime(iso) {
-  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 export default function PublicSkate() {
@@ -40,7 +37,7 @@ export default function PublicSkate() {
             <div key={s.id} className={styles.sessionCard}>
               <div className={styles.sessionDate}>{formatDate(s.start_time)}</div>
               <div className={styles.sessionTime}>
-                {formatTime(s.start_time)} – {formatTime(s.end_time)}
+                {fmtTime(s.start_time)} – {fmtTime(s.end_time)}
               </div>
             </div>
           ))

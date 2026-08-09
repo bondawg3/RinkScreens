@@ -132,6 +132,15 @@ async function syncCalendar(cal) {
   db.transaction((tx) => {
     if (cal.id) tx.update('calendars', cal.id, { cal_name: extractCalName(text) });
 
+    // findByField scans the whole activities table, and this runs once per
+    // imported event — index the uids up front instead. Rows upserted below
+    // are folded back in so a uid seen twice in one import still sees the
+    // values written by the first pass.
+    const activityByUid = new Map();
+    for (const row of tx.findAll('activities')) {
+      if (row.calendar_uid) activityByUid.set(row.calendar_uid, row);
+    }
+
     function processOccurrence(startDate, endDate, item) {
       const start = startDate.toJSDate();
       if (start < cutoff || start > horizon) return;
@@ -146,7 +155,7 @@ async function syncCalendar(cal) {
       }
 
       importedUids.add(uid);
-      const existing = tx.findByField('activities', 'calendar_uid', uid);
+      const existing = activityByUid.get(uid) || null;
 
       let title = rawTitle;
       let away_team = '';
@@ -158,7 +167,7 @@ async function syncCalendar(cal) {
         home_team = parsed.home_team;
       }
 
-      tx.upsertByField('activities', 'calendar_uid', uid, {
+      const row = {
         calendar_uid: uid,
         calendar_id: cal.id,
         start_time: start.toISOString(),
@@ -171,7 +180,9 @@ async function syncCalendar(cal) {
         away_locker: existing?.away_locker || '',
         lr_auto_assigned: existing?.lr_auto_assigned || 0,
         is_skate: forceSkate ? 1 : (rawTitle.includes(keyword) ? 1 : 0),
-      });
+      };
+      tx.upsertByField('activities', 'calendar_uid', uid, row);
+      activityByUid.set(uid, { ...(existing || {}), ...row });
       count++;
     }
 
@@ -276,6 +287,20 @@ async function fetchAndSync() {
   ws.broadcast({ type: 'refresh_data' });
 }
 
+// Calendar sync only imports events within [now-12h, now+30d] and only cleans
+// up rows inside that same window, so a game drops out of range 12 hours after
+// it starts and is then never touched again. Without this, activities grow
+// without bound — and every db write rewrites the whole JSON file, so the cost
+// is paid on every save, not just on reads. Returns the number removed.
+function pruneOldActivities(keepDays = 30) {
+  const cutoff = new Date(Date.now() - keepDays * 86400000).toISOString();
+  return db.transaction((tx) => {
+    const old = tx.findAll('activities').filter((g) => g.start_time && g.start_time < cutoff);
+    old.forEach((g) => tx.remove('activities', g.id));
+    return old.length;
+  });
+}
+
 function startPolling() {
   fetchAndSync();
   const calendars = db.findAll('calendars').filter((c) => c.type === 'hockey_games' || c.type === 'rink_events' || c.type === 'figure_skating' || c.type === 'public_skates');
@@ -304,4 +329,4 @@ async function triggerCalendarRefresh(calId) {
   ws.broadcast({ type: 'refresh_data' });
 }
 
-module.exports = { startPolling, triggerRefresh, triggerCalendarRefresh, parseTitle, syncCalendar, scheduleCalendar, cancelCalendar };
+module.exports = { startPolling, triggerRefresh, triggerCalendarRefresh, parseTitle, syncCalendar, scheduleCalendar, cancelCalendar, pruneOldActivities };

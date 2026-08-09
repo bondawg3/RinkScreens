@@ -9,6 +9,29 @@ import CalendarsTab from './SettingsTab';
 
 const SUB_TABS = ['General', 'Displays', 'Calendars', 'Pricing', 'Locker Rooms', 'Backups', 'Updates', 'Admin'];
 
+// Wraps a save action with the "run it, show a fading notice, surface errors" pattern
+// repeated across the settings forms below.
+function useNotice(defaultDuration = 2000) {
+  const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+
+  async function run(fn, successMsg, duration = defaultDuration) {
+    setError(''); setNotice('');
+    try {
+      const result = await fn();
+      if (successMsg) {
+        setNotice(successMsg);
+        setTimeout(() => setNotice(''), duration);
+      }
+      return result;
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return { notice, error, setNotice, setError, run };
+}
+
 function formatBytes(n) {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
@@ -248,7 +271,7 @@ function SequenceModal({ existing, lockerRooms, onClose, onSaved }) {
 function GeneralSection() {
   const { data: settings, reload: reloadSettings } = useApi('/settings');
   const [rinkName, setRinkName] = useState('');
-  const [saved, setSaved] = useState(false);
+  const { notice: saved, run } = useNotice();
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef();
 
@@ -256,8 +279,10 @@ function GeneralSection() {
 
   async function saveRinkName(e) {
     e.preventDefault();
-    await apiFetch('/settings', { method: 'PATCH', body: JSON.stringify({ rink_name: rinkName }) });
-    setSaved(true); setTimeout(() => setSaved(false), 2000); reloadSettings();
+    await run(async () => {
+      await apiFetch('/settings', { method: 'PATCH', body: JSON.stringify({ rink_name: rinkName }) });
+      reloadSettings();
+    }, 'Saved!');
   }
 
   async function uploadLogo(e) {
@@ -284,7 +309,7 @@ function GeneralSection() {
         </div>
         <div className={styles.formFooter}>
           <button className={styles.btnPrimary} type="submit">Save</button>
-          {saved && <span className={styles.savedMsg}>Saved!</span>}
+          {saved && <span className={styles.savedMsg}>{saved}</span>}
         </div>
       </form>
       <div className={styles.settingsForm}>
@@ -635,8 +660,7 @@ function FolderPickerModal({ initialPath, onClose, onSelect }) {
 function BackupsSection() {
   const { data, reload } = useApi('/backups');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const { notice, error, run } = useNotice();
   const [autoEnabled, setAutoEnabled] = useState(true);
   const [intervalHours, setIntervalHours] = useState('24');
   const [retentionCount, setRetentionCount] = useState('14');
@@ -653,8 +677,8 @@ function BackupsSection() {
   }, [data]);
 
   async function saveScheduleSettings(e) {
-    e.preventDefault(); setError(''); setNotice('');
-    try {
+    e.preventDefault();
+    await run(async () => {
       await apiFetch('/backups/settings', {
         method: 'PUT',
         body: JSON.stringify({
@@ -664,48 +688,44 @@ function BackupsSection() {
           backup_dir: backupDir,
         }),
       });
-      setNotice('Settings saved.'); setTimeout(() => setNotice(''), 2000);
       reload();
-    } catch (err) { setError(err.message); }
+    }, 'Settings saved.');
   }
 
   function resetBackupDir() { setBackupDir(''); }
 
   async function createNow() {
-    setBusy(true); setError(''); setNotice('');
-    try {
+    setBusy(true);
+    await run(async () => {
       await apiFetch('/backups', { method: 'POST' });
-      setNotice('Backup created.'); setTimeout(() => setNotice(''), 2000);
       reload();
-    } catch (err) { setError(err.message); }
-    finally { setBusy(false); }
+    }, 'Backup created.');
+    setBusy(false);
   }
 
   async function restore(filename) {
     if (!confirm(`Restore "${filename}"? This replaces all current data and uploaded files. A safety backup of the current state will be made first.`)) return;
-    setBusy(true); setError(''); setNotice('');
-    try {
+    setBusy(true);
+    await run(async () => {
       await apiFetch(`/backups/${encodeURIComponent(filename)}/restore`, { method: 'POST' });
-      setNotice('Restore complete.'); setTimeout(() => setNotice(''), 3000);
       reload();
-    } catch (err) { setError(err.message); }
-    finally { setBusy(false); }
+    }, 'Restore complete.', 3000);
+    setBusy(false);
   }
 
   async function togglePin(filename, pinned) {
-    setError('');
-    try {
+    await run(async () => {
       await apiFetch(`/backups/${encodeURIComponent(filename)}`, { method: 'PATCH', body: JSON.stringify({ pinned }) });
       reload();
-    } catch (err) { setError(err.message); }
+    });
   }
 
   async function removeBackup(filename) {
     if (!confirm(`Delete backup "${filename}"?`)) return;
-    try {
+    await run(async () => {
       await apiFetch(`/backups/${encodeURIComponent(filename)}`, { method: 'DELETE' });
       reload();
-    } catch (err) { setError(err.message); }
+    });
   }
 
   function download(filename) {
@@ -726,18 +746,17 @@ function BackupsSection() {
     if (!confirm(`Restore from "${file.name}"? This replaces all current data and uploaded files. A safety backup of the current state will be made first.`)) {
       e.target.value = ''; return;
     }
-    setBusy(true); setError(''); setNotice('');
-    try {
+    setBusy(true);
+    await run(async () => {
       const fd = new FormData(); fd.append('file', file);
       const res = await fetch('/api/backups/restore-upload', {
         method: 'POST', body: fd, headers: { Authorization: `Bearer ${getToken()}` },
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
-      setNotice('Restore complete.'); setTimeout(() => setNotice(''), 3000);
       reload();
-    } catch (err) { setError(err.message); }
-    finally { setBusy(false); e.target.value = ''; }
+    }, 'Restore complete.', 3000);
+    setBusy(false); e.target.value = '';
   }
 
   const backups = data?.backups || [];
@@ -841,8 +860,7 @@ function BackupsSection() {
 function UpdatesSection() {
   const { data, reload } = useApi('/updates');
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const { notice, error, setNotice, setError, run } = useNotice();
   const [autoEnabled, setAutoEnabled] = useState(true);
   const [checkMode, setCheckMode] = useState('interval');
   const [intervalHours, setIntervalHours] = useState('24');
@@ -861,8 +879,8 @@ function UpdatesSection() {
   }, [data]);
 
   async function saveSettings(e) {
-    e.preventDefault(); setError(''); setNotice('');
-    try {
+    e.preventDefault();
+    await run(async () => {
       const body = {
         update_check_enabled: autoEnabled,
         update_check_mode: checkMode,
@@ -872,19 +890,17 @@ function UpdatesSection() {
         update_install_time: installTime,
       };
       await apiFetch('/updates/settings', { method: 'PUT', body: JSON.stringify(body) });
-      setNotice('Settings saved.'); setTimeout(() => setNotice(''), 2000);
       reload();
-    } catch (err) { setError(err.message); }
+    }, 'Settings saved.');
   }
 
   async function checkNow() {
-    setBusy(true); setError(''); setNotice('');
-    try {
+    setBusy(true);
+    await run(async () => {
       await apiFetch('/updates/check', { method: 'POST' });
-      setNotice('Checked for updates.'); setTimeout(() => setNotice(''), 2000);
       reload();
-    } catch (err) { setError(err.message); }
-    finally { setBusy(false); }
+    }, 'Checked for updates.');
+    setBusy(false);
   }
 
   async function installNow() {
@@ -1035,8 +1051,20 @@ function AdminSection() {
 }
 
 // ── Page ───────────────────────────────────────────────────────────────────────
+const SECTIONS = {
+  General: GeneralSection,
+  Calendars: CalendarsTab,
+  Pricing: PricingSection,
+  'Locker Rooms': LockerRoomsSection,
+  Displays: DisplaysSection,
+  Backups: BackupsSection,
+  Updates: UpdatesSection,
+  Admin: AdminSection,
+};
+
 export default function SettingsPage() {
   const [active, setActive] = useState('General');
+  const ActiveSection = SECTIONS[active];
 
   return (
     <div>
@@ -1051,14 +1079,7 @@ export default function SettingsPage() {
         ))}
       </div>
 
-      {active === 'General'      && <GeneralSection />}
-      {active === 'Calendars'    && <CalendarsTab />}
-      {active === 'Pricing'      && <PricingSection />}
-      {active === 'Locker Rooms' && <LockerRoomsSection />}
-      {active === 'Displays'     && <DisplaysSection />}
-      {active === 'Backups'      && <BackupsSection />}
-      {active === 'Updates'      && <UpdatesSection />}
-      {active === 'Admin'        && <AdminSection />}
+      <ActiveSection />
     </div>
   );
 }

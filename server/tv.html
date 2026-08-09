@@ -706,6 +706,26 @@ function esc(v) {
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
+// Admin-entered color/font values get interpolated into inline style="..."
+// fragments. esc() stops attribute breakout but NOT CSS injection: a value
+// like "red;position:fixed;top:0;width:100%" has no quotes, so it would sail
+// through esc() and inject extra CSS declarations to overlay/deface a screen.
+// These validators only pass genuine color/font tokens and fall back otherwise.
+function cssColor(v, fallback) {
+  v = String(v == null ? '' : v).trim();
+  if (/^#[0-9a-fA-F]{3,8}$/.test(v)) return v;                        // hex
+  if (/^(rgb|rgba|hsl|hsla)\([0-9.,%\s]+\)$/i.test(v)) return v;       // functional
+  if (/^[a-zA-Z]+$/.test(v)) return v;                                 // named
+  return fallback || '';
+}
+function cssFont(v) {
+  v = String(v == null ? '' : v).trim();
+  return /^[a-zA-Z0-9 _-]+$/.test(v) ? v : 'Arial';                    // family name only
+}
+function cssAlign(v) {
+  return (v === 'center' || v === 'right' || v === 'left') ? v : 'left';
+}
+
 // Returns a CSS style fragment applying a border to one side (or all sides)
 // of an image element, e.g. "border-top:3px solid #fff;" — borderSide is
 // 'all' (default), 'top', 'bottom', 'left', or 'right'.
@@ -797,15 +817,15 @@ function renderSlideElements(elements, tokenValues) {
                 'width:' + (ln.widthPct != null ? ln.widthPct : 100) + '%;' +
                 'height:' + (ln.thickness || 4) + 'px;' +
                 'align-self:' + ruleAlign + ';' +
-                'background:' + esc(ln.color || '#fff') + ';flex-shrink:0;' +
+                'background:' + cssColor(ln.color, '#fff') + ';flex-shrink:0;' +
                 '"></div>';
             } else {
               linesHtml += '<span data-base-size="' + (ln.size || 48) + '" style="' +
-                'color:' + esc(ln.color || '#fff') + ';' +
-                'font-family:' + esc(ln.font || 'Arial') + ',sans-serif;' +
+                'color:' + cssColor(ln.color, '#fff') + ';' +
+                'font-family:' + cssFont(ln.font) + ',sans-serif;' +
                 'font-size:' + (ln.size || 48) + 'px;' +
                 'font-weight:' + (ln.bold ? 'bold' : 'normal') + ';' +
-                'text-align:' + esc(ln.align || 'left') + ';' +
+                'text-align:' + cssAlign(ln.align) + ';' +
                 'white-space:pre-wrap;overflow-wrap:break-word;line-height:1.2;width:100%;display:block;' +
                 '">' + esc(sub(ln.text)) + '</span>';
             }
@@ -818,11 +838,11 @@ function renderSlideElements(elements, tokenValues) {
           html += '<div class="slide-textbox" data-padding="' + boxPadding + '" style="' +
             boxOuterStyle + 'display:flex;align-items:' + boxJustify + ';' +
             '"><span class="slide-textbox-inner" data-base-size="' + (ae.size || 48) + '" style="' +
-            'color:' + esc(ae.color || '#fff') + ';' +
-            'font-family:' + esc(ae.font || 'Arial') + ',sans-serif;' +
+            'color:' + cssColor(ae.color, '#fff') + ';' +
+            'font-family:' + cssFont(ae.font) + ',sans-serif;' +
             'font-size:' + (ae.size || 48) + 'px;' +
             'font-weight:' + (ae.bold ? 'bold' : 'normal') + ';' +
-            'text-align:' + esc(ae.align || 'left') + ';' +
+            'text-align:' + cssAlign(ae.align) + ';' +
             'white-space:pre-wrap;overflow-wrap:break-word;line-height:1.2;width:100%;display:block;' +
             '">' + esc(sub(ae.text)) + '</span></div>';
         }
@@ -831,11 +851,11 @@ function renderSlideElements(elements, tokenValues) {
           'position:absolute;left:' + Number(ae.x) + '%;top:' + Number(ae.y) + '%;' +
           'transform:translate(-50%,-50%);' +
           'width:max-content;' +
-          'color:' + esc(ae.color || '#fff') + ';' +
-          'font-family:' + esc(ae.font || 'Arial') + ',sans-serif;' +
+          'color:' + cssColor(ae.color, '#fff') + ';' +
+          'font-family:' + cssFont(ae.font) + ',sans-serif;' +
           'font-size:' + (ae.size || 48) + 'px;' +
           'font-weight:' + (ae.bold ? 'bold' : 'normal') + ';' +
-          'text-align:' + esc(ae.align || 'left') + ';' +
+          'text-align:' + cssAlign(ae.align) + ';' +
           'white-space:pre-wrap;line-height:1.2;pointer-events:none;' +
           '">' + esc(sub(ae.text)) + '</div>';
       }
@@ -891,11 +911,11 @@ function renderSlideElements(elements, tokenValues) {
         'position:absolute;left:' + Number(ae.x) + '%;top:' + Number(ae.y) + '%;' +
         'transform:translate(-50%,-50%);' +
         'width:max-content;' +
-        'color:' + esc(ae.color || '#fff') + ';' +
-        'font-family:' + esc(ae.font || 'Arial') + ',sans-serif;' +
+        'color:' + cssColor(ae.color, '#fff') + ';' +
+        'font-family:' + cssFont(ae.font) + ',sans-serif;' +
         'font-size:' + (ae.size || 48) + 'px;' +
         'font-weight:' + (ae.bold ? 'bold' : 'normal') + ';' +
-        'text-align:' + esc(ae.align || 'left') + ';' +
+        'text-align:' + cssAlign(ae.align) + ';' +
         'white-space:pre;line-height:1.2;pointer-events:none;' +
         '"></div>';
     }
@@ -1005,8 +1025,10 @@ function teamInfo(teamMap, name) {
 
 // ── Shared row / block builders ─────────────────────────────────────────────
 function teamStyleAttr(info) {
-  var s = info.color ? 'background:' + info.color + ';' + (info.textColor ? 'color:' + info.textColor + ';' : '') : '';
-  return s ? ' style="' + esc(s) + '"' : '';
+  var bg = cssColor(info.color, '');
+  var fg = cssColor(info.textColor, '');
+  var s = bg ? 'background:' + bg + ';' + (fg ? 'color:' + fg + ';' : '') : '';
+  return s ? ' style="' + s + '"' : '';
 }
 
 // Full game row with team colors and locker room numbers (titleHtml is
@@ -1403,24 +1425,37 @@ function fitTable() {
   // ever truly overflowing. So instead of measuring the table as a whole,
   // check directly whether any gap column has been squeezed below that
   // intended 20px — that's the visible symptom we actually care about.
+  // The gap cells are the same nodes at every font size, so collect them once
+  // instead of re-querying the DOM on each probe.
+  var gapsPerTable = [];
+  for (var i = 0; i < tables.length; i++) gapsPerTable.push(tables[i].querySelectorAll('.td-gap'));
+
   function overflowing() {
     var minGap = 20 * 0.9; // small tolerance for rounding
     for (var i = 0; i < tables.length; i++) {
-      var t = tables[i];
-      if (t.scrollHeight > content.clientHeight) return true;
-      var gaps = t.querySelectorAll('.td-gap');
+      if (tables[i].scrollHeight > content.clientHeight) return true;
+      var gaps = gapsPerTable[i];
       for (var g = 0; g < gaps.length; g++) {
         if (gaps[g].offsetWidth < minGap) return true;
       }
     }
     return false;
   }
-  var size = 3.5;
-  setSize(size);
-  while (overflowing() && size > 0.5) {
-    size = Math.round((size - 0.05) * 100) / 100;
-    setSize(size);
+
+  // Same 0.05 step grid as before (size = 3.5 - 0.05*k, down to the 0.5
+  // floor), but binary-searched. Every probe forces a reflow, so this is ~6
+  // instead of ~60; overflow is monotonic in size, so it lands on the same
+  // size the linear walk would have.
+  var STEPS = 60; // 3.5 - 0.05*60 = 0.5
+  function sizeAt(k) { return Math.round((3.5 - 0.05 * k) * 100) / 100; }
+  function fits(k) { setSize(sizeAt(k)); return !overflowing(); }
+
+  var lo = 0, hi = STEPS, best = STEPS;
+  while (lo <= hi) {
+    var mid = Math.floor((lo + hi) / 2);
+    if (fits(mid)) { best = mid; hi = mid - 1; } else { lo = mid + 1; }
   }
+  setSize(sizeAt(best));
 }
 
 // ── Load data ──────────────────────────────────────────────────────────────
@@ -1568,7 +1603,7 @@ function renderScreenConfig(screen) {
         var iframeId = 'webpage-frame';
         document.getElementById('content').innerHTML =
           '<div style="width:100%;height:100%;display:flex;justify-content:center;overflow:hidden;">' +
-          '<iframe id="' + iframeId + '" src="' + esc(screen.webpage_url) + '" style="width:' + wpWidth + '%;height:' + Math.round(100 / wpZoom) + '%;border:none;flex-shrink:0;transform:scale(' + wpZoom + ');transform-origin:top center;" allowfullscreen></iframe>' +
+          '<iframe id="' + iframeId + '" src="' + esc(screen.webpage_url) + '" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" referrerpolicy="no-referrer" style="width:' + wpWidth + '%;height:' + Math.round(100 / wpZoom) + '%;border:none;flex-shrink:0;transform:scale(' + wpZoom + ');transform-origin:top center;" allowfullscreen></iframe>' +
           '</div>';
         if (wpRefresh > 0) {
           webpageTimer = setTimeout(function reloadFrame() {

@@ -4,7 +4,7 @@ const path = require('path');
 const cors = require('cors');
 
 const wsManager = require('./ws');
-const { startPolling } = require('./calendar');
+const { startPolling, pruneOldActivities } = require('./calendar');
 const rss = require('./rss');
 const apiRouter = require('./routes/api');
 const uploadRouter = require('./routes/upload');
@@ -16,6 +16,11 @@ const update = require('./update');
 // Past schedule blocks are dead weight in db.json — drop anything older than a week
 const pruned = pruneOldBlocks(7);
 if (pruned) console.log(`[schedule] pruned ${pruned} past schedule block(s)`);
+
+// Same for finished games/skates: calendar sync stops maintaining them once
+// they fall out of its import window, so they'd otherwise accumulate forever
+const prunedActivities = pruneOldActivities(30);
+if (prunedActivities) console.log(`[calendar] pruned ${prunedActivities} past activity row(s)`);
 
 // Seed a default screen for each display type if none exists yet
 (function seedDefaultScreens() {
@@ -58,13 +63,26 @@ app.use('/api', uploadRouter);
 // display's schedule. /tv/screen/:screenId renders one screen config directly
 // (admin previews/thumbnails), bypassing scheduling.
 const tvHtml = require('fs').readFileSync(path.join(__dirname, 'tv.html'), 'utf8');
+// Both ids land inside a JS string literal in tv.html (var SCREEN_ID = '...').
+// They are always numeric, so validate and 404 otherwise — never splice a raw
+// request value into the page (that was a reflected-XSS hole). Build the two
+// values first, then swap with a function replacer so a '$' in the value can't
+// be read as a String.replace special pattern.
+function renderTv(res, displayId, screenId) {
+  res.send(
+    tvHtml
+      .replace('{{DISPLAY_ID}}', () => String(displayId))
+      .replace('{{SCREEN_ID}}', () => String(screenId))
+  );
+}
 app.get('/tv/screen/:screenId', (req, res) => {
-  res.send(tvHtml.replace('{{DISPLAY_ID}}', '').replace('{{SCREEN_ID}}', req.params.screenId));
+  if (!/^\d+$/.test(req.params.screenId)) return res.status(404).send('Not found.');
+  renderTv(res, '', req.params.screenId);
 });
 app.get('/tv/:tvNumber', (req, res) => {
   const display = db.findAll('displays').find((d) => String(d.tv_number) === req.params.tvNumber);
   if (!display) return res.status(404).send('No display with that TV number.');
-  res.send(tvHtml.replace('{{DISPLAY_ID}}', display.id).replace('{{SCREEN_ID}}', ''));
+  renderTv(res, display.id, '');
 });
 
 // Serve built React app in production
@@ -72,6 +90,18 @@ const clientDist = path.join(__dirname, '..', 'client', 'dist');
 app.use(express.static(clientDist));
 app.get('/{*path}', (req, res) => {
   res.sendFile(path.join(clientDist, 'index.html'));
+});
+
+// Terminal error handler. Without an explicit one, an uncaught throw in any
+// route falls through to Express's default handler, which writes the stack
+// trace into the HTTP response unless NODE_ENV === 'production'. Return a
+// generic message instead (and log the real error server-side) so internals
+// never leak regardless of how the process was started.
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+  console.error('[error]', err);
+  if (res.headersSent) return next(err);
+  res.status(err.status || 500).json({ error: 'Internal server error' });
 });
 
 // Init WebSocket manager

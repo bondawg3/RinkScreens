@@ -96,7 +96,11 @@ router.post('/auth/change-password', requireAuth, async (req, res) => {
 // Unauthenticated TV displays only need these; everything else requires a token
 const PUBLIC_SETTINGS = ['rink_name', 'logo_filename'];
 // Never returned or writable through the API
-const SECRET_SETTINGS = ['jwt_secret', 'admin_password_hash', 'update_github_token'];
+// Never readable via GET /settings nor writable via the blanket PATCH /settings.
+// update_github_repo is here because it chooses the source the auto-updater
+// downloads and executes code from — it must only be settable through the
+// dedicated, validated PUT /updates/settings route, never a generic settings patch.
+const SECRET_SETTINGS = ['jwt_secret', 'admin_password_hash', 'update_github_token', 'update_github_repo'];
 
 router.get('/settings', (req, res) => {
   const settings = db.getSettings();
@@ -146,6 +150,17 @@ function parseCalendarIds(raw) {
   if (!raw) return null;
   if (Array.isArray(raw)) return raw.length ? raw.map(Number) : null;
   try { const p = JSON.parse(raw); return p && p.length ? p.map(Number) : null; } catch { return null; }
+}
+
+// A webpage screen renders this URL inside an iframe on the TV. Only http(s)
+// is allowed — a stored "javascript:" (or "data:") URL would execute in the
+// iframe with the app's own origin. Anything else is dropped to empty.
+function sanitizeWebpageUrl(url) {
+  if (!url) return '';
+  try {
+    const u = new URL(String(url));
+    return (u.protocol === 'http:' || u.protocol === 'https:') ? u.href : '';
+  } catch { return ''; }
 }
 
 function backgroundsMap() {
@@ -221,7 +236,7 @@ router.post('/screens', requireAuth, (req, res) => {
   if (!name) return res.status(400).json({ error: 'name required' });
   const calIds = parseCalendarIds(calendar_ids);
   const priceIds = parseCalendarIds(pricing_ids);
-  const row = db.insert('screens', { name, ip, display_type, background_id: background_id || null, webpage_url, webpage_width: Number(webpage_width), webpage_zoom: Number(webpage_zoom), webpage_refresh: Number(webpage_refresh), calendar_ids: calIds ? JSON.stringify(calIds) : null, bg_opacity: Number(bg_opacity), bg_color_alpha: Number(bg_color_alpha), announcement_data: announcement_data ? JSON.stringify(announcement_data) : null, bg_color: bg_color || '', header_line_width: Number(header_line_width), header_line_color: header_line_color || '#000000', show_pricing: !!show_pricing, show_locker_rooms: !!show_locker_rooms, pricing_ids: priceIds ? JSON.stringify(priceIds) : null, rss_feed_id: rss_feed_id || (Array.isArray(rss_feed_ids) && rss_feed_ids[0]) || null, rss_feed_ids: rss_feed_ids ? JSON.stringify(rss_feed_ids) : null, rss_multi_mode: rss_multi_mode || 'per_feed', rss_slide_layout: rss_slide_layout ? JSON.stringify(rss_slide_layout) : null, rss_templates: rss_templates ? JSON.stringify(rss_templates) : null, rss_item_count: rss_item_count !== undefined ? Number(rss_item_count) : 10, rss_rotate_seconds: rss_rotate_seconds !== undefined ? Number(rss_rotate_seconds) : 8 });
+  const row = db.insert('screens', { name, ip, display_type, background_id: background_id || null, webpage_url: sanitizeWebpageUrl(webpage_url), webpage_width: Number(webpage_width), webpage_zoom: Number(webpage_zoom), webpage_refresh: Number(webpage_refresh), calendar_ids: calIds ? JSON.stringify(calIds) : null, bg_opacity: Number(bg_opacity), bg_color_alpha: Number(bg_color_alpha), announcement_data: announcement_data ? JSON.stringify(announcement_data) : null, bg_color: bg_color || '', header_line_width: Number(header_line_width), header_line_color: header_line_color || '#000000', show_pricing: !!show_pricing, show_locker_rooms: !!show_locker_rooms, pricing_ids: priceIds ? JSON.stringify(priceIds) : null, rss_feed_id: rss_feed_id || (Array.isArray(rss_feed_ids) && rss_feed_ids[0]) || null, rss_feed_ids: rss_feed_ids ? JSON.stringify(rss_feed_ids) : null, rss_multi_mode: rss_multi_mode || 'per_feed', rss_slide_layout: rss_slide_layout ? JSON.stringify(rss_slide_layout) : null, rss_templates: rss_templates ? JSON.stringify(rss_templates) : null, rss_item_count: rss_item_count !== undefined ? Number(rss_item_count) : 10, rss_rotate_seconds: rss_rotate_seconds !== undefined ? Number(rss_rotate_seconds) : 8 });
   res.json({ id: row.id });
 });
 
@@ -236,7 +251,7 @@ router.patch('/screens/:id', requireAuth, (req, res) => {
     ip: ip ?? screen.ip,
     display_type: display_type ?? screen.display_type,
     background_id: background_id !== undefined ? (background_id || null) : screen.background_id,
-    webpage_url: webpage_url !== undefined ? webpage_url : (screen.webpage_url || ''),
+    webpage_url: webpage_url !== undefined ? sanitizeWebpageUrl(webpage_url) : (screen.webpage_url || ''),
     webpage_width: webpage_width !== undefined ? Number(webpage_width) : (screen.webpage_width || 100),
     webpage_zoom: webpage_zoom !== undefined ? Number(webpage_zoom) : (screen.webpage_zoom || 100),
     webpage_refresh: webpage_refresh !== undefined ? Number(webpage_refresh) : (screen.webpage_refresh || 0),
@@ -661,7 +676,9 @@ router.get('/games/debug-calendar', requireAuth, async (req, res) => {
 
   res.json({
     calendar: calName,
-    url,
+    // The iCal URL is a secret (Google "secret address" links grant full
+    // read access to the calendar) and is deliberately withheld elsewhere —
+    // don't echo it back from this debug endpoint either.
     now: now.toISOString(),
     cutoff: cutoff.toISOString(),
     total_vevents: summary.length,

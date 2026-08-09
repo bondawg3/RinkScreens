@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useWebSocket } from '../hooks/useWebSocket';
+import { fmtTime } from '../utils/date';
 import GameBoard from './views/GameBoard';
 import PublicSkate from './views/PublicSkate';
 import styles from './Display.module.css';
@@ -13,7 +14,7 @@ function Clock() {
   }, []);
   return (
     <span>
-      {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+      {fmtTime(time)}
     </span>
   );
 }

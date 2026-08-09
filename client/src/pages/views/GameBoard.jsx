@@ -1,10 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { fmtTime } from '../../utils/date';
 import styles from './GameBoard.module.css';
-
-function formatTime(iso) {
-  const d = new Date(iso);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-}
 
 function teamLabel(name, locker) {
   if (!name) return null;
@@ -50,6 +46,8 @@ export default function GameBoard({ rinkName }) {
   useEffect(() => { load(); }, []);
   GameBoard.reload = load;
 
+  const rows = useMemo(() => groupGames(games), [games]);
+
   if (games.length === 0) {
     return (
       <div className={styles.empty}>
@@ -68,12 +66,12 @@ export default function GameBoard({ rinkName }) {
         <span className={styles.homeHeader}>Home</span>
       </div>
       <div className={styles.rows}>
-        {groupGames(games).map((group) => {
+        {rows.map((group) => {
           const isGrouped = group.length > 1;
           return (
             <div key={group[0].id} className={styles.row + (isGrouped ? ' ' + styles.rowGrouped : '')}>
               <div className={styles.time + (isGrouped ? ' ' + styles.timeTop : '')}>
-                <span className={styles.clock}>{formatTime(group[0].start_time)}</span>
+                <span className={styles.clock}>{fmtTime(group[0].start_time)}</span>
               </div>
               <div className={styles.subRows}>
                 {group.map((g) => {

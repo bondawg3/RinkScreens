@@ -9,7 +9,7 @@ const AdmZip = require('adm-zip');
 const db = require('./db');
 
 const DATA_DIR = process.env.RINKSCREENS_DATA_DIR || path.join(__dirname, '..', 'data');
-const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
+const UPLOAD_DIR = process.env.RINKSCREENS_UPLOAD_DIR || path.join(__dirname, '..', 'uploads');
 const DEFAULT_BACKUP_DIR = path.join(DATA_DIR, 'backups');
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 if (!fs.existsSync(DEFAULT_BACKUP_DIR)) fs.mkdirSync(DEFAULT_BACKUP_DIR, { recursive: true });
@@ -174,11 +174,19 @@ function restoreFromZip(zipPath) {
 
   fs.rmSync(UPLOAD_DIR, { recursive: true, force: true });
   fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  const uploadRoot = path.resolve(UPLOAD_DIR);
   for (const entry of entries) {
     if (entry.isDirectory || !entry.entryName.startsWith('uploads/')) continue;
     const rel = entry.entryName.slice('uploads/'.length);
     if (!rel) continue;
-    const dest = path.join(UPLOAD_DIR, rel);
+    // Zip-slip guard: a crafted entry like "uploads/../../server/index.js"
+    // passes the startsWith check above but must not be allowed to write
+    // outside the uploads dir (that would overwrite app code, run on restart).
+    const dest = path.resolve(uploadRoot, rel);
+    if (dest !== uploadRoot && !dest.startsWith(uploadRoot + path.sep)) {
+      console.warn(`[backup] skipped unsafe zip entry: ${entry.entryName}`);
+      continue;
+    }
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.writeFileSync(dest, entry.getData());
   }

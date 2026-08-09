@@ -112,10 +112,20 @@ export function AutoFitText({ el, scale }) {
     // both sides.
     const availW = box.clientWidth - paddingPx * 2;
     const availH = box.clientHeight - paddingPx * 2;
-    while (size > minSize && (span.scrollHeight > availH || span.scrollWidth > availW)) {
-      size -= 1;
-      span.style.fontSize = size + 'px';
+    // Each probe forces a synchronous reflow, so binary-search the largest
+    // fitting size (~6 probes) rather than stepping down 1px at a time (~40).
+    // Overflow is monotonic in font size, so this lands on the same answer.
+    const fits = (px) => {
+      span.style.fontSize = px + 'px';
+      return span.scrollHeight <= availH && span.scrollWidth <= availW;
+    };
+    let lo = minSize, hi = baseSize;
+    size = minSize;
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (fits(mid)) { size = mid; lo = mid + 1; } else { hi = mid - 1; }
     }
+    span.style.fontSize = size + 'px';
   }, [el.text, el.size, el.font, el.bold, el.align, el.boxWidth, el.boxHeight, el.boxPadding, scale]);
 
   return (
@@ -172,15 +182,23 @@ export function StackedBoxText({ el, scale }) {
         else el2.style.fontSize = val + 'px';
       });
     }
-    let sc = 1;
-    apply(sc);
+    apply(1);
     const availW = box.clientWidth - paddingPx * 2;
     const availH = box.clientHeight - paddingPx * 2;
-    const minScale = 0.15;
-    while (sc > minScale && (stack.scrollHeight > availH || stack.scrollWidth > availW)) {
-      sc -= 0.02;
-      apply(sc);
+    // Same 0.02 step grid as before (scale = 1 - 0.02*k, down to the 0.15
+    // floor), but binary-searched: each probe forces a reflow, so this is ~6
+    // instead of ~43. Overflow is monotonic in scale, so the result matches.
+    const STEPS = 43; // 1 - 0.02*43 = 0.14, the first value past the floor
+    const fits = (k) => {
+      apply(1 - 0.02 * k);
+      return stack.scrollHeight <= availH && stack.scrollWidth <= availW;
+    };
+    let lo = 0, hi = STEPS, best = STEPS;
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2);
+      if (fits(mid)) { best = mid; hi = mid - 1; } else { lo = mid + 1; }
     }
+    apply(1 - 0.02 * best);
   }, [lines, el.boxWidth, el.boxHeight, el.boxPadding, el.lineSpacing, scale]);
 
   return (
@@ -477,7 +495,7 @@ export function useArrowKeyNudge({ selectedId, elements, updateEl }) {
 export function useUndo(getSnapshot, applySnapshot) {
   const undoStack = useRef([]);
   const redoStack = useRef([]);
-  const currentRef = useRef(getSnapshot());
+  const currentRef = useRef(null);
   currentRef.current = getSnapshot();
 
   useEffect(() => {

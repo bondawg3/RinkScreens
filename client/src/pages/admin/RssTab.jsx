@@ -300,6 +300,100 @@ function FeedManager({ feeds, reload }) {
   );
 }
 
+// Renders one slide element, either as a fully interactive canvas item
+// (draggable, selectable, resize handles) or as a read-only preview — used
+// for the live editor canvas and the Logos-slide overlay preview.
+function CanvasElementView({ el, canvasWidth, scale, feeds, interactive, selected, canvasRef, updateEl, pushHistory, onMouseDown }) {
+  return (
+    <div
+      className={s.canvasEl + (interactive && selected ? ' ' + s.canvasElSelected : '')}
+      style={{ left: el.x + '%', top: el.y + '%', ...(interactive ? {} : { pointerEvents: 'none' }) }}
+      onMouseDown={interactive ? onMouseDown : undefined}
+    >
+      {el.type === 'text' ? (
+        el.boxWidth && el.boxHeight ? (
+          <div style={{
+            position: 'relative',
+            width: Math.round(el.boxWidth / 100 * canvasWidth) + 'px',
+            height: Math.round(el.boxHeight / 100 * canvasWidth * 0.5625) + 'px',
+          }}>
+            {el.lines && el.lines.length ? <StackedBoxText el={el} scale={scale} /> : <AutoFitText el={el} scale={scale} />}
+            {interactive && selected && (
+              <ResizeHandles el={el} widthKey="boxWidth" heightKey="boxHeight" canvasRef={canvasRef} updateEl={updateEl} pushHistory={pushHistory} />
+            )}
+          </div>
+        ) : (
+          <span style={{
+            color: el.color,
+            fontFamily: el.font + ', sans-serif',
+            fontSize: Math.round(el.size * scale) + 'px',
+            fontWeight: el.bold ? 'bold' : 'normal',
+            textAlign: el.align,
+            whiteSpace: 'pre-wrap',
+            display: 'block',
+            lineHeight: 1.2,
+            pointerEvents: 'none',
+          }}>{el.text || ' '}</span>
+        )
+      ) : el.filename === '{{image}}' ? (
+        <div style={{
+          position: 'relative',
+          width: Math.round(el.width / 100 * canvasWidth) + 'px',
+          height: Math.round((el.height || el.width * 0.6) / 100 * canvasWidth * 0.5625) + 'px',
+          border: el.borderWidth ? undefined : '2px dashed rgba(255,255,255,0.4)',
+          ...borderStyle(el, scale),
+          boxSizing: 'border-box',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem',
+        }}>
+          Feed Image
+          {interactive && el.autoFocal === false && (
+            <div title="Manual focal point" style={{
+              position: 'absolute',
+              left: (el.focalX ?? 50) + '%',
+              top: (el.focalY ?? 50) + '%',
+              width: '10px', height: '10px', marginLeft: '-5px', marginTop: '-5px',
+              borderRadius: '50%', background: '#ffcc00', border: '1px solid #000',
+            }} />
+          )}
+          {interactive && selected && (
+            <ResizeHandles el={el} widthKey="width" heightKey="height" canvasRef={canvasRef} updateEl={updateEl} pushHistory={pushHistory} />
+          )}
+        </div>
+      ) : el.logoFeedId ? (
+        <div style={{ position: 'relative', display: 'inline-block' }}>
+          <img
+            src={(feeds || []).find(f => f.id === el.logoFeedId)?.logo_src || ''}
+            style={{
+              width: Math.round(el.width / 100 * canvasWidth) + 'px',
+              display: 'block',
+              boxSizing: 'border-box',
+              ...borderStyle(el, scale),
+            }}
+            draggable={false}
+            alt=""
+          />
+          {interactive && selected && (
+            <WidthResizeHandles el={el} widthKey="width" canvasRef={canvasRef} updateEl={updateEl} pushHistory={pushHistory} />
+          )}
+        </div>
+      ) : (
+        <img
+          src={`/uploads/${el.filename}`}
+          style={{
+            width: Math.round(el.width / 100 * canvasWidth) + 'px',
+            display: 'block',
+            boxSizing: 'border-box',
+            ...borderStyle(el, scale),
+          }}
+          draggable={false}
+          alt=""
+        />
+      )}
+    </div>
+  );
+}
+
 // ── Canvas Editor ──────────────────────────────────────────────────────────
 function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
   const [name, setName] = useState(screen.name || '');
@@ -702,93 +796,19 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                 }}
               />
               {elements.map(el => (
-                <div
+                <CanvasElementView
                   key={el.id}
-                  className={s.canvasEl + (selectedId === el.id ? ' ' + s.canvasElSelected : '')}
-                  style={{ left: el.x + '%', top: el.y + '%' }}
+                  el={el}
+                  canvasWidth={canvasWidth}
+                  scale={scale}
+                  feeds={feeds}
+                  interactive
+                  selected={selectedId === el.id}
+                  canvasRef={canvasRef}
+                  updateEl={updateEl}
+                  pushHistory={pushHistory}
                   onMouseDown={e => startDrag(e, el)}
-                >
-                  {el.type === 'text' ? (
-                    el.boxWidth && el.boxHeight ? (
-                      <div style={{
-                        position: 'relative',
-                        width: Math.round(el.boxWidth / 100 * canvasWidth) + 'px',
-                        height: Math.round(el.boxHeight / 100 * canvasWidth * 0.5625) + 'px',
-                      }}>
-                        {el.lines && el.lines.length ? <StackedBoxText el={el} scale={scale} /> : <AutoFitText el={el} scale={scale} />}
-                        {selectedId === el.id && (
-                          <ResizeHandles el={el} widthKey="boxWidth" heightKey="boxHeight" canvasRef={canvasRef} updateEl={updateEl} pushHistory={pushHistory} />
-                        )}
-                      </div>
-                    ) : (
-                      <span style={{
-                        color: el.color,
-                        fontFamily: el.font + ', sans-serif',
-                        fontSize: Math.round(el.size * scale) + 'px',
-                        fontWeight: el.bold ? 'bold' : 'normal',
-                        textAlign: el.align,
-                        whiteSpace: 'pre-wrap',
-                        display: 'block',
-                        lineHeight: 1.2,
-                        pointerEvents: 'none',
-                      }}>{el.text || ' '}</span>
-                    )
-                  ) : el.filename === '{{image}}' ? (
-                    <div style={{
-                      position: 'relative',
-                      width: Math.round(el.width / 100 * canvasWidth) + 'px',
-                      height: Math.round((el.height || el.width * 0.6) / 100 * canvasWidth * 0.5625) + 'px',
-                      border: el.borderWidth ? undefined : '2px dashed rgba(255,255,255,0.4)',
-                      ...borderStyle(el, scale),
-                      boxSizing: 'border-box',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem',
-                    }}>
-                      Feed Image
-                      {el.autoFocal === false && (
-                        <div title="Manual focal point" style={{
-                          position: 'absolute',
-                          left: (el.focalX ?? 50) + '%',
-                          top: (el.focalY ?? 50) + '%',
-                          width: '10px', height: '10px', marginLeft: '-5px', marginTop: '-5px',
-                          borderRadius: '50%', background: '#ffcc00', border: '1px solid #000',
-                        }} />
-                      )}
-                      {selectedId === el.id && (
-                        <ResizeHandles el={el} widthKey="width" heightKey="height" canvasRef={canvasRef} updateEl={updateEl} pushHistory={pushHistory} />
-                      )}
-                    </div>
-                  ) : el.logoFeedId ? (
-                    <div style={{ position: 'relative', display: 'inline-block' }}>
-                      <img
-                        src={(feeds || []).find(f => f.id === el.logoFeedId)?.logo_src || ''}
-                        style={{
-                          width: Math.round(el.width / 100 * canvasWidth) + 'px',
-                          display: 'block',
-                          boxSizing: 'border-box',
-                          ...borderStyle(el, scale),
-                        }}
-                        draggable={false}
-                        alt=""
-                      />
-                      {selectedId === el.id && (
-                        <WidthResizeHandles el={el} widthKey="width" canvasRef={canvasRef} updateEl={updateEl} pushHistory={pushHistory} />
-                      )}
-                    </div>
-                  ) : (
-                    <img
-                      src={`/uploads/${el.filename}`}
-                      style={{
-                        width: Math.round(el.width / 100 * canvasWidth) + 'px',
-                        display: 'block',
-                        boxSizing: 'border-box',
-                        ...borderStyle(el, scale),
-                      }}
-                      draggable={false}
-                      alt=""
-                    />
-                  )}
-                </div>
+                />
               ))}
               {/* Logo overlay preview — a read-only stand-in for whichever
                   Logos slide this content slide has selected below. It's
@@ -799,44 +819,14 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                 const logoTmpl = templates.find(t => t.id === activeTemplate.logoTemplateId);
                 if (!logoTmpl) return null;
                 return (logoTmpl.elements || []).map(el => (
-                  <div key={'overlay-' + el.id} className={s.canvasEl} style={{ left: el.x + '%', top: el.y + '%', pointerEvents: 'none' }}>
-                    {el.type === 'text' ? (
-                      <span style={{
-                        color: el.color,
-                        fontFamily: el.font + ', sans-serif',
-                        fontSize: Math.round(el.size * scale) + 'px',
-                        fontWeight: el.bold ? 'bold' : 'normal',
-                        textAlign: el.align,
-                        whiteSpace: 'pre-wrap',
-                        display: 'block',
-                        lineHeight: 1.2,
-                      }}>{el.text || ' '}</span>
-                    ) : el.filename === '{{image}}' ? (
-                      <div style={{
-                        width: Math.round(el.width / 100 * canvasWidth) + 'px',
-                        height: Math.round((el.height || el.width * 0.6) / 100 * canvasWidth * 0.5625) + 'px',
-                        border: el.borderWidth ? undefined : '2px dashed rgba(255,255,255,0.4)',
-                        ...borderStyle(el, scale),
-                        boxSizing: 'border-box',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        color: 'rgba(255,255,255,0.5)', fontSize: '0.75rem',
-                      }}>Feed Image</div>
-                    ) : el.logoFeedId ? (
-                      <img
-                        src={(feeds || []).find(f => f.id === el.logoFeedId)?.logo_src || ''}
-                        style={{ width: Math.round(el.width / 100 * canvasWidth) + 'px', display: 'block', boxSizing: 'border-box', ...borderStyle(el, scale) }}
-                        draggable={false}
-                        alt=""
-                      />
-                    ) : (
-                      <img
-                        src={`/uploads/${el.filename}`}
-                        style={{ width: Math.round(el.width / 100 * canvasWidth) + 'px', display: 'block', boxSizing: 'border-box', ...borderStyle(el, scale) }}
-                        draggable={false}
-                        alt=""
-                      />
-                    )}
-                  </div>
+                  <CanvasElementView
+                    key={'overlay-' + el.id}
+                    el={el}
+                    canvasWidth={canvasWidth}
+                    scale={scale}
+                    feeds={feeds}
+                    interactive={false}
+                  />
                 ));
               })()}
             </div>

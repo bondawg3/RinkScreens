@@ -2,6 +2,7 @@ const Parser = require('rss-parser');
 const db = require('./db');
 const ws = require('./ws');
 const { computeFocalPoint } = require('./focalpoint');
+const { safeFetch } = require('./safe-url');
 
 const parser = new Parser();
 const pollTimers = new Map();
@@ -10,11 +11,14 @@ const IMAGE_FETCH_TIMEOUT_MS = 8000;
 const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
 const OG_IMAGE_RE = /<meta[^>]+(?:property|name)=["']og:image(?::secure_url)?["'][^>]+content=["']([^"']+)["'][^>]*>|<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']og:image(?::secure_url)?["'][^>]*>/i;
 
+// og:image lookups and image downloads pull URLs straight from feed content,
+// so they go through safeFetch, which rejects internal/loopback/link-local
+// targets and re-validates on every redirect (SSRF guard).
 async function fetchWithTimeout(url, ms) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), ms);
   try {
-    return await fetch(url, { signal: controller.signal });
+    return await safeFetch(url, { signal: controller.signal });
   } finally {
     clearTimeout(timeout);
   }

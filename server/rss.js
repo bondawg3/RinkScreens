@@ -106,6 +106,11 @@ function stripHtml(html) {
 // sync error on the feed and leaves its previously-cached items untouched so
 // a display doesn't go blank just because one poll failed.
 async function fetchAndParseFeed(feed) {
+  if (feed.type === 'webpage') {
+    // required lazily to avoid a circular require (webpage.js imports the
+    // helpers below from this module)
+    return require('./webpage').fetchAndParseWebpageFeed(feed);
+  }
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10000);
@@ -177,4 +182,15 @@ function startPolling() {
   feeds.forEach(scheduleFeed);
 }
 
-module.exports = { startPolling, fetchAndParseFeed, scheduleFeed, cancelFeed, triggerFeedRefresh };
+module.exports = {
+  startPolling,
+  fetchAndParseFeed,
+  scheduleFeed,
+  cancelFeed,
+  triggerFeedRefresh,
+  // shared with webpage.js so it doesn't duplicate image/focal-point handling
+  mapLimit,
+  resolveImageAndFocal,
+  fetchImageBuffer,
+  stripHtml,
+};

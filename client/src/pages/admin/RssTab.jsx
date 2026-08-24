@@ -139,6 +139,9 @@ function FeedRow({ feed, onSaved, onDeleted, onSynced }) {
   const [name, setName] = useState(feed.name);
   const [url, setUrl] = useState(feed.url);
   const [pollMinutes, setPollMinutes] = useState(feed.poll_interval_minutes);
+  const [type, setType] = useState(feed.type || 'rss');
+  const [itemCount, setItemCount] = useState(feed.item_count || 10);
+  const [linkSelector, setLinkSelector] = useState(feed.link_selector || '');
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -149,7 +152,14 @@ function FeedRow({ feed, onSaved, onDeleted, onSynced }) {
     try {
       await apiFetch(`/rss-feeds/${feed.id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ name: name.trim(), url: url.trim(), poll_interval_minutes: Number(pollMinutes) }),
+        body: JSON.stringify({
+          name: name.trim(),
+          url: url.trim(),
+          poll_interval_minutes: Number(pollMinutes),
+          type,
+          item_count: Number(itemCount),
+          link_selector: linkSelector.trim(),
+        }),
       });
       setEditing(false);
       onSaved();
@@ -159,6 +169,7 @@ function FeedRow({ feed, onSaved, onDeleted, onSynced }) {
 
   function cancel() {
     setName(feed.name); setUrl(feed.url); setPollMinutes(feed.poll_interval_minutes);
+    setType(feed.type || 'rss'); setItemCount(feed.item_count || 10); setLinkSelector(feed.link_selector || '');
     setErr(''); setEditing(false);
   }
 
@@ -168,7 +179,26 @@ function FeedRow({ feed, onSaved, onDeleted, onSynced }) {
         <td>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
             <input className={adminStyles.input} value={name} onChange={e => setName(e.target.value)} autoFocus style={{ width: '100%', minWidth: 0, boxSizing: 'border-box' }} />
+            <select className={adminStyles.input} value={type} onChange={e => setType(e.target.value)} style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', fontSize: '0.82rem' }}>
+              <option value="rss">RSS Feed</option>
+              <option value="webpage">Webpage (multiple articles)</option>
+            </select>
             <input className={adminStyles.input} value={url} onChange={e => setUrl(e.target.value)} placeholder="Feed URL" style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', fontSize: '0.82rem' }} />
+            {type === 'webpage' && (
+              <>
+                <input
+                  className={adminStyles.input} type="number" min="1" max="30"
+                  value={itemCount} onChange={e => setItemCount(e.target.value)}
+                  placeholder="Item count" title="Number of articles to pull"
+                  style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', fontSize: '0.82rem' }}
+                />
+                <input
+                  className={adminStyles.input} value={linkSelector} onChange={e => setLinkSelector(e.target.value)}
+                  placeholder="CSS selector (optional)"
+                  style={{ width: '100%', minWidth: 0, boxSizing: 'border-box', fontSize: '0.82rem' }}
+                />
+              </>
+            )}
             {err && <span style={{ color: '#ff8080', fontSize: '0.8rem' }}>{err}</span>}
           </div>
         </td>
@@ -198,7 +228,7 @@ function FeedRow({ feed, onSaved, onDeleted, onSynced }) {
   return (
     <tr>
       <td>
-        <div>{feed.name}</div>
+        <div>{feed.name}{feed.type === 'webpage' && <span className={adminStyles.muted} style={{ fontSize: '0.72rem' }}> (webpage)</span>}</div>
         <div className={adminStyles.muted} style={{ fontSize: '0.78rem', maxWidth: '260px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{feed.url}</div>
       </td>
       <td>{feed.poll_interval_minutes}</td>
@@ -228,6 +258,9 @@ function FeedManager({ feeds, reload }) {
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [pollMinutes, setPollMinutes] = useState(15);
+  const [type, setType] = useState('rss');
+  const [itemCount, setItemCount] = useState(10);
+  const [linkSelector, setLinkSelector] = useState('');
   const [err, setErr] = useState('');
   const [saving, setSaving] = useState(false);
 
@@ -238,10 +271,17 @@ function FeedManager({ feeds, reload }) {
     try {
       await apiFetch('/rss-feeds', {
         method: 'POST',
-        body: JSON.stringify({ name: name.trim(), url: url.trim(), poll_interval_minutes: Number(pollMinutes) }),
+        body: JSON.stringify({
+          name: name.trim(),
+          url: url.trim(),
+          poll_interval_minutes: Number(pollMinutes),
+          type,
+          ...(type === 'webpage' ? { item_count: Number(itemCount), link_selector: linkSelector.trim() } : {}),
+        }),
       });
       setName('');
       setUrl('');
+      setLinkSelector('');
       reload();
     } catch (ex) { setErr(ex.message); }
     setSaving(false);
@@ -284,8 +324,16 @@ function FeedManager({ feeds, reload }) {
       </table>
 
       <div className={adminStyles.rowBetween} style={{ marginTop: '0.75rem', gap: '0.5rem', flexWrap: 'wrap' }}>
+        <select className={adminStyles.input} value={type} onChange={e => setType(e.target.value)} style={{ width: '150px' }}>
+          <option value="rss">RSS Feed</option>
+          <option value="webpage">Webpage (multiple articles)</option>
+        </select>
         <input className={adminStyles.input} placeholder="Feed name" value={name} onChange={e => setName(e.target.value)} />
-        <input className={adminStyles.input} placeholder="https://example.com/feed.xml" value={url} onChange={e => setUrl(e.target.value)} style={{ flex: 1, minWidth: '220px' }} />
+        <input
+          className={adminStyles.input}
+          placeholder={type === 'webpage' ? 'https://example.com/news' : 'https://example.com/feed.xml'}
+          value={url} onChange={e => setUrl(e.target.value)} style={{ flex: 1, minWidth: '220px' }}
+        />
         <input
           className={adminStyles.input}
           type="number" min="1" style={{ width: '80px' }}
@@ -295,6 +343,23 @@ function FeedManager({ feeds, reload }) {
         />
         <button className={adminStyles.btnPrimary} onClick={addFeed} disabled={saving}>+ Add Feed</button>
       </div>
+      {type === 'webpage' && (
+        <div className={adminStyles.rowBetween} style={{ marginTop: '0.5rem', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <input
+            className={adminStyles.input}
+            type="number" min="1" max="30" style={{ width: '80px' }}
+            value={itemCount}
+            onChange={e => setItemCount(e.target.value)}
+            title="Number of articles to pull"
+          />
+          <input
+            className={adminStyles.input}
+            placeholder="CSS selector (optional, auto-detect by default)"
+            value={linkSelector} onChange={e => setLinkSelector(e.target.value)}
+            style={{ flex: 1, minWidth: '220px' }}
+          />
+        </div>
+      )}
       {err && <div style={{ color: '#ff8080', fontSize: '0.85rem', marginTop: '0.4rem' }}>{err}</div>}
     </div>
   );

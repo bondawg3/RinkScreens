@@ -1,4 +1,4 @@
-# RinkScreens — v1.29.0
+# RinkScreens — v1.30.0
 
 Digital signage system for ice rinks. Pulls games from Google Calendar (iCal) and displays them on smart TVs around the facility. An admin panel on any local browser lets staff control what each screen shows and manage locker room assignments, pricing, and backgrounds.
 
@@ -93,6 +93,7 @@ Screens within each tab's list can be reordered by dragging the ⠿ handle (in t
 
 ### RSS Feed tab
 - Add one or more RSS/Atom feed URLs; each feed is polled and cached server-side on its own configurable interval (default 15 min), with a manual "sync now" button, inline editing (name/URL/poll interval), and sync-error status per feed
+- **Webpage feeds** — a feed can also be a plain news/section webpage instead of an RSS URL. The server scrapes the page, auto-detects article links (or use an optional CSS selector override), and extracts each article's title, excerpt, and image via Readability; a configurable item count controls how many articles are pulled per sync. Items behave identically to RSS items everywhere else (templates, tokens, logos, rotation).
 - **Each feed can have a logo** (upload or link by URL), editable inline from the Feeds table
 - **A screen can pull from multiple feeds at once** — select as many as you want, then choose **Per Feed** (N items from each, interleaved so the rotation mixes sources) or **Total (by date)** (merge all selected feeds' items and keep only the N most recent overall)
 - **A screen can cycle through multiple slide templates** — build several distinct layouts in a tab bar above the canvas (rename/duplicate/delete); each template has its own background (color/transparency, or image + opacity) and header divider line

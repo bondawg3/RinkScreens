@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.30.0] — 2026-08-23
+
+### Added
+- **Webpage feeds** — RSS Feed tab feeds can now be a plain news/section webpage instead of an RSS/Atom URL. Add one with type "Webpage (multiple articles)"; the server scrapes the listing page, auto-detects article links (or use an optional CSS selector override for sites where auto-detection struggles), then extracts each article's title, excerpt, and image via Readability. Items behave identically to RSS items everywhere downstream — same templates, tokens, logos, and slide rotation — and a configurable per-feed item count controls how many articles are pulled per sync.
+
 ## [1.29.0] — 2026-08-08
 
 ### Changed

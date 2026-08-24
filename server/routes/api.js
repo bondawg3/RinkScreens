@@ -811,8 +811,9 @@ router.get('/rss-feeds', (req, res) => {
 });
 
 router.post('/rss-feeds', requireAuth, async (req, res) => {
-  const { name, url, poll_interval_minutes = 15 } = req.body;
+  const { name, url, poll_interval_minutes = 15, type = 'rss', item_count, link_selector } = req.body;
   if (!name || !url) return res.status(400).json({ error: 'name and url are required' });
+  if (type !== 'rss' && type !== 'webpage') return res.status(400).json({ error: 'type must be "rss" or "webpage"' });
 
   if (findByNameCi('rss_feeds', name)) {
     return res.status(400).json({ error: `A feed named "${name}" already exists. Please use a different name.` });
@@ -821,7 +822,15 @@ router.post('/rss-feeds', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'This feed URL is already in use by another feed.' });
   }
 
-  const row = db.insert('rss_feeds', { name, url, poll_interval_minutes: Number(poll_interval_minutes), items: [] });
+  const row = db.insert('rss_feeds', {
+    name,
+    url,
+    poll_interval_minutes: Number(poll_interval_minutes),
+    type,
+    item_count: item_count !== undefined ? Number(item_count) : undefined,
+    link_selector: link_selector || '',
+    items: [],
+  });
   fetchAndParseFeed(row).then(() => ws.broadcast({ type: 'refresh_data' })).catch(() => {});
   scheduleFeed(row);
   res.json({ id: row.id });
@@ -831,7 +840,7 @@ router.patch('/rss-feeds/:id', requireAuth, async (req, res) => {
   const feed = db.findById('rss_feeds', req.params.id);
   if (!feed) return res.status(404).json({ error: 'not found' });
 
-  const { name, url, poll_interval_minutes, logo_url } = req.body;
+  const { name, url, poll_interval_minutes, logo_url, type, item_count, link_selector } = req.body;
 
   if (name && name.toLowerCase() !== feed.name.toLowerCase() && findByNameCi('rss_feeds', name, feed.id)) {
     return res.status(400).json({ error: `A feed named "${name}" already exists.` });
@@ -841,11 +850,17 @@ router.patch('/rss-feeds/:id', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'This feed URL is already in use by another feed.' });
     }
   }
+  if (type !== undefined && type !== 'rss' && type !== 'webpage') {
+    return res.status(400).json({ error: 'type must be "rss" or "webpage"' });
+  }
 
   const changes = {
     name: name ?? feed.name,
     url: url ?? feed.url,
     poll_interval_minutes: poll_interval_minutes !== undefined ? Number(poll_interval_minutes) : feed.poll_interval_minutes,
+    type: type ?? feed.type,
+    item_count: item_count !== undefined ? Number(item_count) : feed.item_count,
+    link_selector: link_selector !== undefined ? link_selector : feed.link_selector,
   };
   // Linking a logo URL supersedes an uploaded one — clean up the old file
   // (the reverse, uploading over a linked logo, is handled by the upload

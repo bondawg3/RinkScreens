@@ -134,3 +134,19 @@
 }
 
 .noRowHover tr:hover td { background: inherit; }
+
+.lockerCol {
+  width: 90px;
+}
+
+.actionsCol {
+  white-space: nowrap;
+  width: 1px;
+}
+
+.actionsInner {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: nowrap;
+  align-items: center;
+}

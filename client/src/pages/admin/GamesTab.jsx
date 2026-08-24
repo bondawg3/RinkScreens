@@ -10,7 +10,7 @@ export default function GamesTab() {
   const { data: games, reload } = useApi('/games');
   const { data: calendars } = useApi('/calendars');
   const { data: lockerRooms } = useApi('/locker-rooms');
-  const [editing, setEditing] = useState(null);
+  const [editing, setEditing] = useState([]);
   const [editData, setEditData] = useState({});
   const [refreshing, setRefreshing] = useState(false);
   const [reparsing, setReparsing] = useState(false);
@@ -62,14 +62,31 @@ export default function GamesTab() {
   }
 
   async function saveGame(id) {
-    await apiFetch(`/games/${id}`, { method: 'PATCH', body: JSON.stringify(editData) });
-    setEditing(null);
+    await apiFetch(`/games/${id}`, { method: 'PATCH', body: JSON.stringify(editData[id]) });
+    setEditing((prev) => prev.filter((x) => x !== id));
+    reload();
+  }
+
+  async function saveGroup(games) {
+    await Promise.all(games.map((g) => apiFetch(`/games/${g.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(editData[g.id]),
+    })));
+    setEditing([]);
     reload();
   }
 
   async function deleteGame(game) {
     if (!confirm(`Delete "${game.title || game.raw_title || 'this game'}" at ${fmtTime(game.start_time)}?`)) return;
     await apiFetch(`/games/${game.id}`, { method: 'DELETE' });
+    setEditing((prev) => prev.filter((x) => x !== game.id));
+    reload();
+  }
+
+  async function deleteGroup(games) {
+    if (!confirm(`Delete all ${games.length} events at ${fmtTime(games[0].start_time)}?`)) return;
+    await Promise.all(games.map((g) => apiFetch(`/games/${g.id}`, { method: 'DELETE' })));
+    setEditing([]);
     reload();
   }
 
@@ -119,13 +136,30 @@ export default function GamesTab() {
   }
 
   function startEdit(game) {
-    setEditing(game.id);
+    setEditing([game.id]);
     setEditData({
-      home_team: game.home_team,
-      away_team: game.away_team,
-      home_locker: game.home_locker,
-      away_locker: game.away_locker,
+      [game.id]: {
+        home_team: game.home_team,
+        away_team: game.away_team,
+        home_locker: game.home_locker,
+        away_locker: game.away_locker,
+      },
     });
+  }
+
+  function startGroupEdit(games) {
+    setEditing(games.map((g) => g.id));
+    setEditData(Object.fromEntries(games.map((g) => [g.id, {
+      home_team: g.home_team,
+      away_team: g.away_team,
+      home_locker: g.home_locker,
+      away_locker: g.away_locker,
+    }])));
+  }
+
+  function cancelEdit() {
+    setEditing([]);
+    setEditData({});
   }
 
   const calMap = Object.fromEntries((calendars || []).map((c) => [c.id, c.name]));
@@ -179,9 +213,10 @@ export default function GamesTab() {
   const hockeyCalendars = (calendars || []).filter((c) => c.type === 'hockey_games');
 
   function lockerSelect(game, field) {
-    const value = editing === game.id ? editData[field] : (game[field] || '');
-    const onChange = editing === game.id
-      ? (e) => setEditData({ ...editData, [field]: e.target.value })
+    const isEditing = editing.includes(game.id);
+    const value = isEditing ? editData[game.id][field] : (game[field] || '');
+    const onChange = isEditing
+      ? (e) => setEditData({ ...editData, [game.id]: { ...editData[game.id], [field]: e.target.value } })
       : (e) => saveLocker(game, field, e.target.value);
     return (
       <select className={tabStyles.lockerSelect} value={value} onChange={onChange}>
@@ -203,8 +238,39 @@ export default function GamesTab() {
 
   function renderGroupRow(games) {
     const lead = games[0];
+    const groupKey = games.map((g) => g.id).join('-');
+    const groupIsEditing = games.every((g) => editing.includes(g.id));
+
+    if (groupIsEditing) {
+      return (
+        <React.Fragment key={groupKey}>
+          {games.map((g, i) => (
+            <tr key={g.id}>
+              <td className={styles.nowrap}>{i === 0 ? fmtTime(g.start_time) : ''}</td>
+              <td>{g.title}</td>
+              <td><input className={styles.input} value={editData[g.id].home_team} onChange={(e) => setEditData({ ...editData, [g.id]: { ...editData[g.id], home_team: e.target.value } })} placeholder="Home" /></td>
+              <td>{lockerSelect(g, 'home_locker')}</td>
+              <td><input className={styles.input} value={editData[g.id].away_team} onChange={(e) => setEditData({ ...editData, [g.id]: { ...editData[g.id], away_team: e.target.value } })} placeholder="Away" /></td>
+              <td>{lockerSelect(g, 'away_locker')}</td>
+              <td className={tabStyles.actionsCol}>
+                <div className={tabStyles.actionsInner}>
+                  <button className={styles.btnDanger} onClick={() => deleteGame(g)} title={`Delete "${g.title}"`} style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>🗑</button>
+                  {i === 0 && (
+                    <>
+                      <button className={styles.btnPrimary} onClick={() => saveGroup(games)} title="Save" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>✓</button>
+                      <button className={styles.btnGhost} onClick={cancelEdit} title="Cancel" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>✕</button>
+                    </>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+        </React.Fragment>
+      );
+    }
+
     return (
-      <tr key={games.map((g) => g.id).join('-')}>
+      <tr key={groupKey}>
         <td className={styles.nowrap} style={{ verticalAlign: 'top' }}>{fmtTime(lead.start_time)}</td>
         <td>
           {games.map((g) => <div key={g.id}>{g.title}</div>)}
@@ -213,29 +279,33 @@ export default function GamesTab() {
         <td>{groupLockerSelect(games, 'home_locker')}</td>
         <td>{lead.away_team || <span className={styles.muted}>—</span>}</td>
         <td>{groupLockerSelect(games, 'away_locker')}</td>
-        <td className={styles.actions}>
-          {games.map((g) => (
-            <button key={g.id} className={styles.btnDanger} onClick={() => deleteGame(g)} title={`Delete "${g.title}"`} style={{ fontSize: '1rem', padding: '0.25rem 0.5rem', display: 'block', marginBottom: '0.2rem' }}>🗑</button>
-          ))}
+        <td className={tabStyles.actionsCol}>
+          <div className={tabStyles.actionsInner}>
+            <button className={styles.btnGhost} onClick={() => startGroupEdit(games)} title="Edit events" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>✎</button>
+            <button className={styles.btnDanger} onClick={() => deleteGroup(games)} title="Delete all events" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>🗑</button>
+          </div>
         </td>
       </tr>
     );
   }
 
   function renderRow(g) {
+    const isEditing = editing.includes(g.id);
     return (
       <tr key={g.id}>
         <td className={styles.nowrap}>{fmtTime(g.start_time)}</td>
-        {editing === g.id ? (
+        {isEditing ? (
           <>
             <td>{g.title}</td>
-            <td><input className={styles.input} value={editData.home_team} onChange={(e) => setEditData({ ...editData, home_team: e.target.value })} placeholder="Home" /></td>
+            <td><input className={styles.input} value={editData[g.id].home_team} onChange={(e) => setEditData({ ...editData, [g.id]: { ...editData[g.id], home_team: e.target.value } })} placeholder="Home" /></td>
             <td>{lockerSelect(g, 'home_locker')}</td>
-            <td><input className={styles.input} value={editData.away_team} onChange={(e) => setEditData({ ...editData, away_team: e.target.value })} placeholder="Away" /></td>
+            <td><input className={styles.input} value={editData[g.id].away_team} onChange={(e) => setEditData({ ...editData, [g.id]: { ...editData[g.id], away_team: e.target.value } })} placeholder="Away" /></td>
             <td>{lockerSelect(g, 'away_locker')}</td>
-            <td className={styles.actions}>
-              <button className={styles.btnPrimary} onClick={() => saveGame(g.id)}>Save</button>
-              <button className={styles.btnGhost} onClick={() => setEditing(null)}>Cancel</button>
+            <td className={tabStyles.actionsCol}>
+              <div className={tabStyles.actionsInner}>
+                <button className={styles.btnPrimary} onClick={() => saveGame(g.id)} title="Save" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>✓</button>
+                <button className={styles.btnGhost} onClick={cancelEdit} title="Cancel" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>✕</button>
+              </div>
             </td>
           </>
         ) : (
@@ -245,9 +315,11 @@ export default function GamesTab() {
             <td>{lockerSelect(g, 'home_locker')}</td>
             <td>{g.away_team || <span className={styles.muted}>—</span>}</td>
             <td>{lockerSelect(g, 'away_locker')}</td>
-            <td className={styles.actions}>
-              <button className={styles.btnGhost} onClick={() => startEdit(g)} title="Edit game" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>✎</button>
-              <button className={styles.btnDanger} onClick={() => deleteGame(g)} title="Delete game" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>🗑</button>
+            <td className={tabStyles.actionsCol}>
+              <div className={tabStyles.actionsInner}>
+                <button className={styles.btnGhost} onClick={() => startEdit(g)} title="Edit game" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>✎</button>
+                <button className={styles.btnDanger} onClick={() => deleteGame(g)} title="Delete game" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>🗑</button>
+              </div>
             </td>
           </>
         )}
@@ -347,8 +419,8 @@ export default function GamesTab() {
               <tr>
                 <th>Time</th>
                 <th>Title</th>
-                <th>Home Team</th><th>Home Locker</th>
-                <th>Away Team</th><th>Away Locker</th>
+                <th>Home Team</th><th className={tabStyles.lockerCol}>Home Locker</th>
+                <th>Away Team</th><th className={tabStyles.lockerCol}>Away Locker</th>
                 <th></th>
               </tr>
             </thead>

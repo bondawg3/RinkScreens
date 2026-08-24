@@ -2,6 +2,11 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.30.1] — 2026-08-23
+
+### Changed
+- **Hockey tab locker-room grid** — grouped events (same start time) now show a single edit/delete action instead of one delete icon per event; editing a group lets you adjust and individually delete each event in it. Locker room columns are narrower and the action icons no longer wrap onto a second line.
+
 ## [1.30.0] — 2026-08-23
 
 ### Added

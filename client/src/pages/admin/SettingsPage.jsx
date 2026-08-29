@@ -6,6 +6,7 @@ import calStyles from './CalendarModal.module.css';
 import s from './SettingsPage.module.css';
 import Modal from './Modal';
 import CalendarsTab from './SettingsTab';
+import TvPreviewTab from './TvPreviewTab';
 
 const SUB_TABS = ['General', 'Displays', 'Calendars', 'Pricing', 'Locker Rooms', 'Backups', 'Updates', 'Admin'];
 
@@ -470,6 +471,10 @@ function DisplaysSection() {
           ))}</tbody>
         </table>
       ) : <p className={styles.muted}>No displays added yet.</p>}
+
+      <div style={{ marginTop: '2.5rem' }}>
+        <TvPreviewTab />
+      </div>
     </>
   );
 }

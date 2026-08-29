@@ -2,6 +2,12 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [1.30.2] — 2026-08-29
+
+### Changed
+- **TV Preview moved into Settings** — the standalone "TV Preview" tab is now a section under Settings → Displays, below the display list.
+- Screen thumbnail cards: the visibility (eye) button no longer shrinks when a screen is in use — it stays the same size, just dimmed.
+
 ## [1.30.1] — 2026-08-23
 
 ### Changed

@@ -125,7 +125,7 @@ Settings is organized into sub-tabs:
 - **Calendars** — add/edit/delete iCal calendars (Hockey Games, Public Skates, Rink Events, Figure Skating) with poll interval and locker sequence assignment; **Last Sync** column shows success/failure status per calendar
 - **Pricing** — admission pricing tiers (label + subheading + price + sort order); each screen (Public Skate, Hockey, Rink Events, Figure Skating, Custom) has a **Show Pricing** checkbox plus a picker for which tiers to display on that screen
 - **Locker Rooms** — add/edit/delete rooms; define named **Locker Room Sequences** for auto-assignment
-- **Displays** — register physical TV devices (name + TV number, which sets its `/tv/[tvNumber]` web address)
+- **Displays** — register physical TV devices (name + TV number, which sets its `/tv/[tvNumber]` web address); includes a **TV Preview** panel that renders the exact `/tv/screen/:id` HTML at a chosen fixed resolution, scaled to fit
 - **Backups** — create, download, restore, or delete backups of `db.json` + uploaded files as a `.zip`; configure automatic backup interval and how many backups to retain; restoring a backup file from disk is also supported. See [Backups](#backups) below.
 - **Updates** — check GitHub for newer versions and install them with one click; configure the check schedule (interval or daily time) and optional unattended auto-install at a scheduled time. See [Automatic updates](#automatic-updates) below.
 - **Admin** — change the admin login password

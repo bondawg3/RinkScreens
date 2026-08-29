@@ -186,7 +186,7 @@
 }
 
 /* ── Eye toggle ── */
-.eyeOn, .eyeOff {
+.eyeOn, .eyeOff, .eyeDisabled {
   background: none;
   border: 1.5px solid var(--border, #e5e7eb);
   border-radius: 5px;

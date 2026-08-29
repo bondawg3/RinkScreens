@@ -5,7 +5,6 @@ import { clearToken } from '../../hooks/useApi';
 
 const tabs = [
   { to: 'displays', label: 'Displays' },
-  { to: 'tv-preview', label: 'TV Preview' },
   { to: 'games', label: 'Hockey' },
   { to: 'rink-events', label: 'Rink Events' },
   { to: 'figure-skating', label: 'Figure Skating' },

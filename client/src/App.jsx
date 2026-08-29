@@ -16,7 +16,6 @@ import WebpageTab from './pages/admin/WebpageTab';
 import AnnouncementTab from './pages/admin/AnnouncementTab';
 import RssTab from './pages/admin/RssTab';
 import CustomTab from './pages/admin/CustomTab';
-import TvPreviewTab from './pages/admin/TvPreviewTab';
 import { getToken } from './hooks/useApi';
 
 function ProtectedRoute({ children }) {
@@ -35,7 +34,6 @@ export default function App() {
           <Route index element={<Navigate to="displays" replace />} />
           <Route path="displays" element={<DisplaysTab />} />
           <Route path="displays/:displayId/schedule" element={<DisplaySchedulePage />} />
-          <Route path="tv-preview" element={<TvPreviewTab />} />
           <Route path="games" element={<GamesTab />} />
           <Route path="rink-events" element={<RinkEventsTab />} />
           <Route path="figure-skating" element={<FigureSkatingTab />} />

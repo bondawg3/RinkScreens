@@ -2,6 +2,14 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [2.1.0] — 2026-09-02
+
+### Changed
+- **Consistent icon buttons across the admin** — the remaining text "Edit" / "Delete" / "Remove" row actions (Displays cards, Leagues teams, Settings → locker rooms / sequences / pricing) are now the same `✎` / `🗑` icon buttons already used elsewhere, each with a hover tooltip. Standalone destructive actions ("Delete League", "Remove Logo", backup "Delete") keep their text labels.
+
+### Internal
+- Admin icon glyphs are defined once in `client/src/icons.js` (`ICONS.edit`, `ICONS.remove`, `ICONS.preview`, `ICONS.schedule`, `ICONS.duplicate`, `ICONS.save`, `ICONS.close`, `ICONS.expand`, `ICONS.visible` / `ICONS.hidden`, `ICONS.dragHandle`, `ICONS.pinned`) instead of being hardcoded in each component — restyling the iconography is now a one-file change. No visual change.
+
 ## [2.0.0] — 2026-09-01
 
 Major update to the display scheduler.

@@ -13,9 +13,14 @@ const { pruneOldBlocks } = require('./schedule');
 const backup = require('./backup');
 const update = require('./update');
 
-// Past schedule blocks are dead weight in db.json — drop anything older than a week
-const pruned = pruneOldBlocks(7);
-if (pruned) console.log(`[schedule] pruned ${pruned} past schedule block(s)`);
+// Past schedule blocks are dead weight in db.json — keep the last 30 days,
+// drop the rest. Re-run daily so a long-lived rink server keeps pruning.
+function pruneSchedule() {
+  const n = pruneOldBlocks(30);
+  if (n) console.log(`[schedule] pruned ${n} past schedule block(s)`);
+}
+pruneSchedule();
+setInterval(pruneSchedule, 24 * 60 * 60 * 1000).unref();
 
 // Same for finished games/skates: calendar sync stops maintaining them once
 // they fall out of its import window, so they'd otherwise accumulate forever

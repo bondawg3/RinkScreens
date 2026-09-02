@@ -188,7 +188,7 @@ describe('schedule API', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ from_start: '2026-08-01', from_end: '2026-08-01', to_start: '2026-08-05' });
     expect(copy.status).toBe(200);
-    expect(copy.body).toEqual({ created: 1, skipped: 1 }); // 12:00 copied; 09:00 overlaps
+    expect(copy.body).toEqual({ created: 1, skipped: 1, replaced: 0 }); // 12:00 copied; 09:00 overlaps
 
     const list = await request(app)
       .get(`/api/displays/${display.id}/schedule?from=2026-08-05&to=2026-08-05`)
@@ -208,7 +208,7 @@ describe('schedule API', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ from_start: '2026-08-02', from_end: '2026-08-08', to_start: '2026-08-09' });
     expect(copy.status).toBe(200);
-    expect(copy.body).toEqual({ created: 2, skipped: 0 });
+    expect(copy.body).toEqual({ created: 2, skipped: 0, replaced: 0 });
 
     // Wed block (offset +3) lands on 2026-08-12
     const wed = await request(app)
@@ -216,6 +216,53 @@ describe('schedule API', () => {
       .set('Authorization', `Bearer ${token}`);
     expect(wed.body).toHaveLength(1);
     expect(wed.body[0].start_time).toBe('14:00');
+  });
+
+  it('copy preview: reports conflicting destination days without writing', async () => {
+    const token = await setupAdmin();
+    const { screenB, display } = seed();
+    await addBlock(token, display, screenB, '2026-08-01', '09:00', '10:00');
+    await addBlock(token, display, screenB, '2026-08-05', '09:30', '10:30'); // conflicts
+
+    const preview = await request(app)
+      .post(`/api/displays/${display.id}/schedule/copy`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ from_start: '2026-08-01', from_end: '2026-08-01', to_start: '2026-08-05', mode: 'preview' });
+    expect(preview.status).toBe(200);
+    expect(preview.body.total).toBe(1);
+    expect(preview.body.conflictDates).toEqual([
+      { date: '2026-08-05', incoming: 1, existing: 1, conflicting: 1 },
+    ]);
+
+    // nothing written
+    const list = await request(app)
+      .get(`/api/displays/${display.id}/schedule?from=2026-08-05&to=2026-08-05`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(list.body).toHaveLength(1);
+  });
+
+  it('copy replace: evicts the overlapped blocks on a resolved day, keeps the rest', async () => {
+    const token = await setupAdmin();
+    const { screenA, screenB, display } = seed();
+    await addBlock(token, display, screenB, '2026-08-01', '09:00', '10:00');
+    await addBlock(token, display, screenA, '2026-08-05', '09:30', '10:30'); // overlaps the copy
+    await addBlock(token, display, screenA, '2026-08-05', '14:00', '15:00'); // untouched
+
+    const copy = await request(app)
+      .post(`/api/displays/${display.id}/schedule/copy`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        from_start: '2026-08-01', from_end: '2026-08-01', to_start: '2026-08-05',
+        mode: 'apply', resolutions: { '2026-08-05': 'replace' },
+      });
+    expect(copy.status).toBe(200);
+    expect(copy.body).toEqual({ created: 1, skipped: 0, replaced: 1 });
+
+    const list = await request(app)
+      .get(`/api/displays/${display.id}/schedule?from=2026-08-05&to=2026-08-05`)
+      .set('Authorization', `Bearer ${token}`);
+    const times = list.body.map((b) => b.start_time).sort();
+    expect(times).toEqual(['09:00', '14:00']); // 09:30 evicted, 09:00 copied in, 14:00 kept
   });
 
   it('copy: rejects a destination that overlaps the source range', async () => {
@@ -326,6 +373,20 @@ describe('schedule API', () => {
       start_time: '09:00', end_time: '10:00', content_screen_id: screenB.id,
     });
     expect(pruneOldBlocks(7)).toBe(1);
+    expect(db.findAll('display_schedules')).toHaveLength(1);
+  });
+
+  it('keeps the last 30 days and drops anything older (default window)', () => {
+    const { screenB, display } = seed();
+    const mk = (daysAgo) => db.insert('display_schedules', {
+      display_id: display.id,
+      date: localDateStr(new Date(Date.now() - daysAgo * 86400000)),
+      start_time: '09:00', end_time: '10:00', content_screen_id: screenB.id,
+    });
+    mk(29);  // inside the window — kept
+    mk(31);  // outside — pruned
+    mk(400); // outside — pruned
+    expect(pruneOldBlocks()).toBe(2);
     expect(db.findAll('display_schedules')).toHaveLength(1);
   });
 });

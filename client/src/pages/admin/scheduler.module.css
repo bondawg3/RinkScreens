@@ -19,7 +19,38 @@
 .split.swapped { flex-direction: row-reverse; }
 
 .timelinePane { flex: 0 0 340px; }
+.timelinePaneWide { flex: 1 1 60%; min-width: 0; }
 .palettePane { flex: 1; min-width: 0; }
+
+/* ── Multi-day (3-day / week) grid ── */
+.multiScroll {
+  max-height: 92vh;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.multiGrid {
+  display: grid;
+  gap: 6px;
+  padding: 6px;
+  background: var(--border);
+}
+.multiCol {
+  min-width: 0;
+  background: var(--white);
+}
+.multiColHead {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--white);
+  font-weight: 700;
+  font-size: 0.78rem;
+  text-align: center;
+  padding: 5px 2px;
+  border-bottom: 1px solid var(--border);
+}
+.multiCol .timeline { border: none; border-radius: 0; }
 
 /* ── Timeline ── */
 .timeline {
@@ -61,6 +92,22 @@
   background: rgba(120, 200, 255, 0.18);
   border: 1px dashed rgba(120, 200, 255, 0.6);
   border-radius: 5px;
+  pointer-events: none;
+}
+
+.pendingSlot {
+  position: absolute;
+  left: 56px; right: 6px;
+  border-radius: 6px;
+  background: rgba(120, 200, 255, 0.16);
+  border: 2px dashed rgba(120, 200, 255, 0.75);
+  color: var(--text-light);
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 8px;
   pointer-events: none;
 }
 
@@ -107,7 +154,7 @@
 .resizeHandle {
   position: absolute;
   left: 0; right: 0;
-  height: 7px;
+  height: 10px;
   cursor: ns-resize;
 }
 .resizeHandle.top { top: 0; }
@@ -148,6 +195,44 @@
   background: var(--white);
 }
 .paletteCard:hover { border-color: #0a84c8; }
+.paletteCard.pickable {
+  cursor: pointer;
+  border-color: #0a84c8;
+  box-shadow: 0 0 0 2px rgba(10, 132, 200, 0.25);
+}
+.paletteCard.pickable:hover { box-shadow: 0 0 0 3px rgba(10, 132, 200, 0.5); }
+
+.pendingHint {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.7rem;
+  margin-bottom: 0.6rem;
+  border: 1px solid rgba(10, 132, 200, 0.4);
+  background: rgba(10, 132, 200, 0.08);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.contextMenu {
+  position: fixed;
+  z-index: 50;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  min-width: 150px;
+}
+.contextMenu li {
+  padding: 6px 10px;
+  font-size: 0.85rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.contextMenu li:hover { background: rgba(10, 132, 200, 0.12); }
 .paletteName {
   padding: 4px 8px;
   font-size: 0.8rem;

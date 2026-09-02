@@ -106,8 +106,9 @@ function resolveActive(displayId, now = new Date()) {
 }
 
 // Drops blocks whose date is more than `keepDays` days in the past so the
-// JSON store doesn't grow without bound. Returns the number removed.
-function pruneOldBlocks(keepDays = 7) {
+// JSON store doesn't grow without bound. Keeps the last 30 days so recent
+// history stays reviewable. Returns the number removed.
+function pruneOldBlocks(keepDays = 30) {
   const cutoff = localDateStr(new Date(Date.now() - keepDays * 86400000));
   return db.transaction((tx) => {
     const old = tx.findAll('display_schedules').filter((b) => b.date < cutoff);

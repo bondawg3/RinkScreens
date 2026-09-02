@@ -2,6 +2,32 @@
 
 All notable changes to RinkScreens are documented here.
 
+## [2.0.0] — 2026-09-01
+
+Major update to the display scheduler.
+
+### Added
+- **3-day and Week views** — the scheduler is no longer day-at-a-time. A View control switches between Day, 3 days, and Week; multi-day views show the days side by side with one shared time axis, and every column supports the same editing (click to add, drag from the palette, move, resize).
+- **Copy a block to another day** — in the multi-day views each block has a ⧉ handle; drag it onto another day's column to copy the block there.
+- **Click an empty slot to add** — click any open time on the timeline to arm it, then click a screen in the palette to drop it there. Right-clicking a palette thumbnail also offers "Add to schedule" (uses the armed slot, or the first free hour).
+- **Display switcher** — ‹ › arrows and a dropdown in the scheduler header move between displays without returning to the Displays page.
+- **"All screens" checkbox** on the palette shows or hides every screen type at once.
+- **Timeline zoom** — Fit to screen / Comfortable / Large. The day always renders 12 AM–12 AM with no inner scroll at Fit; Comfortable (the default) makes 15-minute slots easy to hit.
+
+### Changed
+- **Duplicate day / week** now open a dialog: pick the destination (tomorrow, same day next week, next week, or a specific date/week) and, for any destination day that already has overlapping blocks, choose Skip or Replace per day.
+- **Schedule history retention raised from 7 to 30 days**, and pruning now runs every 24 hours instead of only at server startup.
+- **Admin screen thumbnails are now static snapshots** — the scheduler palette and every screen-thumbnail card across the admin render the TV page once (first slide, no rotation, no periodic reload, no WebSocket) and mount lazily as they scroll into view. Previously each thumbnail ran a full live copy of the TV page, which made pages with many thumbnails slow.
+- The scheduler toolbar is split into two rows (date navigation + view/duplicate above, swap-sides + zoom below), and the "← Displays" link was removed now that the display switcher covers moving between displays.
+- View, zoom, side-swap, column density, week start, and hidden types are all saved server-side per the existing `schedule_prefs`.
+
+### Fixed
+- Test suite: the JSON store no longer serves stale rows between test files running in parallel (it bypasses its in-memory cache when pointed at a test data directory), so `npm test` passes reliably without `--no-file-parallelism`.
+
+### API
+- `POST /api/displays/:id/schedule/copy` accepts `mode: "preview"` (reports which destination days have conflicts, writes nothing) and `mode: "apply"` with a `resolutions` map of `{ "YYYY-MM-DD": "skip" | "replace" }`; the response now includes `replaced`.
+- `GET /tv/screen/:screenId?static=1` renders a one-shot static snapshot with no timers or WebSocket.
+
 ## [1.30.2] — 2026-08-29
 
 ### Changed

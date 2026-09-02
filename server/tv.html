@@ -432,6 +432,13 @@ var PAGED_STATE = { pageHtmls: null, pageEndTimes: null, bannerHtml: '', pageIdx
 var PREVIEW_DATE = (typeof URLSearchParams !== 'undefined')
   ? (new URLSearchParams(location.search).get('preview_date') || null)
   : null;
+// STATIC mode (?static=1): a one-shot render for admin thumbnails. Renders the
+// first page/slide only and starts none of the ongoing machinery — no rotation
+// timers, no periodic reload, no schedule-boundary re-fetch, no WebSocket, no
+// ticking clock. Dozens of these run at once in the schedule/palette grids, so
+// each must cost ~nothing after first paint.
+var STATIC = (typeof URLSearchParams !== 'undefined')
+  && new URLSearchParams(location.search).get('static') === '1';
 
 var DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 var MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -543,6 +550,7 @@ function updatePreviewPageControls() {
 // as rapid bouncing). Wrapping only makes sense while the page we'd wrap to
 // hasn't happened yet, which never applies here once the day is fully spent.
 function scheduleNextPagedFlip(rotateIntervalSec) {
+  if (STATIC) return; // thumbnail: hold on the first page
   var n = PAGED_STATE.pageHtmls.length;
   if (PAGED_STATE.pageIdx >= n - 1) return; // last page — hold until new data arrives via poll
 
@@ -597,6 +605,7 @@ function renderPagedContent(bannerHtml, pageHtmls, pageEndTimes, rotateIntervalS
 // games/figure-skating pages, which hold at the last page) — a feed screen
 // has no "last item of the day" to stop at.
 function scheduleNextRssFlip(rotateIntervalSec) {
+  if (STATIC) return; // thumbnail: hold on the first slide
   var n = PAGED_STATE.pageHtmls.length;
   if (n <= 1) return;
   rssRotateTimer = setTimeout(function() {
@@ -636,7 +645,7 @@ function updateClock() {
   document.getElementById('clock').innerHTML = h + ':' + (m < 10 ? '0' : '') + m + ' ' + ampm;
   document.getElementById('date').innerHTML = DAY_NAMES[d.getDay()] + ', ' + MONTH_NAMES[d.getMonth()] + ' ' + d.getDate();
 }
-setInterval(updateClock, 1000);
+if (!STATIC) setInterval(updateClock, 1000);
 updateClock();
 
 var annoClockTimer = null;
@@ -1473,7 +1482,7 @@ function loadScreen() {
   if (boundaryTimer) { clearTimeout(boundaryTimer); boundaryTimer = null; }
   if (annoClockTimer) { clearInterval(annoClockTimer); annoClockTimer = null; }
   if (reloadTimer) { clearInterval(reloadTimer); }
-  reloadTimer = setInterval(loadScreen, 300000);
+  if (!STATIC) reloadTimer = setInterval(loadScreen, 300000);
 
   if (DISPLAY_ID) {
     // Physical display: the server resolves the schedule to one screen config
@@ -1483,7 +1492,7 @@ function loadScreen() {
       // so scheduled switches don't wait for the 60s poll
       if (data.valid_until) {
         var waitMs = new Date(data.valid_until).getTime() - Date.now();
-        if (waitMs > 0) boundaryTimer = setTimeout(loadScreen, Math.max(waitMs, 1000) + 500);
+        if (waitMs > 0 && !STATIC) boundaryTimer = setTimeout(loadScreen, Math.max(waitMs, 1000) + 500);
       }
       if (!data.screen) {
         document.getElementById('content').innerHTML =
@@ -1605,7 +1614,7 @@ function renderScreenConfig(screen) {
           '<div style="width:100%;height:100%;display:flex;justify-content:center;overflow:hidden;">' +
           '<iframe id="' + iframeId + '" src="' + esc(screen.webpage_url) + '" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" referrerpolicy="no-referrer" style="width:' + wpWidth + '%;height:' + Math.round(100 / wpZoom) + '%;border:none;flex-shrink:0;transform:scale(' + wpZoom + ');transform-origin:top center;" allowfullscreen></iframe>' +
           '</div>';
-        if (wpRefresh > 0) {
+        if (wpRefresh > 0 && !STATIC) {
           webpageTimer = setTimeout(function reloadFrame() {
             var f = document.getElementById(iframeId);
             if (f) f.src = f.src;
@@ -1757,7 +1766,7 @@ function renderScreenConfig(screen) {
       fitTextBoxes();
       updateAnnoDateTimes();
       if (annoClockTimer) clearInterval(annoClockTimer);
-      annoClockTimer = setInterval(updateAnnoDateTimes, 1000);
+      if (!STATIC) annoClockTimer = setInterval(updateAnnoDateTimes, 1000);
 
     } else if (dtype === 'rss') {
       var rssContent = document.getElementById('content');
@@ -1965,7 +1974,7 @@ function connectWS() {
     ws.onclose = function() { setTimeout(connectWS, 3000); };
   } catch(x) {}
 }
-connectWS();
+if (!STATIC) connectWS();
 
 // ── Auto-refresh fallback (interval managed dynamically inside loadScreen) ─
 

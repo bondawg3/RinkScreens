@@ -100,6 +100,38 @@ export function placeBlock(blocks, candidate) {
   return { ok: false, reason: 'nofit' };
 }
 
+/**
+ * Resolves a placeBlock result into a final block list, or null to abort.
+ * `confirmReplace()` is called (and must return truthy) before evicting the
+ * block a full drop landed on; `onNoFit()` is called when nothing can be
+ * evicted. Shared by drag-drop, click-to-add, and right-click-add so all three
+ * handle "that time is full" identically.
+ */
+export function applyPlacement(blocks, candidate, confirmReplace, onNoFit) {
+  const res = placeBlock(blocks, candidate);
+  if (res.ok) return res.blocks;
+  if (res.reason === 'replace' && confirmReplace()) {
+    const without = blocks.filter((b) => b.id !== res.targetId);
+    const retry = placeBlock(without, candidate);
+    if (retry.ok) return retry.blocks;
+  }
+  if (onNoFit) onNoFit();
+  return null;
+}
+
+// Start minute of the first gap at least `len` minutes long, scanning from
+// midnight. Returns null when the day has no room. Used to place a screen added
+// by right-click when the user hasn't picked a slot.
+export function firstFreeSlot(blocks, len = DEFAULT_LEN) {
+  const sorted = [...blocks].sort((a, b) => a.start - b.start);
+  let cursor = 0;
+  for (const b of sorted) {
+    if (b.start - cursor >= len) return cursor;
+    cursor = Math.max(cursor, b.end);
+  }
+  return DAY_END - cursor >= len ? cursor : null;
+}
+
 // A one-hour default block dropped at `startMin`; if it would pass midnight,
 // shift the start up so it still ends exactly at 24:00 (keeps the hour).
 export function defaultBlockAt(startMin) {

@@ -431,11 +431,20 @@ router.post('/displays/:id/schedule', requireAuth, (req, res) => {
 // Copies a range of days onto another range, preserving each block's day-offset
 // from the source start. Body: { from_start, from_end, to_start } (YYYY-MM-DD).
 // Duplicating a single day is from_start === from_end; a week is a 7-day span.
-// Blocks that would overlap existing blocks on their target day are skipped.
+//
+// `mode`:
+//   'preview'          — writes nothing, returns { total, conflictDates } so the
+//                        UI can ask how to handle each already-populated day.
+//   'apply' (default)  — writes. `resolutions` is a { 'YYYY-MM-DD': 'skip'|'replace' }
+//                        map for the conflicting days: 'skip' (default) drops the
+//                        incoming blocks that overlap; 'replace' deletes the
+//                        overlapped existing blocks and copies the incoming ones.
+const overlapsTime = (a, b) => a.start_time < b.end_time && b.start_time < a.end_time;
+
 router.post('/displays/:id/schedule/copy', requireAuth, (req, res) => {
   const display = db.findById('displays', req.params.id);
   if (!display) return res.status(404).json({ error: 'not found' });
-  const { from_start, from_end, to_start } = req.body;
+  const { from_start, from_end, to_start, mode, resolutions } = req.body;
   const isDate = (d) => /^\d{4}-\d{2}-\d{2}$/.test(d || '');
   if (!isDate(from_start) || !isDate(from_end) || !isDate(to_start)) {
     return res.status(400).json({ error: 'from_start, from_end, and to_start must be YYYY-MM-DD' });
@@ -453,24 +462,55 @@ router.post('/displays/:id/schedule/copy', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Destination overlaps the source range.' });
   }
 
-  let created = 0, skipped = 0;
+  // Incoming blocks grouped by their target date
+  const byDate = {};
+  for (const b of source) {
+    const date = schedule.addDays(to_start, schedule.dayOffset(from_start, b.date));
+    (byDate[date] ||= []).push({
+      start_time: b.start_time, end_time: b.end_time, content_screen_id: b.content_screen_id,
+    });
+  }
+  const dates = Object.keys(byDate).sort();
+
+  const conflictDates = [];
+  for (const date of dates) {
+    const existing = db.findAll('display_schedules').filter((e) => e.display_id === display.id && e.date === date);
+    const conflicting = byDate[date].filter((t) => existing.some((e) => overlapsTime(e, t)));
+    if (conflicting.length) {
+      conflictDates.push({ date, incoming: byDate[date].length, existing: existing.length, conflicting: conflicting.length });
+    }
+  }
+
+  if (mode === 'preview') {
+    return res.json({ total: source.length, conflictDates });
+  }
+
+  const resolutionFor = (date) => (resolutions && resolutions[date] === 'replace' ? 'replace' : 'skip');
+
+  let created = 0, skipped = 0, replaced = 0;
   db.transaction((tx) => {
-    for (const b of source) {
-      const date = schedule.addDays(to_start, schedule.dayOffset(from_start, b.date));
-      const existing = tx.findAll('display_schedules')
-        .filter((e) => e.display_id === display.id && e.date === date);
-      const overlaps = existing.some((e) => e.start_time < b.end_time && b.start_time < e.end_time);
-      if (overlaps) { skipped++; continue; }
-      tx.insert('display_schedules', {
-        display_id: display.id, date,
-        start_time: b.start_time, end_time: b.end_time,
-        content_screen_id: b.content_screen_id,
-      });
-      created++;
+    for (const date of dates) {
+      const decision = resolutionFor(date);
+      let existing = tx.findAll('display_schedules').filter((e) => e.display_id === display.id && e.date === date);
+      for (const t of byDate[date]) {
+        const clash = existing.filter((e) => overlapsTime(e, t));
+        if (clash.length) {
+          if (decision !== 'replace') { skipped++; continue; }
+          clash.forEach((e) => tx.remove('display_schedules', e.id));
+          existing = existing.filter((e) => !clash.includes(e));
+          replaced += clash.length;
+        }
+        const row = tx.insert('display_schedules', {
+          display_id: display.id, date,
+          start_time: t.start_time, end_time: t.end_time, content_screen_id: t.content_screen_id,
+        });
+        existing.push(row);
+        created++;
+      }
     }
   });
   ws.push(`d:${display.id}`, { type: 'reload' });
-  res.json({ created, skipped });
+  res.json({ created, skipped, replaced });
 });
 
 // Atomically replaces every block for one display+date with the supplied set.

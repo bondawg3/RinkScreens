@@ -63,6 +63,13 @@ function migrateGamesTable(data) {
 let cache = null;      // parsed data, aliased by every load() while valid
 let cacheStat = null;  // stat of DB_FILE when cache was last read/written (null = no file)
 
+// Tests point RINKSCREENS_DATA_DIR at a temp dir and reset the store between
+// cases by deleting db.json. vitest also loads this module more than once (ESM
+// graph + CJS interop), so two cache instances can race on the same file and
+// hand back stale rows. In test mode skip the cache entirely — always read the
+// file — so every instance and every case sees exactly what's on disk.
+const NO_CACHE = !!process.env.RINKSCREENS_DATA_DIR;
+
 function statFile() {
   try {
     const s = fs.statSync(DB_FILE);
@@ -109,6 +116,7 @@ function readFromDisk() {
 }
 
 function load() {
+  if (NO_CACHE) return readFromDisk();
   if (cacheValid()) return cache;
   invalidateCache();
   const data = readFromDisk();

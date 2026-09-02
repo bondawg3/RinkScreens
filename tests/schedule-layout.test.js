@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   toMin, toHHMM, snap15, defaultBlockAt, placeBlock, resizeBlock,
-  addDays, weekRange, DAY_END,
+  applyPlacement, firstFreeSlot, addDays, weekRange, DAY_END,
 } from '../client/src/pages/admin/scheduleLayout.js';
 
 // Terse block builder: b(9,10) => 09:00–10:00
@@ -79,6 +79,42 @@ describe('placeBlock', () => {
     for (let m = 0; m < DAY_END; m += 15) packed.push({ id: m, screen_id: 1, start: m, end: m + 15 });
     const r = placeBlock(packed, { screen_id: 2, start: 540, end: 600 });
     expect(r).toEqual({ ok: false, reason: 'nofit' });
+  });
+});
+
+describe('firstFreeSlot', () => {
+  it('is midnight on an empty day', () => {
+    expect(firstFreeSlot([])).toBe(0);
+  });
+  it('finds the first hour-long gap between blocks', () => {
+    // 00:00–09:00 busy, then free; next gap big enough starts at 09:00
+    expect(firstFreeSlot([b(0, 9, 1), b(12, 24, 2)])).toBe(9 * 60);
+  });
+  it('skips gaps shorter than the requested length', () => {
+    // only a 30-min gap at 09:30, then open from 13:00
+    expect(firstFreeSlot([b(0, 9.5, 1), b(10, 13, 2)])).toBe(13 * 60);
+  });
+  it('returns null when the day has no room', () => {
+    expect(firstFreeSlot([b(0, 24, 1)])).toBeNull();
+  });
+});
+
+describe('applyPlacement', () => {
+  it('returns the packed layout on a plain add', () => {
+    const next = applyPlacement([b(9, 10, 1)], { screen_id: 2, start: 660, end: 720 }, () => false, () => {});
+    expect(next).toHaveLength(2);
+  });
+  it('evicts the target block when the user confirms a replace', () => {
+    const day = [{ id: 1, screen_id: 1, start: 0, end: DAY_END }];
+    const next = applyPlacement(day, { screen_id: 2, start: 540, end: 600 }, () => true, () => {});
+    expect(next).toEqual([{ screen_id: 2, start: 540, end: 600 }]);
+  });
+  it('aborts (null) and calls onNoFit when replace is declined', () => {
+    const day = [{ id: 1, screen_id: 1, start: 0, end: DAY_END }];
+    let noFit = false;
+    const next = applyPlacement(day, { screen_id: 2, start: 540, end: 600 }, () => false, () => { noFit = true; });
+    expect(next).toBeNull();
+    expect(noFit).toBe(true);
   });
 });
 

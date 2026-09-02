@@ -45,7 +45,7 @@ function ImageCard({ b, onTypeChange, onDelete, onLabelSave }) {
         ) : (
           <div className={bgStyles.labelRow}>
             <span className={bgStyles.label} title={b.label}>{b.label}</span>
-            <button className={bgStyles.iconBtn} onClick={startEdit} title="Edit label">✏</button>
+            <button className={bgStyles.iconBtn} onClick={startEdit} title="Edit label">✎</button>
           </div>
         )}
         <div className={bgStyles.cardActions}>
@@ -59,7 +59,7 @@ function ImageCard({ b, onTypeChange, onDelete, onLabelSave }) {
               onClick={() => onTypeChange(b.id, 'general')}
             >IMG</button>
           </div>
-          <button className={styles.btnDanger} onClick={() => onDelete(b.id)}>Delete</button>
+          <button className={styles.btnDanger} onClick={() => onDelete(b.id)} title="Delete">🗑</button>
         </div>
       </div>
     </div>

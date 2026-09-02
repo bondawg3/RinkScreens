@@ -82,8 +82,8 @@ function LockerRoomRow({ room, onSaved, onDeleted }) {
       <td>{room.name}</td>
       <td>
         <div className={styles.actions}>
-          <button className={styles.btnGhost} onClick={() => setEditing(true)}>Edit</button>
-          <button className={styles.btnDanger} onClick={remove}>Delete</button>
+          <button className={styles.btnGhost} onClick={() => setEditing(true)} title="Edit">✎</button>
+          <button className={styles.btnDanger} onClick={remove} title="Delete">🗑</button>
         </div>
       </td>
     </tr>
@@ -162,8 +162,8 @@ function DisplayRow({ display, onSaved, onDeleted }) {
       <td><a href={webAddress} target="_blank" rel="noopener noreferrer">{webAddress}</a></td>
       <td>
         <div className={styles.actions}>
-          <button className={styles.btnGhost} onClick={() => setEditing(true)}>Edit</button>
-          <button className={styles.btnDanger} onClick={remove}>Delete</button>
+          <button className={styles.btnGhost} onClick={() => setEditing(true)} title="Edit">✎</button>
+          <button className={styles.btnDanger} onClick={remove} title="Delete">🗑</button>
         </div>
       </td>
     </tr>
@@ -409,8 +409,8 @@ function LockerRoomsSection() {
                         reloadSettings();
                       }}>Set Default</button>
                     )}
-                    <button className={styles.btnGhost} onClick={() => setSeqModal(seq)}>Edit</button>
-                    <button className={styles.btnDanger} onClick={() => deleteSequence(seq)}>Delete</button>
+                    <button className={styles.btnGhost} onClick={() => setSeqModal(seq)} title="Edit">✎</button>
+                    <button className={styles.btnDanger} onClick={() => deleteSequence(seq)} title="Delete">🗑</button>
                   </div>
                 </td>
               </tr>
@@ -544,8 +544,8 @@ function PricingSection() {
                   <td>{p.price}</td>
                   <td>{p.sort_order}</td>
                   <td className={styles.actions}>
-                    <button className={styles.btnGhost} onClick={() => { setEditing(p.id); setEditData({ label: p.label, subheading: p.subheading || '', price: p.price, sort_order: p.sort_order }); }}>Edit</button>
-                    <button className={styles.btnDanger} onClick={() => deletePrice(p.id)}>Delete</button>
+                    <button className={styles.btnGhost} onClick={() => { setEditing(p.id); setEditData({ label: p.label, subheading: p.subheading || '', price: p.price, sort_order: p.sort_order }); }} title="Edit">✎</button>
+                    <button className={styles.btnDanger} onClick={() => deletePrice(p.id)} title="Delete">🗑</button>
                   </td>
                 </>
               )}

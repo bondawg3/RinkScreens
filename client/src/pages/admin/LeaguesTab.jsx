@@ -138,8 +138,8 @@ function TeamRow({ team, onSaved, onDeleted }) {
             </>
           ) : (
             <>
-              <button className={styles.btnGhost} onClick={() => setEditingName(true)}>Edit</button>
-              <button className={styles.btnDanger} onClick={remove}>Delete</button>
+              <button className={styles.btnGhost} onClick={() => setEditingName(true)} title="Edit">✎</button>
+              <button className={styles.btnDanger} onClick={remove} title="Delete">🗑</button>
             </>
           )}
         </div>

@@ -96,8 +96,8 @@ export default function DisplaysTab() {
                     <a href={`/tv/${d.tv_number}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">📺</a>
                   )}
                   <button className={styles.btnGhost} onClick={() => navigate(`/admin/displays/${d.id}/schedule`)} title="Schedule">📅</button>
-                  <button className={styles.btnGhost} onClick={() => startEdit(d)}>Edit</button>
-                  <button className={styles.btnDanger} onClick={() => deleteDisplay(d.id)}>Remove</button>
+                  <button className={styles.btnGhost} onClick={() => startEdit(d)} title="Edit">✎</button>
+                  <button className={styles.btnDanger} onClick={() => deleteDisplay(d.id)} title="Remove">🗑</button>
                 </div>
               </div>
             </div>

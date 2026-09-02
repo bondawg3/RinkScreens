@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ICONS } from '../../icons';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 import tabStyles from './GamesTab.module.css';
@@ -254,11 +255,11 @@ export default function GamesTab() {
               <td>{lockerSelect(g, 'away_locker')}</td>
               <td className={tabStyles.actionsCol}>
                 <div className={tabStyles.actionsInner}>
-                  <button className={styles.btnDanger} onClick={() => deleteGame(g)} title={`Delete "${g.title}"`} style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>🗑</button>
+                  <button className={styles.btnDanger} onClick={() => deleteGame(g)} title={`Delete "${g.title}"`} style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>{ICONS.remove}</button>
                   {i === 0 && (
                     <>
-                      <button className={styles.btnPrimary} onClick={() => saveGroup(games)} title="Save" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>✓</button>
-                      <button className={styles.btnGhost} onClick={cancelEdit} title="Cancel" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>✕</button>
+                      <button className={styles.btnPrimary} onClick={() => saveGroup(games)} title="Save" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>{ICONS.save}</button>
+                      <button className={styles.btnGhost} onClick={cancelEdit} title="Cancel" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>{ICONS.close}</button>
                     </>
                   )}
                 </div>
@@ -281,8 +282,8 @@ export default function GamesTab() {
         <td>{groupLockerSelect(games, 'away_locker')}</td>
         <td className={tabStyles.actionsCol}>
           <div className={tabStyles.actionsInner}>
-            <button className={styles.btnGhost} onClick={() => startGroupEdit(games)} title="Edit events" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>✎</button>
-            <button className={styles.btnDanger} onClick={() => deleteGroup(games)} title="Delete all events" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>🗑</button>
+            <button className={styles.btnGhost} onClick={() => startGroupEdit(games)} title="Edit events" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>{ICONS.edit}</button>
+            <button className={styles.btnDanger} onClick={() => deleteGroup(games)} title="Delete all events" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>{ICONS.remove}</button>
           </div>
         </td>
       </tr>
@@ -303,8 +304,8 @@ export default function GamesTab() {
             <td>{lockerSelect(g, 'away_locker')}</td>
             <td className={tabStyles.actionsCol}>
               <div className={tabStyles.actionsInner}>
-                <button className={styles.btnPrimary} onClick={() => saveGame(g.id)} title="Save" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>✓</button>
-                <button className={styles.btnGhost} onClick={cancelEdit} title="Cancel" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>✕</button>
+                <button className={styles.btnPrimary} onClick={() => saveGame(g.id)} title="Save" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>{ICONS.save}</button>
+                <button className={styles.btnGhost} onClick={cancelEdit} title="Cancel" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>{ICONS.close}</button>
               </div>
             </td>
           </>
@@ -317,8 +318,8 @@ export default function GamesTab() {
             <td>{lockerSelect(g, 'away_locker')}</td>
             <td className={tabStyles.actionsCol}>
               <div className={tabStyles.actionsInner}>
-                <button className={styles.btnGhost} onClick={() => startEdit(g)} title="Edit game" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>✎</button>
-                <button className={styles.btnDanger} onClick={() => deleteGame(g)} title="Delete game" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>🗑</button>
+                <button className={styles.btnGhost} onClick={() => startEdit(g)} title="Edit game" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>{ICONS.edit}</button>
+                <button className={styles.btnDanger} onClick={() => deleteGame(g)} title="Delete game" style={{ fontSize: '1rem', padding: '0.25rem 0.5rem' }}>{ICONS.remove}</button>
               </div>
             </td>
           </>
@@ -373,7 +374,7 @@ export default function GamesTab() {
           gap: '0.75rem',
         }}>
           <span style={{ flex: 1 }}>{autoAssignMsg.text}</span>
-          <button onClick={() => setAutoAssignMsg(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'inherit', padding: 0 }}>✕</button>
+          <button onClick={() => setAutoAssignMsg(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1rem', color: 'inherit', padding: 0 }}>{ICONS.close}</button>
         </div>
       )}
       <p className={styles.hint}>

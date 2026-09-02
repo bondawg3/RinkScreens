@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ICONS } from '../../icons';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { useApi, apiFetch } from '../../hooks/useApi';
@@ -119,11 +120,11 @@ export default function WebpageTab() {
                       </div>
                       <div className={tStyles.cardActions}>
                         <DragHandle attributes={attributes} listeners={listeners} className={tStyles.dragHandle} />
-                        <a href={`/tv/screen/${sc.id}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">📺</a>
-                        <button className={styles.btnGhost} onClick={() => openEdit(sc)} title="Edit">✎</button>
+                        <a href={`/tv/screen/${sc.id}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">{ICONS.preview}</a>
+                        <button className={styles.btnGhost} onClick={() => openEdit(sc)} title="Edit">{ICONS.edit}</button>
                         <button className={styles.btnGhost} title="Resync page" onClick={() => apiFetch(`/screens/${sc.id}/reload`, { method: 'POST' })}>&#8635;</button>
                         <EyeButton screen={sc} assignedName={assignedDisplayName(sc.id)} onToggle={toggleVisible} />
-                        <button className={styles.btnDanger} onClick={() => deleteScreen(sc.id)} title="Delete">🗑</button>
+                        <button className={styles.btnDanger} onClick={() => deleteScreen(sc.id)} title="Delete">{ICONS.remove}</button>
                         <DuplicateButton screen={sc} onDuplicate={duplicateScreen} />
                       </div>
                       <EyeHint show={eyeHint === sc.id} name={assignedDisplayName(sc.id)} />

@@ -1,4 +1,5 @@
 import React, { useState, useRef, useLayoutEffect, useEffect } from 'react';
+import { ICONS } from '../../icons';
 import s from './AnnouncementTab.module.css';
 
 export const FONTS = [
@@ -272,7 +273,7 @@ export function LinesEditor({ lines, onChange, tokens }) {
             <div style={{ display: 'flex', gap: '0.25rem' }}>
               <button type="button" className={s.deleteBtnDark} onClick={() => moveLine(idx, -1)} disabled={idx === 0} title="Move up">↑</button>
               <button type="button" className={s.deleteBtnDark} onClick={() => moveLine(idx, 1)} disabled={idx === lines.length - 1} title="Move down">↓</button>
-              <button type="button" className={s.deleteBtnDark} onClick={() => removeLine(idx)} title="Remove">✕</button>
+              <button type="button" className={s.deleteBtnDark} onClick={() => removeLine(idx)} title="Remove">{ICONS.close}</button>
             </div>
           </div>
 

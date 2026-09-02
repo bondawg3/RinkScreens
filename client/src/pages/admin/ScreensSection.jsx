@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ICONS } from '../../icons';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { useApi, apiFetch } from '../../hooks/useApi';
@@ -219,13 +220,13 @@ export default function ScreensSection({ displayType, calendarType }) {
                         {bg && <div style={{ fontSize: '0.8rem', color: 'var(--muted)' }}>{bg} — {sc.bg_opacity ?? 100}% opacity</div>}
                         <InUseBadge name={assignedDisplayName(sc.id)} />
                         <div className={s.cardActions}>
-                          <a href={`/tv/screen/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost} title="Preview">📺</a>
-                          <button className={adminStyles.btnGhost} onClick={() => openEdit(sc)} title="Edit">✎</button>
+                          <a href={`/tv/screen/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost} title="Preview">{ICONS.preview}</a>
+                          <button className={adminStyles.btnGhost} onClick={() => openEdit(sc)} title="Edit">{ICONS.edit}</button>
                           {sc.show_pricing && (
                             <button className={s.pricingBtn} title="Choose which prices to show" onClick={() => openPricingModal(sc)}>$</button>
                           )}
                           <EyeButton screen={sc} assignedName={assignedDisplayName(sc.id)} onToggle={toggleVisible} />
-                          <button className={adminStyles.btnDanger} onClick={() => deleteScreen(sc.id)} title="Delete">🗑</button>
+                          <button className={adminStyles.btnDanger} onClick={() => deleteScreen(sc.id)} title="Delete">{ICONS.remove}</button>
                           <DuplicateButton screen={sc} onDuplicate={duplicateScreen} />
                         </div>
                         <EyeHint show={eyeHint === sc.id} name={assignedDisplayName(sc.id)} />

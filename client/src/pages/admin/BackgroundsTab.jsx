@@ -1,4 +1,5 @@
 import React, { useRef, useState } from 'react';
+import { ICONS } from '../../icons';
 import { useApi, apiFetch, getToken } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 import bgStyles from './BackgroundsTab.module.css';
@@ -39,13 +40,13 @@ function ImageCard({ b, onTypeChange, onDelete, onLabelSave }) {
               onChange={e => setDraft(e.target.value)}
               onKeyDown={onKeyDown}
             />
-            <button className={bgStyles.iconBtn} onClick={commit} title="Save">✓</button>
-            <button className={bgStyles.iconBtn} onClick={cancel} title="Cancel">✕</button>
+            <button className={bgStyles.iconBtn} onClick={commit} title="Save">{ICONS.save}</button>
+            <button className={bgStyles.iconBtn} onClick={cancel} title="Cancel">{ICONS.close}</button>
           </div>
         ) : (
           <div className={bgStyles.labelRow}>
             <span className={bgStyles.label} title={b.label}>{b.label}</span>
-            <button className={bgStyles.iconBtn} onClick={startEdit} title="Edit label">✎</button>
+            <button className={bgStyles.iconBtn} onClick={startEdit} title="Edit label">{ICONS.edit}</button>
           </div>
         )}
         <div className={bgStyles.cardActions}>
@@ -59,7 +60,7 @@ function ImageCard({ b, onTypeChange, onDelete, onLabelSave }) {
               onClick={() => onTypeChange(b.id, 'general')}
             >IMG</button>
           </div>
-          <button className={styles.btnDanger} onClick={() => onDelete(b.id)} title="Delete">🗑</button>
+          <button className={styles.btnDanger} onClick={() => onDelete(b.id)} title="Delete">{ICONS.remove}</button>
         </div>
       </div>
     </div>

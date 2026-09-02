@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ICONS } from '../../icons';
 import { useNavigate } from 'react-router-dom';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
@@ -93,11 +94,11 @@ export default function DisplaysTab() {
 
                 <div className={tStyles.cardActions}>
                   {assignedScreen && (
-                    <a href={`/tv/${d.tv_number}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">📺</a>
+                    <a href={`/tv/${d.tv_number}?preview`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">{ICONS.preview}</a>
                   )}
-                  <button className={styles.btnGhost} onClick={() => navigate(`/admin/displays/${d.id}/schedule`)} title="Schedule">📅</button>
-                  <button className={styles.btnGhost} onClick={() => startEdit(d)} title="Edit">✎</button>
-                  <button className={styles.btnDanger} onClick={() => deleteDisplay(d.id)} title="Remove">🗑</button>
+                  <button className={styles.btnGhost} onClick={() => navigate(`/admin/displays/${d.id}/schedule`)} title="Schedule">{ICONS.schedule}</button>
+                  <button className={styles.btnGhost} onClick={() => startEdit(d)} title="Edit">{ICONS.edit}</button>
+                  <button className={styles.btnDanger} onClick={() => deleteDisplay(d.id)} title="Remove">{ICONS.remove}</button>
                 </div>
               </div>
             </div>
@@ -125,7 +126,7 @@ export default function DisplaysTab() {
                     : <span className={styles.offline}>● Unassigned</span>}
                 </div>
                 <div className={tStyles.cardActions}>
-                  <a href={`/tv/screen/${sc.id}`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">📺</a>
+                  <a href={`/tv/screen/${sc.id}`} target="_blank" rel="noreferrer" className={styles.btnGhost} title="Preview">{ICONS.preview}</a>
                 </div>
               </div>
             </div>

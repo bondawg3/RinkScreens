@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useLayoutEffect } from 'react';
+import { ICONS } from '../../icons';
 import s from './scheduler.module.css';
 import {
   applyPlacement, resizeBlock, defaultBlockAt, snap15, DAY_END,
@@ -242,10 +243,10 @@ export default function ScheduleTimeline({
                       screen_id: b.screen_id, start: b.start, end: b.end,
                     }));
                   }}
-                >⧉</span>
+                >{ICONS.duplicate}</span>
               )}
-              <button className={s.blockBtn} title="Whole day" onPointerDown={(e) => e.stopPropagation()} onClick={() => makeWholeDay(b)}>⤢</button>
-              <button className={s.blockBtn} title="Remove" onPointerDown={(e) => e.stopPropagation()} onClick={() => deleteBlock(b)}>🗑</button>
+              <button className={s.blockBtn} title="Whole day" onPointerDown={(e) => e.stopPropagation()} onClick={() => makeWholeDay(b)}>{ICONS.expand}</button>
+              <button className={s.blockBtn} title="Remove" onPointerDown={(e) => e.stopPropagation()} onClick={() => deleteBlock(b)}>{ICONS.remove}</button>
             </div>
             <div className={s.resizeHandle + ' ' + s.bottom} onPointerDown={(e) => startResize(e, b, 'bottom')} />
           </div>

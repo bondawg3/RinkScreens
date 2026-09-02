@@ -1,4 +1,5 @@
 import styles from './Modal.module.css';
+import { ICONS } from '../../icons';
 
 /**
  * Shared screen-settings-style popup: fixed-height frame with a sticky
@@ -12,7 +13,7 @@ export default function Modal({ onClose, title, width = 480, closeButton = false
   const header = closeButton ? (
     <div className={styles.modalHeader}>
       <span>{title}</span>
-      <button type="button" className={styles.closeBtn} onClick={onClose}>✕</button>
+      <button type="button" className={styles.closeBtn} onClick={onClose}>{ICONS.close}</button>
     </div>
   ) : (
     <div className={styles.modalTitle}>{title}</div>

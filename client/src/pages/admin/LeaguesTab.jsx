@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ICONS } from '../../icons';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 
@@ -41,7 +42,7 @@ function ColorPicker({ value, onChange }) {
               outlineOffset: '-4px' }} />
         ))}
         <button type="button" onClick={() => pick('')} title="Clear"
-          style={{ width: 18, height: 18, borderRadius: 3, background: '#fff', cursor: 'pointer', border: '1px solid #ccc', fontSize: 10, padding: 0, color: '#999', lineHeight: 1 }}>✕</button>
+          style={{ width: 18, height: 18, borderRadius: 3, background: '#fff', cursor: 'pointer', border: '1px solid #ccc', fontSize: 10, padding: 0, color: '#999', lineHeight: 1 }}>{ICONS.close}</button>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -138,8 +139,8 @@ function TeamRow({ team, onSaved, onDeleted }) {
             </>
           ) : (
             <>
-              <button className={styles.btnGhost} onClick={() => setEditingName(true)} title="Edit">✎</button>
-              <button className={styles.btnDanger} onClick={remove} title="Delete">🗑</button>
+              <button className={styles.btnGhost} onClick={() => setEditingName(true)} title="Edit">{ICONS.edit}</button>
+              <button className={styles.btnDanger} onClick={remove} title="Delete">{ICONS.remove}</button>
             </>
           )}
         </div>

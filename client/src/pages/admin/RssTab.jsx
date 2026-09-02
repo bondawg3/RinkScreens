@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { ICONS } from '../../icons';
 import { DndContext, closestCenter } from '@dnd-kit/core';
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable';
 import { useApi, apiFetch, getToken } from '../../hooks/useApi';
@@ -246,8 +247,8 @@ function FeedRow({ feed, onSaved, onDeleted, onSynced }) {
       <td>
         <div className={adminStyles.actions}>
           <button className={adminStyles.btnGhost} onClick={() => onSynced(feed.id)} title="Sync now">↻</button>
-          <button className={adminStyles.btnGhost} onClick={() => setEditing(true)} title="Edit">✎</button>
-          <button className={adminStyles.btnDanger} onClick={() => onDeleted(feed.id)} title="Delete">🗑</button>
+          <button className={adminStyles.btnGhost} onClick={() => setEditing(true)} title="Edit">{ICONS.edit}</button>
+          <button className={adminStyles.btnDanger} onClick={() => onDeleted(feed.id)} title="Delete">{ICONS.remove}</button>
         </div>
       </td>
     </tr>
@@ -790,9 +791,9 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                   {dedicatedFeed && (
                     <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.5)' }}>({dedicatedFeed.name})</span>
                   )}
-                  <button type="button" className={s.deleteBtnDark} onClick={e => { e.stopPropagation(); duplicateTemplate(idx); }} title="Duplicate slide">⧉</button>
+                  <button type="button" className={s.deleteBtnDark} onClick={e => { e.stopPropagation(); duplicateTemplate(idx); }} title="Duplicate slide">{ICONS.duplicate}</button>
                   {contentTemplates.length > 1 && (
-                    <button type="button" className={s.deleteBtnDark} onClick={e => { e.stopPropagation(); deleteTemplate(idx); }} title="Delete slide">✕</button>
+                    <button type="button" className={s.deleteBtnDark} onClick={e => { e.stopPropagation(); deleteTemplate(idx); }} title="Delete slide">{ICONS.close}</button>
                   )}
                 </div>
               );
@@ -833,8 +834,8 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                       fontWeight: idx === activeTemplateIdx ? 700 : 400, width: Math.max(60, t.name.length * 7) + 'px',
                     }}
                   />
-                  <button type="button" className={s.deleteBtnDark} onClick={e => { e.stopPropagation(); duplicateTemplate(idx); }} title="Duplicate logo slide">⧉</button>
-                  <button type="button" className={s.deleteBtnDark} onClick={e => { e.stopPropagation(); deleteTemplate(idx); }} title="Delete logo slide">✕</button>
+                  <button type="button" className={s.deleteBtnDark} onClick={e => { e.stopPropagation(); duplicateTemplate(idx); }} title="Duplicate logo slide">{ICONS.duplicate}</button>
+                  <button type="button" className={s.deleteBtnDark} onClick={e => { e.stopPropagation(); deleteTemplate(idx); }} title="Delete logo slide">{ICONS.close}</button>
                 </div>
               );
             })}
@@ -1002,7 +1003,7 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                 style={{ fontFamily: 'monospace', flex: 1 }}
               />
               {activeTemplate.bgColor && (
-                <button className={s.deleteBtnDark} onClick={() => updateTemplate({ bgColor: '' })} title="Clear color">✕</button>
+                <button className={s.deleteBtnDark} onClick={() => updateTemplate({ bgColor: '' })} title="Clear color">{ICONS.close}</button>
               )}
             </div>
             <div className={s.propLabel} style={{ marginTop: '0.4rem' }}>Color Transparency — {activeTemplate.bgColorAlpha ?? 100}%</div>
@@ -1248,7 +1249,7 @@ function Editor({ screen, backgrounds, feeds, onSave, onCancel }) {
                             onChange={e => updateEl(selectedId, { boxColor: e.target.value })}
                           />
                           {selectedEl.boxColor && (
-                            <button className={s.deleteBtnDark} onClick={() => updateEl(selectedId, { boxColor: undefined })} title="Clear">✕</button>
+                            <button className={s.deleteBtnDark} onClick={() => updateEl(selectedId, { boxColor: undefined })} title="Clear">{ICONS.close}</button>
                           )}
                         </div>
                         <div className={s.propLabel} style={{ marginTop: '0.3rem' }}>Box Color Opacity — {selectedEl.boxAlpha ?? 100}%</div>
@@ -1475,10 +1476,10 @@ export default function RssTab() {
                       <InUseBadge name={assignedDisplayName(sc.id)} />
                       <div className={tStyles.cardActions}>
                         <DragHandle attributes={attributes} listeners={listeners} className={tStyles.dragHandle} />
-                        <a href={`/tv/screen/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost} title="Preview">📺</a>
-                        <button className={adminStyles.btnGhost} onClick={() => setEditingScreen(sc)} title="Edit">✎</button>
+                        <a href={`/tv/screen/${sc.id}?preview`} target="_blank" rel="noreferrer" className={adminStyles.btnGhost} title="Preview">{ICONS.preview}</a>
+                        <button className={adminStyles.btnGhost} onClick={() => setEditingScreen(sc)} title="Edit">{ICONS.edit}</button>
                         <EyeButton screen={sc} assignedName={assignedDisplayName(sc.id)} onToggle={toggleVisible} />
-                        <button className={adminStyles.btnDanger} onClick={() => deleteScreen(sc.id)} title="Delete">🗑</button>
+                        <button className={adminStyles.btnDanger} onClick={() => deleteScreen(sc.id)} title="Delete">{ICONS.remove}</button>
                         <DuplicateButton screen={sc} onDuplicate={duplicateScreen} />
                       </div>
                       <EyeHint show={eyeHint === sc.id} name={assignedDisplayName(sc.id)} />

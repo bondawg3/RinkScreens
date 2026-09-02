@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { ICONS } from '../../icons';
 import { PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -46,7 +47,7 @@ export function DuplicateButton({ screen, onDuplicate }) {
       className={adminStyles.btnGhost}
       onClick={() => onDuplicate(screen.id)}
       title="Duplicate this screen"
-    >⧉</button>
+    >{ICONS.duplicate}</button>
   );
 }
 
@@ -63,7 +64,7 @@ export function EyeButton({ screen, assignedName, onToggle }) {
       title={assignedName
         ? `In use by ${assignedName} — unassign first`
         : visible ? 'Visible in Displays tab — click to hide' : 'Hidden from Displays tab — click to show'}
-    >{visible ? '👁' : '🚫'}</button>
+    >{visible ? ICONS.visible : ICONS.hidden}</button>
   );
 }
 
@@ -128,7 +129,7 @@ export function SortableCard({ id, className, draggingClassName, children }) {
 export function DragHandle({ attributes, listeners, className }) {
   return (
     <button type="button" className={className} title="Drag to reorder" {...attributes} {...listeners}>
-      ⠿
+      {ICONS.dragHandle}
     </button>
   );
 }

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { ICONS } from '../../icons';
 import { useApi, apiFetch, getToken, setToken } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 import settStyles from './RinkSettings.module.css';
@@ -82,8 +83,8 @@ function LockerRoomRow({ room, onSaved, onDeleted }) {
       <td>{room.name}</td>
       <td>
         <div className={styles.actions}>
-          <button className={styles.btnGhost} onClick={() => setEditing(true)} title="Edit">✎</button>
-          <button className={styles.btnDanger} onClick={remove} title="Delete">🗑</button>
+          <button className={styles.btnGhost} onClick={() => setEditing(true)} title="Edit">{ICONS.edit}</button>
+          <button className={styles.btnDanger} onClick={remove} title="Delete">{ICONS.remove}</button>
         </div>
       </td>
     </tr>
@@ -162,8 +163,8 @@ function DisplayRow({ display, onSaved, onDeleted }) {
       <td><a href={webAddress} target="_blank" rel="noopener noreferrer">{webAddress}</a></td>
       <td>
         <div className={styles.actions}>
-          <button className={styles.btnGhost} onClick={() => setEditing(true)} title="Edit">✎</button>
-          <button className={styles.btnDanger} onClick={remove} title="Delete">🗑</button>
+          <button className={styles.btnGhost} onClick={() => setEditing(true)} title="Edit">{ICONS.edit}</button>
+          <button className={styles.btnDanger} onClick={remove} title="Delete">{ICONS.remove}</button>
         </div>
       </td>
     </tr>
@@ -256,7 +257,7 @@ function SequenceModal({ existing, lockerRooms, onClose, onSaved }) {
                     <div className={settStyles.pairActions}>
                       <button type="button" className={settStyles.moveBtn} onClick={() => movePair(i, -1)} disabled={i === 0}>▲</button>
                       <button type="button" className={settStyles.moveBtn} onClick={() => movePair(i, 1)} disabled={i === pairs.length - 1}>▼</button>
-                      <button type="button" className={styles.btnDanger} onClick={() => removePair(i)}>✕</button>
+                      <button type="button" className={styles.btnDanger} onClick={() => removePair(i)}>{ICONS.close}</button>
                     </div>
                   </div>
                 ))}
@@ -409,8 +410,8 @@ function LockerRoomsSection() {
                         reloadSettings();
                       }}>Set Default</button>
                     )}
-                    <button className={styles.btnGhost} onClick={() => setSeqModal(seq)} title="Edit">✎</button>
-                    <button className={styles.btnDanger} onClick={() => deleteSequence(seq)} title="Delete">🗑</button>
+                    <button className={styles.btnGhost} onClick={() => setSeqModal(seq)} title="Edit">{ICONS.edit}</button>
+                    <button className={styles.btnDanger} onClick={() => deleteSequence(seq)} title="Delete">{ICONS.remove}</button>
                   </div>
                 </td>
               </tr>
@@ -544,8 +545,8 @@ function PricingSection() {
                   <td>{p.price}</td>
                   <td>{p.sort_order}</td>
                   <td className={styles.actions}>
-                    <button className={styles.btnGhost} onClick={() => { setEditing(p.id); setEditData({ label: p.label, subheading: p.subheading || '', price: p.price, sort_order: p.sort_order }); }} title="Edit">✎</button>
-                    <button className={styles.btnDanger} onClick={() => deletePrice(p.id)} title="Delete">🗑</button>
+                    <button className={styles.btnGhost} onClick={() => { setEditing(p.id); setEditData({ label: p.label, subheading: p.subheading || '', price: p.price, sort_order: p.sort_order }); }} title="Edit">{ICONS.edit}</button>
+                    <button className={styles.btnDanger} onClick={() => deletePrice(p.id)} title="Delete">{ICONS.remove}</button>
                   </td>
                 </>
               )}
@@ -837,7 +838,7 @@ function BackupsSection() {
               <tr key={b.filename}>
                 <td style={{ wordBreak: 'break-all' }}>
                   {b.filename}
-                  {b.pinned && <span style={{ marginLeft: 8, fontSize: '0.75rem', background: 'var(--ice-blue)', color: '#fff', borderRadius: 4, padding: '1px 6px' }}>📌 Kept</span>}
+                  {b.pinned && <span style={{ marginLeft: 8, fontSize: '0.75rem', background: 'var(--ice-blue)', color: '#fff', borderRadius: 4, padding: '1px 6px' }}>{ICONS.pinned} Kept</span>}
                 </td>
                 <td>{formatBytes(b.size)}</td>
                 <td>{new Date(b.created_at).toLocaleString()}</td>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { ICONS } from '../../icons';
 import { useApi, apiFetch } from '../../hooks/useApi';
 import styles from './AdminTab.module.css';
 import calStyles from './CalendarModal.module.css';
@@ -342,8 +343,8 @@ export default function CalendarsTab() {
                             {syncing === cal.id ? '…' : '↻'}
                           </button>
                         )}
-                        <button className={calStyles.iconBtn} title="Edit" onClick={() => openEdit(cal)}>✎</button>
-                        <button className={calStyles.iconBtnDanger} title="Remove" onClick={() => removeCalendar(cal.id)}>🗑</button>
+                        <button className={calStyles.iconBtn} title="Edit" onClick={() => openEdit(cal)}>{ICONS.edit}</button>
+                        <button className={calStyles.iconBtnDanger} title="Remove" onClick={() => removeCalendar(cal.id)}>{ICONS.remove}</button>
                       </div>
                     </td>
                   </tr>
